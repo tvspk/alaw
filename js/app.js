@@ -6,17 +6,22 @@ import { primaryVersion, isSynced, langLabel, fold, songsFromJson, looksLikeLrc 
 import { renderSong } from './song.js';
 import { renderEdit } from './edit.js';
 import { renderTapSync } from './tapsync.js';
+import { isAndroid, request } from './net.js';
+import { aiConfig, setAiConfig, pickModel } from './ai.js';
 
-export const APP_VERSION = '0.1.0';
+export const APP_VERSION = '0.2.0';
 const app = document.getElementById('app');
 let cleanup = null;
-let depth = 0;          // kolik obrazovek v rámci aplikace je za námi (kvůli tlačítku Zpět)
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně
 
+// Hloubka v historii (kolik obrazovek aplikace je za námi) se drží v history.state, aby „Zpět“
+// vedlo na předchozí obrazovku a z první obrazovky na knihovnu, nikdy ven z aplikace.
+const depth = () => (history.state && history.state.d) || 0;
 const nav = {
-  go(hash) { depth++; location.hash = hash; },
-  replace(hash) { location.replace(hash); },
-  back() { if (depth > 0) { depth--; history.back(); } else location.replace('#/'); },
+  go(hash) { history.pushState({ d: depth() + 1 }, '', hash); route(); },
+  replace(hash) { history.replaceState({ d: depth() }, '', hash); route(); },
+  back() { if (depth() > 0) history.back(); else nav.replace('#/'); },
+  home() { if (depth() > 0) history.go(-depth()); else nav.replace('#/'); },
 };
 
 async function route() {
@@ -36,11 +41,17 @@ async function route() {
     root.replaceChildren(el('div', { class: 'view' }, el('p', { class: 'empty', text: `Něco se pokazilo: ${e.message || e}` })));
   }
   app.replaceChildren(root);
-  if (view !== 'song' || !history.state?.keepScroll) scrollTo(0, 0);
+  scrollTo(0, 0);
 }
 
-window.addEventListener('hashchange', () => { route(); });
-window.addEventListener('popstate', () => { if (depth > 0) depth--; });
+window.addEventListener('popstate', () => { route(); });
+// odkazy uvnitř aplikace (href="#/…") přes nav, ať se drží hloubka historie
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[href^="#/"]');
+  if (!a || e.defaultPrevented) return;
+  e.preventDefault();
+  nav.go(a.getAttribute('href'));
+});
 
 // ---------- knihovna ----------
 
@@ -180,6 +191,8 @@ async function renderSettings(root) {
       el('div', { class: 'row' },
         el('button', { type: 'button', class: 'btn', text: '⇩ Stáhnout zálohu', onclick: () => exportAll(withAudio.checked) }),
         el('button', { type: 'button', class: 'btn', text: '⇧ Načíst soubor', onclick: importFile }))),
+    searchSection(),
+    aiSection(),
     el('section', { class: 'section' },
       el('h2', { text: 'Synchronizace' }),
       el('p', { text: 'Šifrovaná synchronizace přes GitHub mezi telefonem a počítačem přijde v další verzi. Zatím se vše ukládá jen v tomto zařízení.' })),
@@ -189,9 +202,117 @@ async function renderSettings(root) {
     el('p', { class: 'empty', style: { padding: '12px' }, text: `Alaw ${APP_VERSION}` })));
 }
 
-// ---------- start ----------
+function searchSection() {
+  if (isAndroid()) {
+    return el('section', { class: 'section' }, el('h2', { text: 'Hledání textů' }),
+      el('p', { text: 'V aplikaci pro Android hledá Alaw ve všech zdrojích přímo, prostředník není potřeba.' }));
+  }
+  const input = el('input', { type: 'url', value: getPrefs().proxyUrl || '', placeholder: 'https://alaw-proxy.….workers.dev', autocomplete: 'off' });
+  const status = el('div', { class: 'ai-status' });
+  return el('section', { class: 'section' },
+    el('h2', { text: 'Hledání textů (prostředník)' }),
+    el('p', { text: 'LRCLIB, Welsh Lyrics wiki, Wicidestun a We Learn Welsh fungují i bez něj. Pro ostatní weby (LyricsTranslate, Bandcamp, Genius, AZLyrics) potřebuje prohlížeč na počítači prostředníka na Cloudflare Workers. V telefonu (APK) potřeba není.' }),
+    el('label', { class: 'field' }, el('span', { text: 'Adresa prostředníka' }), input),
+    el('div', { class: 'row', style: { marginTop: '8px' } },
+      el('button', { type: 'button', class: 'btn small', text: 'Uložit a vyzkoušet', onclick: async () => {
+        const url = input.value.trim().replace(/\/+$/, '');
+        if (url && !/^https:\/\/[\w.-]+\.workers\.dev$/.test(url) && !/^https:\/\//.test(url)) { status.textContent = 'Adresa musí začínat https://'; return; }
+        setPrefs({ proxyUrl: url });
+        if (!url) { status.textContent = 'Prostředník vypnutý.'; return; }
+        status.textContent = 'Zkouším…';
+        try { await request('https://lyricstranslate.com/en/language/welsh', { timeout: 15000 }); status.textContent = '✓ Funguje.'; }
+        catch (e) { status.textContent = `Nefunguje: ${e.message}`; }
+      } })),
+    status);
+}
 
-if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+function aiSection() {
+  const cfg = aiConfig();
+  const input = el('input', { type: 'password', value: cfg.key || '', placeholder: 'AIza…', autocomplete: 'off', spellcheck: false });
+  const status = el('div', { class: 'ai-status', text: cfg.key ? `Model: ${cfg.model}` : '' });
+  return el('section', { class: 'section' },
+    el('h2', { text: 'Překlady pomocí AI (Gemini)' }),
+    el('p', {}, 'Klíč získáš zdarma v ', el('a', { href: 'https://aistudio.google.com/apikey', target: '_blank', rel: 'noopener', text: 'Google AI Studiu' }),
+      '. Uloží se jen v tomto zařízení – nezálohuje se a nesynchronizuje.'),
+    el('label', { class: 'field' }, el('span', { text: 'Klíč API' }), input),
+    el('div', { class: 'row', style: { marginTop: '8px' } },
+      el('button', { type: 'button', class: 'btn small', text: 'Uložit a ověřit', onclick: async () => {
+        const key = input.value.trim();
+        if (!key) { setAiConfig(null); status.textContent = 'Klíč smazán.'; return; }
+        status.textContent = 'Ověřuji…';
+        try { const model = await pickModel(key); setAiConfig({ key, model }); status.textContent = `✓ Funguje. Model: ${model}`; }
+        catch (e) { status.textContent = e.message; }
+      } }),
+      cfg.key ? el('button', { type: 'button', class: 'btn small danger', text: 'Smazat klíč', onclick: () => { setAiConfig(null); input.value = ''; status.textContent = 'Klíč smazán.'; } }) : null),
+    status);
+}
+
+// Sdílení z jiné aplikace (Android: „Sdílet → Alaw“): ?share-url=…&share-text=…&share-title=…
+function takeShare() {
+  const p = new URLSearchParams(location.search);
+  if (!p.has('share-url') && !p.has('share-text')) return;
+  const text = p.get('share-text') || '';
+  const url = p.get('share-url') || (text.match(/https?:\/\/\S+/) || [])[0] || '';
+  history.replaceState(null, '', location.pathname + '#/new');
+  pendingDraft = url ? { shareUrl: url, title: '' } : { shareText: text, title: p.get('share-title') || '' };
+}
+window.alawShare = (url, text) => { // volá APK, když aplikace už běží
+  const u = url || (String(text || '').match(/https?:\/\/\S+/) || [])[0] || '';
+  pendingDraft = u ? { shareUrl: u } : { shareText: text || '' };
+  if (location.hash === '#/new') route(); else nav.go('#/new');
+};
+
+// ---------- Android: tlačítko Zpět, barvy lišt, uložení souboru, nová verze ----------
+window.alawBack = () => {
+  const sheetEl = document.querySelector('.sheet-backdrop');
+  if (sheetEl) { sheetEl.remove(); return true; }
+  const overlay = document.querySelector('.overlay');
+  if (overlay) { overlay.remove(); return true; }
+  const view = location.hash.replace(/^#\/?/, '').split('/')[0];
+  if (!view) return false;
+  nav.back();
+  return true;
+};
+window.alawSaved = ok => toast(ok ? 'Soubor uložen' : 'Soubor se nepodařilo uložit');
+
+function syncBars() {
+  if (!isAndroid() || !window.AlawAndroid.setBars) return;
+  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  window.AlawAndroid.setBars(dark ? '#121614' : '#f5f2ea', !dark);
+}
+
+const newer = (a, b) => { // je verze a novější než b?
+  const pa = String(a).split('.').map(n => parseInt(n, 10) || 0), pb = String(b).split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  return false;
+};
+async function checkUpdate() {
+  if (!isAndroid() || !window.AlawAndroid.version) return;
+  const st = getPrefs().update || {};
+  const now = Date.now();
+  let latest = st.latest;
+  if (!st.checked || now - st.checked > 20 * 3600e3) {
+    try {
+      const r = await fetch('https://api.github.com/repos/tvspk/alaw/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
+      if (r.ok) latest = ((await r.json()).tag_name || '').replace(/^v/, '');
+    } catch { /* offline */ }
+    setPrefs({ update: { ...st, checked: now, latest } });
+  }
+  const mine = window.AlawAndroid.version();
+  if (!latest || !mine || !newer(latest, mine) || (st.later && now < st.later)) return;
+  const bar = el('div', { class: 'update-bar' }, el('span', { text: `Nová verze Alaw ${latest}` }),
+    el('button', { type: 'button', class: 'btn small primary', text: 'Stáhnout', onclick: () => window.AlawAndroid.open('https://github.com/tvspk/alaw/releases/latest/download/alaw.apk') }),
+    el('button', { type: 'button', class: 'btn small', text: 'Později', onclick: () => { setPrefs({ update: { ...getPrefs().update, later: Date.now() + 24 * 3600e3 } }); bar.remove(); } }));
+  document.body.append(bar);
+}
+
+// ---------- start ----------
+syncBars();
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', syncBars);
+setTimeout(checkUpdate, 2000);
+takeShare();
+
+if ('serviceWorker' in navigator && location.protocol !== 'file:' && !isAndroid()) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 requestPersistence();

@@ -1,0 +1,68 @@
+# Při každém pushi do main: kontroly, sw.js aktuální, test prostředníka, stavba APK. Když je v android/verze.txt nová verze,
+# vznikne vydání v<verze> se souborem alaw.apk (instaluje se přes předchozí verzi, data zůstanou).
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Žádné klíče ani tokeny v repozitáři
+        run: |
+          if git ls-files | grep -Ei '\.jks$|heslo|keystore'; then echo "::error::Podpisový klíč nesmí být v repozitáři."; exit 1; fi
+          if grep -rIlE 'github_pat_[A-Za-z0-9]{20}|AIza[0-9A-Za-z_-]{30}' --exclude-dir=.git . ; then echo "::error::Token nebo klíč nesmí být v repozitáři."; exit 1; fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: sw.js je aktuální
+        run: python3 scripts/build_sw.py --check
+
+      - name: Test prostředníka
+        run: node testy/test_worker.mjs
+
+      - name: Nástroje (npm)
+        run: sh android/pripravit_nastroje.sh
+
+      - name: Stavba APK
+        env:
+          ALAW_KEYSTORE: ${{ secrets.ALAW_KEYSTORE }}
+          ALAW_KEYSTORE_PASSWORD: ${{ secrets.ALAW_KEYSTORE_PASSWORD }}
+        run: sh android/build.sh
+
+      - name: APK jako artefakt běhu
+        uses: actions/upload-artifact@v4
+        with:
+          name: alaw-apk
+          path: android/out/alaw.apk
+          retention-days: 14
+
+      - name: Vydání (jen nová verze podepsaná klíčem)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="$(cat android/build/version)"
+          if [ "$(cat android/build/release)" != "yes" ]; then echo "Bez klíče (Secrets) – nevydává se."; exit 0; fi
+          if gh release view "v$V" >/dev/null 2>&1; then echo "Vydání v$V už existuje – pro nové zvyšte verzi v android/verze.txt."; exit 0; fi
+          gh release create "v$V" android/out/alaw.apk --title "Alaw $V" --latest \
+            --notes "Alaw $V pro Android. Nainstalujte alaw.apk přes předchozí verzi, písně zůstanou."

@@ -79,7 +79,7 @@ export async function renderTapSync(root, id, nav) {
     await saveSong(song);
     dirty = false;
     toast('Časy uloženy');
-    nav.replace(`#/song/${song.id}`);
+    nav.back();
   }
 
   player.onState = p => { playBtn.innerHTML = p ? ICONS.pause : ICONS.play; };

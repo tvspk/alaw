@@ -5,11 +5,16 @@ OUT = Path(__file__).resolve().parent.parent / 'icons'
 GREEN, CREAM, RED = (29, 107, 76), (245, 242, 234), (179, 38, 30)
 FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf'
 
-def draw(size, maskable):
+def draw(size, maskable, fg_only=False, round_=False):
     s = size * 4
     img = Image.new('RGBA', (s, s), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    if maskable:
+    if fg_only:
+        scale = 0.6   # popředí adaptivní ikony: bezpečná zóna je vnitřních 66 %
+    elif round_:
+        d.ellipse([0, 0, s - 1, s - 1], fill=GREEN)
+        scale = 0.7
+    elif maskable:
         d.rectangle([0, 0, s, s], fill=GREEN)
         scale = 0.62
     else:
@@ -30,4 +35,12 @@ OUT.mkdir(exist_ok=True)
 draw(192, False).save(OUT / 'icon-192.png')
 draw(512, False).save(OUT / 'icon-512.png')
 draw(512, True).save(OUT / 'icon-maskable-512.png')
+# Android (mipmap): klasická, kulatá a popředí adaptivní ikony
+RES = Path(__file__).resolve().parent.parent / 'android' / 'proj' / 'res'
+for name, (leg, fg) in {'mdpi': (48, 108), 'hdpi': (72, 162), 'xhdpi': (96, 216), 'xxhdpi': (144, 324), 'xxxhdpi': (192, 432)}.items():
+    out = RES / f'mipmap-{name}'
+    out.mkdir(parents=True, exist_ok=True)
+    draw(leg, False).save(out / 'ic_launcher.png')
+    draw(leg, False, round_=True).save(out / 'ic_launcher_round.png')
+    draw(fg, False, fg_only=True).save(out / 'ic_launcher_foreground.png')
 print('ikony hotové')

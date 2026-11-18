@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_bg">#1D6B4C</color>
+    <color name="start_bg">#F5F2EA</color>
+    <string name="app_name">Alaw</string>
+    <string name="share_label">Text do Alaw</string>
+    <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:windowBackground">@color/start_bg</item>
+        <item name="android:statusBarColor">@color/start_bg</item>
+        <item name="android:navigationBarColor">@color/start_bg</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

@@ -67,6 +67,12 @@ export function menu(items, close) {
 
 export function download(filename, data, type = 'application/json') {
   const blob = data instanceof Blob ? data : new Blob([data], { type });
+  if (window.AlawAndroid && window.AlawAndroid.saveFile) { // Android: uživatel vybere, kam soubor uložit
+    const r = new FileReader();
+    r.onload = () => window.AlawAndroid.saveFile(filename, blob.type || type, String(r.result).split(',')[1] || '');
+    r.readAsDataURL(blob);
+    return;
+  }
   const url = URL.createObjectURL(blob);
   const a = el('a', { href: url, download: filename });
   document.body.append(a);

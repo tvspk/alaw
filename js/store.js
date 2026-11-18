@@ -26,7 +26,7 @@ export const deleteAudioBlob = key => db.deleteAudio(key);
 
 // Nastavení jen pro toto zařízení (velikost písma, poslední režim…).
 const PREFS_KEY = 'alaw-prefs';
-const defaults = { mode: 'read', clozePct: 40, showTr: true, showLit: false, showContr: true, rate: 1, lyricSize: 1.22, autoScroll: true, source: {} };
+const defaults = { mode: 'read', clozePct: 40, showTr: true, showAlt: true, showLit: false, showContr: true, rate: 1, lyricSize: 1.22, autoScroll: true, source: {} };
 let prefs = null;
 export function getPrefs() {
   if (!prefs) {

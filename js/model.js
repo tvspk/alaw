@@ -3,7 +3,8 @@
 // Píseň = { v, id, title, artist, language, tags[], createdAt, updatedAt, primary, versions[] }
 // Verze = { id, label, source, sourceUrl, youtubeId, audio, lines[] }
 //   audio = { key, name, type, size } | null   (soubor samotný je v IndexedDB pod klíčem key)
-// Verš  = { id, start, text, literal, translation, contractions[], note, stanza }
+// Verš  = { id, start, text, literal, translation, alt, contractions[], note, stanza }
+//   alt = překlad převzatý ze zdroje textu (obvykle anglický), translation = český překlad
 //   start = začátek v ms nebo null (nečasováno); konec verše = začátek dalšího časovaného verše
 //   stanza = true, když verš začíná novou sloku (před ním byl v textu prázdný řádek)
 
@@ -28,7 +29,7 @@ export const LANGUAGES = [
 export const langLabel = code => (LANGUAGES.find(l => l[0] === code) || [null, code || 'Jiný jazyk'])[1];
 
 export function newLine(text = '', start = null, stanza = false) {
-  return { id: uid(8), start, text, literal: '', translation: '', contractions: [], note: '', stanza };
+  return { id: uid(8), start, text, literal: '', translation: '', alt: '', contractions: [], note: '', stanza };
 }
 
 export function newVersion(lines = [], extra = {}) {
@@ -199,6 +200,7 @@ export function normalizeSong(s) {
       text: str(l.text, 1000),
       literal: str(l.literal, 1000),
       translation: str(l.translation, 1000),
+      alt: str(l.alt, 1000),
       contractions: Array.isArray(l.contractions)
         ? l.contractions.filter(c => c && typeof c.short === 'string').map(c => ({ short: str(c.short, 200), full: str(c.full, 200), note: str(c.note, 300) })) : [],
       note: str(l.note, 3000),
@@ -225,3 +227,28 @@ export const parseTags = text => [...new Set(String(text || '').split(/[,;#]/).m
 
 // Hledání bez ohledu na diakritiku a stříšky (ŵ → w, â → a).
 export const fold = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+// Doplní verše časy z jiného (časovaného) textu stejné písně: páruje verše podle znění, popořadě.
+export function borrowTimes(lines, timedLines) {
+  const src = timedLines.filter(l => l.start != null);
+  let from = 0, matched = 0;
+  const out = lines.map(l => ({ ...l }));
+  for (const l of out) {
+    const key = fold(l.text).replace(/[^\p{L}\p{N}]/gu, '');
+    if (!key) continue;
+    const idx = src.findIndex((t, j) => j >= from && fold(t.text).replace(/[^\p{L}\p{N}]/gu, '') === key);
+    if (idx === -1) continue;
+    l.start = src[idx].start;
+    from = idx + 1;
+    matched++;
+  }
+  return { lines: out, matched, total: out.length };
+}
+
+// Přiřadí řádky překladu ze zdroje k veršům (jen když počet řádků sedí).
+export function attachAlt(lines, altText) {
+  const alt = String(altText || '').split('\n').map(s => s.trim()).filter(Boolean);
+  if (!alt.length || alt.length !== lines.length) return false;
+  lines.forEach((l, i) => { l.alt = alt[i]; });
+  return true;
+}

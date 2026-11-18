@@ -86,7 +86,7 @@ export class Player {
           } else if (e.data === YT.PlayerState.PAUSED || e.data === YT.PlayerState.ENDED) this._setPlaying(false);
         },
         onError: e => {
-          const msg = { 2: 'Neplatné ID videa.', 5: 'Video nejde přehrát v tomto prohlížeči.', 100: 'Video neexistuje nebo je soukromé.', 101: 'Autor nepovolil přehrávání mimo YouTube.', 150: 'Autor nepovolil přehrávání mimo YouTube.' }[e.data];
+          const msg = { 2: 'Neplatné ID videa.', 5: 'Video nejde přehrát v tomto prohlížeči.', 100: 'Video neexistuje nebo je soukromé.', 101: 'Tohle video nejde přehrát mimo YouTube (autor to nepovolil). Zkus jiné video s toutéž písní.', 150: 'Tohle video nejde přehrát mimo YouTube (autor to nepovolil). Zkus jiné video s toutéž písní.' }[e.data];
           this.onError(msg || `Chyba YouTube (${e.data}).`);
         },
       },
