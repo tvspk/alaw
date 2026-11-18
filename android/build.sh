@@ -30,6 +30,11 @@ python3 -I scripts/zipalign.py build/base.apk build/aligned.apk
 java -jar $AJ/apksigner.jar sign --ks $KS --ks-key-alias alaw --ks-pass pass:"$PW" --key-pass pass:"$PW" \
   --min-sdk-version 26 --out out/alaw.apk build/aligned.apk
 rm -rf build/key
-java -jar $AJ/apksigner.jar verify -v --print-certs out/alaw.apk | grep -E "Verified|SHA-256|DN"
+java -jar $AJ/apksigner.jar verify -v --print-certs out/alaw.apk | grep -E "Verified|SHA-256|DN" | tee build/certs.txt
+# vydávat se smí jen APK podepsané stálým klíčem (jinak by aktualizace nešla nainstalovat přes předchozí verzi)
+CERT=c633f3c876b1591610982cec07a6fa1da1c1fec1da44c5dde5cc894bc5a46da7
+if [ "$REL" = yes ] && ! grep -q "certificate SHA-256 digest: $CERT" build/certs.txt; then
+  echo "CHYBA: APK je podepsané jiným klíčem, než má Alaw. Nevydávám."; exit 1
+fi
 echo "$VN" > build/version; echo "$REL" > build/release
 echo "HOTOVO: android/out/alaw.apk (verze $VN, versionCode $VC, vydání: $REL)"
