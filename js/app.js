@@ -9,7 +9,7 @@ import { renderTapSync } from './tapsync.js';
 import { isAndroid, request } from './net.js';
 import { aiConfig, setAiConfig, pickModel } from './ai.js';
 
-export const APP_VERSION = '0.2.3';
+export const APP_VERSION = '0.2.4';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně

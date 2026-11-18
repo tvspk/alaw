@@ -352,15 +352,22 @@ export async function renderSong(root, id, nav) {
     if (overwrite && !confirm('Přepsat všechny překlady, doslovné překlady a zkratky novými z AI?')) return;
     const status = el('div', { class: 'ai-status', text: 'Posílám verše Gemini…' });
     const closeSheet = sheet(() => el('div', {}, el('h3', { text: 'Překlad pomocí AI' }), status));
+    let progress = '';
     try {
-      const n = await translateVersion(song, version, { overwrite, onProgress: (d, t) => { status.textContent = t ? `Přeloženo ${d} z ${t} veršů…` : 'Všechny verše už překlad mají.'; },
-        onWait: msg => { status.textContent = msg; } });
+      const n = await translateVersion(song, version, { overwrite,
+        onProgress: (d, t) => { progress = t ? `Přeloženo ${d} z ${t} veršů` : ''; status.textContent = progress || 'Všechny verše už překlad mají.'; },
+        onWait: msg => { status.textContent = [progress, msg].filter(Boolean).join(' · '); } });
       await saveSong(song);
       closeSheet();
       setPrefs({ showTr: true });
       updateTools(); renderLyrics();
       toast(n ? `Přeloženo ${n} veršů` : 'Všechny verše už překlad mají.');
-    } catch (e) { status.textContent = e.message; status.classList.add('media-error'); }
+    } catch (e) {
+      // co se stihlo přeložit, zůstane uložené; příště se doplní jen zbytek
+      await saveSong(song); updateTools(); renderLyrics();
+      status.textContent = (progress ? `${progress}. ` : '') + e.message + (progress ? ' Zbytek doplníš příště volbou „Doplnit překlad pomocí AI“.' : '');
+      status.classList.add('media-error');
+    }
   }
 
   async function explain(i) {

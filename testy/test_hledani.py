@@ -80,6 +80,16 @@ def gemini(route):
         return route.fulfill(status=503, json={'error': {'message': 'The model is overloaded. Please try again later.'}})
     if len(gen) == 4:
         assert 'gemini-3.6-flash:generateContent' in req.url, req.url  # po třech pokusech přešlo na další model
+        assert body['generationConfig'].get('thinkingConfig'), 'posílá thinkingConfig'
+        return route.fulfill(status=400, json={'error': {'message': 'Invalid JSON payload received. Unknown name "thinkingLevel" at generation_config.thinking_config'}})
+    if len(gen) >= 5:
+        assert 'thinkingConfig' not in body['generationConfig'], 'po odmítnutí už thinkingConfig neposílá'
+    if 'line' in payload and not any('slow' in c for c in gemini_calls):
+        gemini_calls.append('slow')
+        time.sleep(3)  # první vysvětlení „visí“ déle než časový limit → aplikace to zkusí znovu
+        try: route.fulfill(status=500, body='')
+        except Exception: pass
+        return
     if 'lines' in payload:
         out = {'lines': [{'id': l['id'], 'translation': f"CZ {l['original'][:12]}", 'literal': 'doslovně', 'contractions':
                           [{'short': "'nghariad", 'full': 'fy nghariad', 'note': 'vynechané fy'}] if 'nghariad' in l['original'] else []} for l in payload['lines']]}
@@ -120,6 +130,7 @@ def main():
         page.on('console', lambda m: m.type == 'error' and not any(x in m.text for x in ('Failed to load resource', 'network error', 'A network error occurred')) and errors.append(m.text))
         page.expose_function('pyFetch', lambda j: respond(json.loads(j)))
         page.expose_function('pySave', lambda n, m, b64: saved.append((n, m, len(b64))))
+        page.add_init_script("window.__alawAiTimeout = 2000")
         page.add_init_script("""window.AlawAndroid = { fetch: (id, j) => window.pyFetch(j).then(r => window.__alawNet(id, r)),
           version: () => '0.1.0', open: u => { window.__opened = u; }, saveFile: (n, m, b) => window.pySave(n, m, b), setBars: () => {} };""")
         page.route('https://generativelanguage.googleapis.com/**', gemini)

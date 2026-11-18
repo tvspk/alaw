@@ -15,17 +15,30 @@ export const hasAi = () => !!aiConfig().key;
 class AiError extends Error {}
 
 // Klíč: starší formát „AIza…“ i nový „AQ.…“. Posílá se v hlavičce; kdyby ji Google odmítl (401), zkusí se parametr ?key=.
+// Jak dlouho čekat na jednu odpověď (Google při přetížení odpověď někdy jen zdržuje, místo aby vrátil chybu).
+const TIMEOUT = () => window.__alawAiTimeout || 45000;
+
 async function call(path, body, key) {
   let r;
-  const send = viaQuery => fetch(`${API}/${path}${viaQuery ? `${path.includes('?') ? '&' : '?'}key=${encodeURIComponent(key)}` : ''}`, {
-    method: body ? 'POST' : 'GET',
-    headers: viaQuery ? { 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const send = async viaQuery => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), TIMEOUT());
+    try {
+      return await fetch(`${API}/${path}${viaQuery ? `${path.includes('?') ? '&' : '?'}key=${encodeURIComponent(key)}` : ''}`, {
+        method: body ? 'POST' : 'GET',
+        headers: viaQuery ? { 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: body ? JSON.stringify(body) : undefined,
+        signal: ctrl.signal,
+      });
+    } finally { clearTimeout(timer); }
+  };
   try {
     r = await send(false);
     if (r.status === 401) r = await send(true);
-  } catch { throw new AiError(navigator.onLine ? 'Gemini neodpovídá.' : 'Jsi offline.'); }
+  } catch (e) {
+    if (e.name === 'AbortError') throw Object.assign(new AiError('Gemini neodpověděl včas (přetížení).'), { retry: 'busy' });
+    throw new AiError(navigator.onLine ? 'Gemini neodpovídá.' : 'Jsi offline.');
+  }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
     const msg = data.error?.message || '';
@@ -72,16 +85,25 @@ async function generate(system, user, schema, onWait = () => {}) {
     contents: [{ role: 'user', parts: [{ text: user }] }],
     generationConfig: { temperature: 0.2, responseMimeType: 'application/json', responseSchema: schema },
   };
+  // překlad nepotřebuje dlouhé „přemýšlení“ modelu – zrychlí odpověď; když to model nezná, zkusí se bez toho
+  if (localStorage.getItem('alaw-ai-nothink') !== '0') body.generationConfig.thinkingConfig = { thinkingLevel: 'low' };
   let data, lastErr;
   outer: for (const m of order) {
     for (const pause of [0, 2000, 5000]) {
       if (pause) { onWait(`Gemini je přetížený, zkouším znovu (${m})…`); await sleep(pause); }
+      const started = Date.now();
+      const tick = setInterval(() => onWait(`Čekám na Gemini (${m})… ${Math.round((Date.now() - started) / 1000)} s`), 1000);
       try { data = await call(`models/${m}:generateContent`, body, key); break outer; }
       catch (e) {
         lastErr = e;
+        if (body.generationConfig.thinkingConfig && /thinking/i.test(e.message)) { // model volbu nezná
+          delete body.generationConfig.thinkingConfig;
+          localStorage.setItem('alaw-ai-nothink', '0');
+          try { data = await call(`models/${m}:generateContent`, body, key); break outer; } catch (e2) { lastErr = e2; if (e2.retry !== 'busy') throw e2; continue; }
+        }
         if (e.retry === 'model') continue outer;
         if (e.retry !== 'busy') throw e;
-      }
+      } finally { clearInterval(tick); }
     }
     onWait('Zkouším jiný model Gemini…');
   }
@@ -111,7 +133,7 @@ Pravidla:
 // Přeloží verše (ty bez překladu, nebo všechny při overwrite). onProgress(hotovo, celkem).
 export async function translateVersion(song, version, { overwrite = false, onProgress = () => {}, onWait = () => {} } = {}) {
   const todo = version.lines.filter(l => l.text.trim() && (overwrite || !l.translation));
-  const BATCH = 40;
+  const BATCH = 12;
   let done = 0;
   onProgress(0, todo.length);
   for (let i = 0; i < todo.length; i += BATCH) {
