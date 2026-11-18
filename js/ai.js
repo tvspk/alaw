@@ -31,9 +31,12 @@ async function call(path, body, key) {
     const msg = data.error?.message || '';
     if ((r.status === 400 && /API key/i.test(msg)) || r.status === 401) throw new AiError('Klíč pro Gemini není platný. Zkopíruj ho z Google AI Studia znovu celý (začíná „AQ.“ nebo „AIza“).');
     if (r.status === 403) throw new AiError('Klíč pro Gemini nemá přístup (zkontroluj ho v Google AI Studiu).');
-    if (r.status === 429) throw new AiError('Gemini hlásí vyčerpaný limit. Zkus to později.');
     if (r.status === 404) throw Object.assign(new AiError('Model Gemini nenalezen. V Nastavení klíč ulož znovu, vybere se aktuální model.'), { retry: 'model' });
-    if (r.status === 503 || r.status === 500 || r.status === 502 || r.status === 504) throw Object.assign(new AiError('Gemini je teď přetížený. Zkus to za pár minut.'), { retry: 'busy' });
+    // přetížení: Google ho hlásí různými kódy (5xx, někdy i 4xx) se zprávou „high demand / overloaded / try again“
+    if (r.status >= 500 || /high demand|overload|unavailable|try again|capacity/i.test(msg) || /UNAVAILABLE|RESOURCE_EXHAUSTED/.test(data.error?.status || '') && r.status !== 429) {
+      throw Object.assign(new AiError(`Gemini je teď přetížený (${r.status}). Zkus to za pár minut.`), { retry: 'busy' });
+    }
+    if (r.status === 429) throw Object.assign(new AiError('Gemini hlásí vyčerpaný denní limit bezplatného klíče. Zkus to zítra, nebo si v Google AI Studiu zapni placení.'), { retry: 'model' });
     throw new AiError(`Chyba Gemini ${r.status}${msg ? `: ${msg.slice(0, 160)}` : ''}`);
   }
   return data;
@@ -82,7 +85,7 @@ async function generate(system, user, schema, onWait = () => {}) {
     }
     onWait('Zkouším jiný model Gemini…');
   }
-  if (!data) throw lastErr;
+  if (!data) throw new AiError(`${lastErr.message} (zkoušené modely: ${order.join(', ')})`);
   const cand = data.candidates?.[0];
   if (!cand) throw new AiError('Gemini nevrátil odpověď' + (data.promptFeedback?.blockReason ? ` (${data.promptFeedback.blockReason}).` : '.'));
   if (cand.finishReason === 'RECITATION') throw new AiError('Gemini odmítl odpovědět (ochrana autorských práv). Zkus přeložit méně veršů najednou.');
