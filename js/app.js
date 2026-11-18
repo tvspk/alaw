@@ -9,7 +9,7 @@ import { renderTapSync } from './tapsync.js';
 import { isAndroid, request } from './net.js';
 import { aiConfig, setAiConfig, pickModel } from './ai.js';
 
-export const APP_VERSION = '0.2.1';
+export const APP_VERSION = '0.2.2';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně
@@ -240,7 +240,7 @@ function aiSection() {
         const key = input.value.replace(/\s+/g, '');
         if (!key) { setAiConfig(null); status.textContent = 'Klíč smazán.'; return; }
         status.textContent = 'Ověřuji…';
-        try { const model = await pickModel(key); setAiConfig({ key, model }); status.textContent = `✓ Funguje. Model: ${model}`; }
+        try { const picked = await pickModel(key); setAiConfig({ key, ...picked }); status.textContent = `✓ Funguje. Model: ${picked.model}`; }
         catch (e) { status.textContent = e.message; }
       } }),
       cfg.key ? el('button', { type: 'button', class: 'btn small danger', text: 'Smazat klíč', onclick: () => { setAiConfig(null); input.value = ''; status.textContent = 'Klíč smazán.'; } }) : null),

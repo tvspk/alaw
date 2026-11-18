@@ -62,6 +62,7 @@ GEMINI_MODELS = {'models': [
     {'name': 'models/gemini-3.5-flash', 'supportedGenerationMethods': ['generateContent']},
     {'name': 'models/gemini-3.7-flash', 'supportedGenerationMethods': ['generateContent']},
     {'name': 'models/gemini-3.7-flash-lite', 'supportedGenerationMethods': ['generateContent']},
+    {'name': 'models/gemini-3.6-flash', 'supportedGenerationMethods': ['generateContent']},
     {'name': 'models/text-embedding-004', 'supportedGenerationMethods': ['embedContent']}]}
 gemini_calls = []
 
@@ -74,7 +75,11 @@ def gemini(route):
         return route.fulfill(json=GEMINI_MODELS)
     body = json.loads(req.post_data)
     payload = json.loads(body['contents'][0]['parts'][0]['text'])
-    assert 'gemini-3.7-flash:generateContent' in req.url, req.url
+    gen = [c for c in gemini_calls if ':generateContent' in c]
+    if len(gen) <= 3:  # první model je „přetížený“ (503) → aplikace zkusí znovu a pak další model
+        return route.fulfill(status=503, json={'error': {'message': 'The model is overloaded. Please try again later.'}})
+    if len(gen) == 4:
+        assert 'gemini-3.6-flash:generateContent' in req.url, req.url  # po třech pokusech přešlo na další model
     if 'lines' in payload:
         out = {'lines': [{'id': l['id'], 'translation': f"CZ {l['original'][:12]}", 'literal': 'doslovně', 'contractions':
                           [{'short': "'nghariad", 'full': 'fy nghariad', 'note': 'vynechané fy'}] if 'nghariad' in l['original'] else []} for l in payload['lines']]}
@@ -179,8 +184,10 @@ def main():
         page.wait_for_selector('.lyrics .lyric')
         page.click('[aria-label="Další možnosti"]')
         page.click('text=Přeložit pomocí AI')
-        page.wait_for_selector('.lyric .tr')
-        check(page.locator('.lyric .tr').count() == 4, 'všechny verše přeložené')
+        page.wait_for_selector('text=Gemini je přetížený')
+        check(True, 'při přetížení hlásí, že zkouší znovu')
+        page.wait_for_selector('.lyric .tr', timeout=30000)
+        check(page.locator('.lyric .tr').count() == 4, 'po přetížení přeloženo záložním modelem (3.6 flash)')
         check("'nghariad → fy nghariad" in page.inner_text('.lyric >> nth=2'), 'zkratka z AI')
         page.locator('.lyric .more').nth(0).click()
         page.click('text=Vysvětlit verš slovo po slovu')

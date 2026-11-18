@@ -32,32 +32,57 @@ async function call(path, body, key) {
     if ((r.status === 400 && /API key/i.test(msg)) || r.status === 401) throw new AiError('Klíč pro Gemini není platný. Zkopíruj ho z Google AI Studia znovu celý (začíná „AQ.“ nebo „AIza“).');
     if (r.status === 403) throw new AiError('Klíč pro Gemini nemá přístup (zkontroluj ho v Google AI Studiu).');
     if (r.status === 429) throw new AiError('Gemini hlásí vyčerpaný limit. Zkus to později.');
-    if (r.status === 404) throw new AiError('Model Gemini nenalezen. V Nastavení klíč ulož znovu, vybere se aktuální model.');
+    if (r.status === 404) throw Object.assign(new AiError('Model Gemini nenalezen. V Nastavení klíč ulož znovu, vybere se aktuální model.'), { retry: 'model' });
+    if (r.status === 503 || r.status === 500 || r.status === 502 || r.status === 504) throw Object.assign(new AiError('Gemini je teď přetížený. Zkus to za pár minut.'), { retry: 'busy' });
     throw new AiError(`Chyba Gemini ${r.status}${msg ? `: ${msg.slice(0, 160)}` : ''}`);
   }
   return data;
 }
 
 // Ověří klíč a vybere nejnovější stabilní model „flash“ (názvy modelů se mění, proto se nezadávají natvrdo).
+// Vrací { model, models }: models = záložní pořadí (novější flash, starší flash, pak flash-lite).
 export async function pickModel(key) {
   const data = await call('models?pageSize=1000', null, key);
-  const names = (data.models || [])
+  const all = (data.models || [])
     .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
-    .map(m => m.name.replace(/^models\//, ''))
-    .filter(n => /^gemini-[\d.]+-flash$/.test(n));
+    .map(m => m.name.replace(/^models\//, ''));
   const ver = n => parseFloat(n.match(/gemini-([\d.]+)/)[1]);
-  names.sort((a, b) => ver(b) - ver(a));
-  return names[0] || 'gemini-flash-latest';
+  const byVer = re => all.filter(n => re.test(n)).sort((a, b) => ver(b) - ver(a));
+  const models = [...byVer(/^gemini-[\d.]+-flash$/).slice(0, 3), ...byVer(/^gemini-[\d.]+-flash-lite$/).slice(0, 1)];
+  if (!models.length) models.push('gemini-flash-latest');
+  return { model: models[0], models };
 }
 
-async function generate(system, user, schema) {
-  const { key, model } = aiConfig();
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// Při přetížení (503) zkusí každý model víckrát s rostoucí pauzou, pak další model v pořadí.
+async function generate(system, user, schema, onWait = () => {}) {
+  let { key, model, models } = aiConfig();
   if (!key) throw new AiError('Nejdřív vlož klíč pro Gemini v Nastavení.');
-  const data = await call(`models/${model || 'gemini-flash-latest'}:generateContent`, {
+  if (!models) { // klíč uložený starší verzí: doplnit záložní modely
+    try { ({ model, models } = await pickModel(key)); setAiConfig({ key, model, models }); } catch { /* zkusí uložený model */ }
+  }
+  const order = [...new Set([model, ...(models || [])].filter(Boolean))];
+  if (!order.length) order.push('gemini-flash-latest');
+  const body = {
     systemInstruction: { parts: [{ text: system }] },
     contents: [{ role: 'user', parts: [{ text: user }] }],
     generationConfig: { temperature: 0.2, responseMimeType: 'application/json', responseSchema: schema },
-  }, key);
+  };
+  let data, lastErr;
+  outer: for (const m of order) {
+    for (const pause of [0, 2000, 5000]) {
+      if (pause) { onWait(`Gemini je přetížený, zkouším znovu (${m})…`); await sleep(pause); }
+      try { data = await call(`models/${m}:generateContent`, body, key); break outer; }
+      catch (e) {
+        lastErr = e;
+        if (e.retry === 'model') continue outer;
+        if (e.retry !== 'busy') throw e;
+      }
+    }
+    onWait('Zkouším jiný model Gemini…');
+  }
+  if (!data) throw lastErr;
   const cand = data.candidates?.[0];
   if (!cand) throw new AiError('Gemini nevrátil odpověď' + (data.promptFeedback?.blockReason ? ` (${data.promptFeedback.blockReason}).` : '.'));
   if (cand.finishReason === 'RECITATION') throw new AiError('Gemini odmítl odpovědět (ochrana autorských práv). Zkus přeložit méně veršů najednou.');
@@ -81,7 +106,7 @@ Pravidla:
 - Vrať všechny verše se stejným "id", jaké dostaneš. Původní text neopakuj.`;
 
 // Přeloží verše (ty bez překladu, nebo všechny při overwrite). onProgress(hotovo, celkem).
-export async function translateVersion(song, version, { overwrite = false, onProgress = () => {} } = {}) {
+export async function translateVersion(song, version, { overwrite = false, onProgress = () => {}, onWait = () => {} } = {}) {
   const todo = version.lines.filter(l => l.text.trim() && (overwrite || !l.translation));
   const BATCH = 40;
   let done = 0;
@@ -105,7 +130,7 @@ export async function translateVersion(song, version, { overwrite = false, onPro
         }) }),
       },
       required: ['lines'],
-    }));
+    }), onWait);
     const byId = new Map((res.lines || []).map(x => [String(x.id), x]));
     for (const l of chunk) {
       const x = byId.get(l.id);

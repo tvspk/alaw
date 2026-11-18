@@ -353,7 +353,8 @@ export async function renderSong(root, id, nav) {
     const status = el('div', { class: 'ai-status', text: 'Posílám verše Gemini…' });
     const closeSheet = sheet(() => el('div', {}, el('h3', { text: 'Překlad pomocí AI' }), status));
     try {
-      const n = await translateVersion(song, version, { overwrite, onProgress: (d, t) => { status.textContent = t ? `Přeloženo ${d} z ${t} veršů…` : 'Všechny verše už překlad mají.'; } });
+      const n = await translateVersion(song, version, { overwrite, onProgress: (d, t) => { status.textContent = t ? `Přeloženo ${d} z ${t} veršů…` : 'Všechny verše už překlad mají.'; },
+        onWait: msg => { status.textContent = msg; } });
       await saveSong(song);
       closeSheet();
       setPrefs({ showTr: true });
