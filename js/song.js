@@ -1,0 +1,369 @@
+// Obrazovka písně: text, režimy učení, přehrávač, smyčka, úprava veršů.
+import { el, iconBtn, ICONS, sheet, menu, toast, download, safeName } from './ui.js';
+import { getSong, saveSong, deleteSong, getAudioBlob, getPrefs, setPrefs } from './store.js';
+import { primaryVersion, formatMs, toLrc, langLabel } from './model.js';
+import { Player, RATES } from './player.js';
+
+const WORD_RE = /^([^\p{L}\p{N}]*)(.*?)([^\p{L}\p{N}]*)$/u;
+
+function hash01(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return (h >>> 0) / 4294967296;
+}
+
+function parseTime(text) {
+  const s = String(text || '').trim();
+  if (!s) return null;
+  const m = s.match(/^(\d{1,3}):(\d{1,2})(?:[.,](\d{1,3}))?$/) || s.match(/^()(\d+)(?:[.,](\d{1,3}))?$/);
+  if (!m) return undefined;
+  const f = m[3] ? +m[3].padEnd(3, '0').slice(0, 3) : 0;
+  return ((+m[1] || 0) * 60 + +m[2]) * 1000 + f;
+}
+
+export async function renderSong(root, id, nav) {
+  let song = await getSong(id);
+  if (!song) { root.append(el('div', { class: 'view' }, el('p', { class: 'empty', text: 'Píseň nenalezena.' }))); return; }
+  const prefs = getPrefs();
+  let version = primaryVersion(song);
+  const player = new Player();
+  player.rate = prefs.rate;
+
+  const st = {
+    mode: prefs.mode, pct: prefs.clozePct, seed: 1, revealed: new Set(), revealAll: false,
+    loop: null, active: -1, lastUserScroll: 0, source: null,
+  };
+
+  // ---------- horní lišta ----------
+  const titleEl = el('h1', {}, el('span', { text: song.title }), el('small', { text: [song.artist, langLabel(song.language)].filter(Boolean).join(' · ') }));
+  const top = el('header', { class: 'topbar' },
+    iconBtn('back', 'Zpět', () => nav.back()),
+    titleEl,
+    iconBtn('more', 'Další možnosti', openSongMenu));
+
+  // ---------- média ----------
+  const media = el('div', { class: 'media' });
+  const mediaError = el('div', { class: 'media-error', hidden: true });
+
+  // ---------- režimy učení ----------
+  const segBtns = {};
+  const seg = el('div', { class: 'seg', role: 'tablist' },
+    [['read', 'Číst'], ['cloze', 'Mizení'], ['initials', 'Písmena']].map(([m, label]) =>
+      (segBtns[m] = el('button', { type: 'button', role: 'tab', text: label, onclick: () => setMode(m) }))));
+  const pctLabel = el('span');
+  const pctInput = el('input', { type: 'range', min: 10, max: 100, step: 10, value: st.pct, 'aria-label': 'Kolik slov skrýt',
+    oninput: () => { st.pct = +pctInput.value; setPrefs({ clozePct: st.pct }); st.revealed.clear(); updatePct(); renderLyrics(); } });
+  const range = el('label', { class: 'range' }, pctLabel, pctInput);
+  const shuffleBtn = el('button', { type: 'button', class: 'chip', text: '🔀 Jiná slova', onclick: () => { st.seed++; st.revealed.clear(); renderLyrics(); } });
+  const revealBtn = el('button', { type: 'button', class: 'chip', onclick: () => { st.revealAll = !st.revealAll; st.revealed.clear(); renderLyrics(); updateTools(); } });
+  const togTr = toggleChip('Překlad', 'showTr');
+  const togLit = toggleChip('Doslovně', 'showLit');
+  const togContr = toggleChip('Zkratky', 'showContr');
+  const tools = el('div', { class: 'tools' });
+  const study = el('div', { class: 'study' }, seg, tools);
+
+  function toggleChip(label, key) {
+    const b = el('button', { type: 'button', class: 'chip', text: label, onclick: () => { setPrefs({ [key]: !getPrefs()[key] }); updateTools(); renderLyrics(); } });
+    b.dataset.key = key;
+    return b;
+  }
+
+  function updatePct() { pctLabel.textContent = `Skrýt ${st.pct} %`; }
+
+  function updateTools() {
+    for (const [m, b] of Object.entries(segBtns)) { b.classList.toggle('on', st.mode === m); b.setAttribute('aria-selected', st.mode === m); }
+    const p = getPrefs();
+    const has = k => version.lines.some(l => (k === 'contractions' ? l.contractions.length : l[k]));
+    const chips = [];
+    if (st.mode === 'cloze') chips.push(range, shuffleBtn);
+    if (st.mode !== 'read') { revealBtn.textContent = st.revealAll ? '🙈 Skrýt' : '👁 Odkrýt vše'; chips.push(revealBtn); }
+    if (has('translation')) chips.push(togTr);
+    if (has('literal')) chips.push(togLit);
+    if (has('contractions')) chips.push(togContr);
+    for (const c of [togTr, togLit, togContr]) c.classList.toggle('on', !!p[c.dataset.key]);
+    tools.replaceChildren(...chips);
+    tools.hidden = !chips.length;
+    updatePct();
+  }
+
+  function setMode(m) {
+    st.mode = m; st.revealed.clear(); st.revealAll = false;
+    setPrefs({ mode: m });
+    updateTools(); renderLyrics();
+  }
+
+  // ---------- text ----------
+  const list = el('ol', { class: 'lyrics' });
+  let lineEls = [];
+
+  function wordNodes(line) {
+    const out = [];
+    let wi = 0;
+    for (const part of line.text.split(/(\s+)/)) {
+      if (!part) continue;
+      if (/^\s+$/.test(part)) { out.push(part); continue; }
+      const [, lead, core, trail] = part.match(WORD_RE);
+      if (!core) { out.push(part); continue; }
+      const key = `${line.id}:${wi}`;
+      const hide = !st.revealAll && (st.mode === 'initials' || (st.mode === 'cloze' && hash01(`${st.seed}|${line.id}|${wi}`) * 100 < st.pct));
+      wi++;
+      if (lead) out.push(lead);
+      if (!hide) out.push(core);
+      else if (st.revealed.has(key)) out.push(el('span', { class: 'w peek', text: core }));
+      else {
+        const w = el('span', { class: 'w hide', dataset: { k: key }, role: 'button', 'aria-label': 'Skryté slovo, ťukni pro odkrytí' });
+        if (st.mode === 'initials') w.append(el('span', { class: 'first', text: core[0] }), core.slice(1));
+        else w.append(core);
+        out.push(w);
+      }
+      if (trail) out.push(trail);
+    }
+    return out;
+  }
+
+  function renderLyrics() {
+    const p = getPrefs();
+    const learning = st.mode !== 'read' && !st.revealAll;
+    const loopRange = loopIdx();
+    lineEls = version.lines.map((line, i) => {
+      const timed = line.start != null;
+      const body = el('div', { class: 'body' },
+        timed && st.mode === 'read' ? el('div', { class: 'time', text: formatMs(line.start, false) }) : null,
+        el('div', { class: 'text' }, wordNodes(line)),
+        p.showTr && line.translation && !learning ? el('div', { class: 'tr', text: line.translation }) : null,
+        p.showLit && line.literal && !learning ? el('div', { class: 'lit', text: line.literal }) : null,
+        p.showContr && line.contractions.length && !learning
+          ? el('div', { class: 'contr' }, line.contractions.map(c => el('span', { text: `${c.short} → ${c.full}`, title: c.note }))) : null,
+        line.note && st.mode === 'read' ? el('div', { class: 'note', text: line.note }) : null);
+      const li = el('li', { class: 'lyric' + (line.stanza ? ' stanza' : '') + (timed ? ' timed' : ''), dataset: { i } },
+        body, el('button', { type: 'button', class: 'icon-btn more', 'aria-label': 'Možnosti verše', html: ICONS.more, onclick: () => openLineMenu(i) }));
+      if (i === st.active) li.classList.add('active');
+      if (loopRange && i >= loopRange[0] && i <= loopRange[1]) li.classList.add('in-loop');
+      return li;
+    });
+    list.replaceChildren(...lineEls);
+    if (!version.lines.length) list.append(el('p', { class: 'empty', text: 'Píseň zatím nemá text. Doplň ho v Upravit.' }));
+  }
+
+  list.addEventListener('click', e => {
+    const w = e.target.closest('.w.hide');
+    if (w) { st.revealed.add(w.dataset.k); renderLyrics(); return; }
+    if (e.target.closest('.more')) return;
+    const li = e.target.closest('.lyric');
+    if (!li || !e.target.closest('.text')) return;
+    const i = +li.dataset.i;
+    const line = version.lines[i];
+    if (line.start == null || !player.ready) return;
+    const lr = loopIdx();
+    if (lr && (i < lr[0] || i > lr[1])) clearLoop();
+    player.playFrom(Math.max(0, line.start - 150));
+  });
+
+  // ---------- přehrávač ----------
+  const playBtn = el('button', { type: 'button', class: 'play', 'aria-label': 'Přehrát', html: ICONS.play, onclick: () => player.toggle() });
+  const timeEl = el('span', { class: 'time', text: '00:00 / --:--' });
+  const progress = el('input', { type: 'range', class: 'progress', min: 0, max: 1000, value: 0, step: 100, 'aria-label': 'Pozice',
+    oninput: () => player.seek(+progress.value) });
+  const rateBtn = el('button', { type: 'button', class: 'pill', onclick: () => {
+    const next = RATES[(RATES.indexOf(player.rate) + 1) % RATES.length] ?? 1;
+    player.setRate(next); setPrefs({ rate: next }); updateRate();
+  } });
+  const loopBtn = el('button', { type: 'button', class: 'pill loop', hidden: true, onclick: clearLoop });
+  const srcBtn = el('button', { type: 'button', class: 'pill', hidden: true, onclick: () => switchSource(st.source === 'audio' ? 'youtube' : 'audio') });
+  const bar = el('div', { class: 'playerbar', hidden: true }, el('div', { class: 'inner' },
+    progress,
+    el('div', { class: 'controls' },
+      iconBtn('rewind', 'O 5 sekund zpět', () => player.seek(player.time() - 5000)),
+      playBtn, timeEl, el('span', { class: 'grow' }), loopBtn, srcBtn, rateBtn)));
+
+  function updateRate() { rateBtn.textContent = `${String(player.rate).replace('.', ',')}×`; rateBtn.classList.toggle('on', player.rate !== 1); }
+
+  player.onState = playing => { playBtn.innerHTML = playing ? ICONS.pause : ICONS.play; playBtn.setAttribute('aria-label', playing ? 'Pozastavit' : 'Přehrát'); };
+  player.onReady = () => { progress.max = Math.round(player.duration || 1000); mediaError.hidden = true; onTime(player.time()); };
+  player.onError = msg => { mediaError.textContent = msg; mediaError.hidden = false; };
+  player.onTime = onTime;
+
+  function onTime(t) {
+    if (player.duration) progress.max = Math.round(player.duration);
+    if (document.activeElement !== progress) progress.value = Math.round(t);
+    timeEl.textContent = `${formatMs(t, false)} / ${formatMs(player.duration, false)}`;
+    // aktivní verš = poslední časovaný verš, který už začal
+    let active = -1;
+    version.lines.forEach((l, i) => { if (l.start != null && l.start <= t + 80) active = i; });
+    if (active !== st.active) {
+      lineEls[st.active]?.classList.remove('active');
+      st.active = active;
+      const li = lineEls[active];
+      if (li) {
+        li.classList.add('active');
+        if (getPrefs().autoScroll && player.playing && Date.now() - st.lastUserScroll > 3500) li.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }
+  }
+  const markScroll = () => { st.lastUserScroll = Date.now(); };
+  window.addEventListener('touchmove', markScroll, { passive: true });
+  window.addEventListener('wheel', markScroll, { passive: true });
+
+  async function switchSource(kind) {
+    st.source = kind;
+    setPrefs({ source: { ...getPrefs().source, [song.id]: kind } });
+    mediaError.hidden = true;
+    const hasAudio = !!version.audio, hasYt = !!version.youtubeId;
+    srcBtn.hidden = !(hasAudio && hasYt);
+    srcBtn.textContent = kind === 'audio' ? '♪ Soubor' : '▶ YouTube';
+    bar.hidden = false;
+    if (kind === 'audio') {
+      const blob = await getAudioBlob(version.audio.key);
+      if (!blob) {
+        player.destroy();
+        media.replaceChildren(el('div', { class: 'media-note', text: `Zvukový soubor „${version.audio.name}“ v tomto zařízení není. Nahraj ho znovu v Upravit.` }));
+        return;
+      }
+      media.replaceChildren();
+      player.loadAudio(blob);
+    } else {
+      const wrap = el('div', { class: 'yt-wrap' });
+      media.replaceChildren(wrap);
+      await player.loadYouTube(wrap, version.youtubeId);
+    }
+    player.setRate(player.rate);
+    applyLoop(false);
+  }
+
+  function setupMedia() {
+    const hasAudio = !!version.audio, hasYt = !!version.youtubeId;
+    if (!hasAudio && !hasYt) {
+      player.destroy(); bar.hidden = true;
+      media.replaceChildren(el('div', { class: 'media-note' }, 'Bez nahrávky. V ',
+        el('a', { href: `#/edit/${song.id}`, text: 'Upravit' }), ' můžeš přidat odkaz na YouTube nebo vlastní zvukový soubor.'));
+      return;
+    }
+    const saved = getPrefs().source[song.id];
+    switchSource(saved === 'youtube' && hasYt ? 'youtube' : saved === 'audio' && hasAudio ? 'audio' : hasAudio ? 'audio' : 'youtube');
+  }
+
+  // ---------- smyčka ----------
+  function loopIdx() { return st.loop ? [Math.min(st.loop.a, st.loop.b), Math.max(st.loop.a, st.loop.b)] : null; }
+
+  function applyLoop(start = true) {
+    const r = loopIdx();
+    if (!r) { player.setLoop(null); loopBtn.hidden = true; return; }
+    const a = version.lines[r[0]].start;
+    const next = version.lines.slice(r[1] + 1).find(l => l.start != null);
+    player.setLoop(a, next ? next.start : null);
+    loopBtn.hidden = false;
+    loopBtn.textContent = r[0] === r[1] ? `🔁 verš ${r[0] + 1}  ✕` : `🔁 ${r[0] + 1}–${r[1] + 1}  ✕`;
+    if (start && player.ready) player.playFrom(Math.max(0, a - 150));
+  }
+
+  function setLoop(a, b) {
+    if (version.lines[Math.min(a, b)].start == null) { toast('Verš ještě nemá čas. Nejdřív píseň načasuj.'); return; }
+    st.loop = { a, b };
+    applyLoop(); renderLyrics();
+  }
+
+  function clearLoop() { st.loop = null; applyLoop(false); renderLyrics(); }
+
+  // ---------- nabídky ----------
+  function openLineMenu(i) {
+    const line = version.lines[i];
+    const timed = line.start != null && player.kind;
+    const r = loopIdx();
+    sheet(close => el('div', {},
+      el('h3', { text: line.text }),
+      line.translation ? el('div', { class: 'sub', text: line.translation }) : null,
+      menu([
+        timed && { icon: '🔁', label: 'Opakovat tento verš', action: () => setLoop(i, i) },
+        timed && { icon: '⤒', label: r ? 'Smyčka začne tady' : 'Smyčka od tohoto verše…', action: () => setLoop(i, r ? Math.max(r[1], i) : i) },
+        timed && r && { icon: '⤓', label: 'Smyčka skončí tady', action: () => setLoop(Math.min(r[0], i), i) },
+        st.mode !== 'read' && { icon: '👁', label: 'Odkrýt verš', action: () => { revealLine(line); } },
+        { icon: '✎', label: 'Upravit verš, překlad, poznámku', action: () => editLine(i) },
+      ], close)));
+  }
+
+  function revealLine(line) {
+    const n = line.text.split(/\s+/).length;
+    for (let w = 0; w < n + 1; w++) st.revealed.add(`${line.id}:${w}`);
+    renderLyrics();
+  }
+
+  function editLine(i) {
+    const line = version.lines[i];
+    const f = {
+      text: el('textarea', { class: 'short', value: line.text }),
+      translation: el('textarea', { class: 'short', value: line.translation }),
+      literal: el('textarea', { class: 'short', value: line.literal }),
+      contractions: el('textarea', { class: 'short', value: line.contractions.map(c => `${c.short} = ${c.full}${c.note ? ' — ' + c.note : ''}`).join('\n'), placeholder: 'dwi = rydw i — hovorově' }),
+      note: el('textarea', { class: 'short', value: line.note, placeholder: 'Pomůcka, poznámka k výslovnosti…' }),
+      start: el('input', { value: line.start != null ? formatMs(line.start) : '', inputmode: 'decimal', placeholder: 'mm:ss.cc' }),
+    };
+    const field = (label, node, hint) => el('label', { class: 'field' }, el('span', { text: label }), node, hint ? el('div', { class: 'hint', text: hint }) : null);
+    sheet(close => el('div', { class: 'form' },
+      el('h3', { text: `Verš ${i + 1}` }),
+      field('Text', f.text),
+      field('Překlad', f.translation),
+      field('Doslovně', f.literal),
+      field('Zkratky a hovorové tvary', f.contractions, 'Jeden na řádek: krátký tvar = plný tvar — poznámka'),
+      field('Poznámka', f.note),
+      field('Začátek verše', f.start, 'Např. 01:23.45. Prázdné = bez času.'),
+      el('div', { class: 'row end' },
+        el('button', { type: 'button', class: 'btn', text: 'Zrušit', onclick: close }),
+        el('button', { type: 'button', class: 'btn primary', text: 'Uložit', onclick: async () => {
+          const start = parseTime(f.start.value);
+          if (start === undefined) { toast('Čas zapiš jako mm:ss.cc, např. 01:23.45'); return; }
+          if (!f.text.value.trim()) { toast('Text verše nesmí být prázdný.'); return; }
+          Object.assign(line, {
+            text: f.text.value.replace(/\s+/g, ' ').trim(),
+            translation: f.translation.value.trim(),
+            literal: f.literal.value.trim(),
+            note: f.note.value.trim(),
+            start,
+            contractions: f.contractions.value.split('\n').map(s => s.trim()).filter(Boolean).map(s => {
+              const [pair, ...noteParts] = s.split(/\s+[—–-]\s+/);
+              const [short, full = ''] = pair.split('=').map(x => x.trim());
+              return { short, full, note: noteParts.join(' – ').trim() };
+            }).filter(c => c.short),
+          });
+          await saveSong(song);
+          close(); updateTools(); renderLyrics(); applyLoop(false);
+          toast('Uloženo');
+        } }))));
+  }
+
+  function openSongMenu() {
+    sheet(close => el('div', {},
+      el('h3', { text: song.title }),
+      el('div', { class: 'sub', text: `${version.lines.length} veršů` }),
+      menu([
+        { icon: '✎', label: 'Upravit píseň', action: () => nav.go(`#/edit/${song.id}`) },
+        { icon: '⏱', label: 'Časovat verše ťukáním', action: () => nav.go(`#/sync/${song.id}`) },
+        { icon: '⇩', label: 'Stáhnout text (.lrc)', action: () => download(`${safeName(song.artist + '-' + song.title)}.lrc`, toLrc(song, version), 'text/plain') },
+        { icon: '⇩', label: 'Stáhnout píseň (.json)', action: () => download(`${safeName(song.artist + '-' + song.title)}.json`, JSON.stringify(song, null, 2)) },
+        { icon: '🗑', label: 'Smazat píseň', danger: true, action: async () => {
+          if (!confirm(`Smazat „${song.title}“ včetně zvukového souboru? Nejde to vrátit.`)) return;
+          await deleteSong(song); toast('Smazáno'); nav.replace('#/');
+        } },
+      ], close)));
+  }
+
+  // ---------- sestavení ----------
+  const view = el('div', { class: 'view' }, top, media, mediaError, study, list);
+  root.append(view, bar);
+  updateRate(); updateTools(); renderLyrics(); setupMedia();
+  const onScroll = () => top.classList.toggle('scrolled', scrollY > 4);
+  window.addEventListener('scroll', onScroll, { passive: true });
+  const onKey = e => {
+    if (e.target.closest('input, textarea, select') || document.querySelector('.sheet')) return;
+    if (e.code === 'Space') { e.preventDefault(); player.toggle(); }
+  };
+  document.addEventListener('keydown', onKey);
+  document.documentElement.style.setProperty('--lyric-size', `${getPrefs().lyricSize}rem`);
+
+  return () => {
+    player.destroy();
+    window.removeEventListener('scroll', onScroll);
+    window.removeEventListener('touchmove', markScroll);
+    window.removeEventListener('wheel', markScroll);
+    document.removeEventListener('keydown', onKey);
+  };
+}
