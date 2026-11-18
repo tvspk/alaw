@@ -14,19 +14,22 @@ export const hasAi = () => !!aiConfig().key;
 
 class AiError extends Error {}
 
+// Klíč: starší formát „AIza…“ i nový „AQ.…“. Posílá se v hlavičce; kdyby ji Google odmítl (401), zkusí se parametr ?key=.
 async function call(path, body, key) {
   let r;
+  const send = viaQuery => fetch(`${API}/${path}${viaQuery ? `${path.includes('?') ? '&' : '?'}key=${encodeURIComponent(key)}` : ''}`, {
+    method: body ? 'POST' : 'GET',
+    headers: viaQuery ? { 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+    body: body ? JSON.stringify(body) : undefined,
+  });
   try {
-    r = await fetch(`${API}/${path}`, {
-      method: body ? 'POST' : 'GET',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    r = await send(false);
+    if (r.status === 401) r = await send(true);
   } catch { throw new AiError(navigator.onLine ? 'Gemini neodpovídá.' : 'Jsi offline.'); }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
     const msg = data.error?.message || '';
-    if (r.status === 400 && /API key/i.test(msg)) throw new AiError('Klíč pro Gemini není platný.');
+    if ((r.status === 400 && /API key/i.test(msg)) || r.status === 401) throw new AiError('Klíč pro Gemini není platný. Zkopíruj ho z Google AI Studia znovu celý (začíná „AQ.“ nebo „AIza“).');
     if (r.status === 403) throw new AiError('Klíč pro Gemini nemá přístup (zkontroluj ho v Google AI Studiu).');
     if (r.status === 429) throw new AiError('Gemini hlásí vyčerpaný limit. Zkus to později.');
     if (r.status === 404) throw new AiError('Model Gemini nenalezen. V Nastavení klíč ulož znovu, vybere se aktuální model.');

@@ -9,7 +9,7 @@ import { renderTapSync } from './tapsync.js';
 import { isAndroid, request } from './net.js';
 import { aiConfig, setAiConfig, pickModel } from './ai.js';
 
-export const APP_VERSION = '0.2.0';
+export const APP_VERSION = '0.2.1';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně
@@ -228,7 +228,7 @@ function searchSection() {
 
 function aiSection() {
   const cfg = aiConfig();
-  const input = el('input', { type: 'password', value: cfg.key || '', placeholder: 'AIza…', autocomplete: 'off', spellcheck: false });
+  const input = el('input', { type: 'password', value: cfg.key || '', placeholder: 'AQ.… nebo AIza…', autocomplete: 'off', spellcheck: false });
   const status = el('div', { class: 'ai-status', text: cfg.key ? `Model: ${cfg.model}` : '' });
   return el('section', { class: 'section' },
     el('h2', { text: 'Překlady pomocí AI (Gemini)' }),
@@ -237,7 +237,7 @@ function aiSection() {
     el('label', { class: 'field' }, el('span', { text: 'Klíč API' }), input),
     el('div', { class: 'row', style: { marginTop: '8px' } },
       el('button', { type: 'button', class: 'btn small', text: 'Uložit a ověřit', onclick: async () => {
-        const key = input.value.trim();
+        const key = input.value.replace(/\s+/g, '');
         if (!key) { setAiConfig(null); status.textContent = 'Klíč smazán.'; return; }
         status.textContent = 'Ověřuji…';
         try { const model = await pickModel(key); setAiConfig({ key, model }); status.textContent = `✓ Funguje. Model: ${model}`; }

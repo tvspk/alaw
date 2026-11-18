@@ -68,8 +68,8 @@ gemini_calls = []
 def gemini(route):
     req = route.request
     gemini_calls.append(req.url)
-    if req.headers.get('x-goog-api-key') != 'AIzaTEST':
-        return route.fulfill(status=400, json={'error': {'message': 'API key not valid'}})
+    if req.headers.get('x-goog-api-key') != 'AQ.TESTKEY':
+        return route.fulfill(status=401, json={'error': {'message': 'Request had invalid authentication credentials.'}})
     if req.url.endswith('/models?pageSize=1000'):
         return route.fulfill(json=GEMINI_MODELS)
     body = json.loads(req.post_data)
@@ -166,11 +166,12 @@ def main():
         page.once('dialog', lambda d: d.accept())
         page.click('text=Přeložit pomocí AI')
         page.wait_for_selector('text=Klíč API')
-        page.fill('input[placeholder="AIza…"]', 'spatny')
+        page.fill('input[placeholder="AQ.… nebo AIza…"]', 'spatny')
         page.click('text=Uložit a ověřit')
         page.wait_for_selector('text=Klíč pro Gemini není platný.')
         check(True, 'neplatný klíč odmítnut')
-        page.fill('input[placeholder="AIza…"]', 'AIzaTEST')
+        check(any('key=spatny' in c for c in gemini_calls), 'při odmítnutí zkusí i ?key=')
+        page.fill('input[placeholder="AQ.… nebo AIza…"]', 'AQ.TESTKEY')
         page.click('text=Uložit a ověřit')
         page.wait_for_selector('text=Model: gemini-3.7-flash')
         check(True, 'vybrán nejnovější model flash (ne lite)')
