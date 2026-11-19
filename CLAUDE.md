@@ -24,4 +24,4 @@
   Ukládat písně jen přes `store.saveSong`/`deleteSong` (razítko času + náhrobek + naplánování synchronizace).
   Formát stavu `v:1`; při nekompatibilní změně zvýšit. QR: `js/qr.js` (window.GSQR), obsah `ALAW:` + 8 slov, bez tokenu.
   Test: `python3 testy/test_sync.py` (napodobený GitHub, dvě zařízení). Nikdy netestovat proti skutečnému GitHubu.
-- Plán: 3) verze a sporná místa, 4) pokrok a opakování.
+- **Stav projektu, rozhodnutí a další kroky: `HANDOFF.md`** (přečti jako první). Plán: 4) pokrok a opakování, 3) verze a sporná místa.
