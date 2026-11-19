@@ -1,6 +1,7 @@
 // Práce s písněmi nad IndexedDB + nastavení, která platí jen v tomto zařízení (localStorage).
 import { db } from './db.js';
 import { normalizeSong } from './model.js';
+import { stamp, recordDelete, changed } from './sync.js';
 
 export async function listSongs() {
   const songs = (await db.allSongs()).map(normalizeSong).filter(Boolean);
@@ -10,14 +11,18 @@ export async function listSongs() {
 export const getSong = async id => normalizeSong(await db.getSong(id));
 
 export async function saveSong(song) {
-  song.updatedAt = Date.now();
+  const prev = await db.getSong(song.id);
+  song.updatedAt = stamp(Math.max(prev?.updatedAt || 0, song.updatedAt || 0)); // čas podle GitHubu, vždy novější
   await db.putSong(song);
+  changed();
   return song;
 }
 
 export async function deleteSong(song) {
   for (const v of song.versions) if (v.audio) await db.deleteAudio(v.audio.key);
   await db.deleteSong(song.id);
+  await recordDelete(song.id);
+  changed();
 }
 
 export const getAudioBlob = key => db.getAudio(key);

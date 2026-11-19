@@ -112,6 +112,7 @@ def main():
 
         print('Režimy učení')
         page.click('.seg button:has-text("Mizení")')
+        page.wait_for_selector('.w.hide', timeout=3000)
         n_hidden = page.locator('.w.hide').count()
         check(n_hidden > 0, f'mizení skrylo {n_hidden} slov')
         page.locator('.w.hide').first.click()

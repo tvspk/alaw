@@ -11,6 +11,8 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowInsetsController;
 import android.webkit.JavascriptInterface;
+import android.webkit.PermissionRequest;
+import android.content.pm.PackageManager;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -42,13 +44,14 @@ import java.util.regex.Pattern;
 public class MainActivity extends Activity {
     private static final String HOST = "appassets.androidplatform.net";
     private static final String HOME = "https://" + HOST + "/index.html";
-    private static final int REQ_FILE = 11, REQ_SAVE = 12;
+    private static final int REQ_FILE = 11, REQ_SAVE = 12, REQ_CAMERA = 13;
     private static final int MAX_BYTES = 5 * 1024 * 1024;
     private static final String UA = "AlawLyrics/0.2 (+https://github.com/tvspk/alaw)";
 
     private WebView web;
     private ValueCallback<Uri[]> fileCallback;
     private byte[] pendingSave;
+    private PermissionRequest pendingCamera;
     private final ExecutorService pool = Executors.newFixedThreadPool(6);
 
     @Override
@@ -95,6 +98,25 @@ public class MainActivity extends Activity {
         });
 
         web.setWebChromeClient(new WebChromeClient() {
+            /** Kamera pro QR párování: jen pro vlastní stránku, oprávnění Androidu se žádá až při skenování. */
+            @Override
+            public void onPermissionRequest(final PermissionRequest r) {
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        Uri o = r.getOrigin();
+                        boolean video = false;
+                        for (String res : r.getResources()) if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(res)) video = true;
+                        if (o == null || !HOST.equals(o.getHost()) || !video) { r.deny(); return; }
+                        if (checkSelfPermission(android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                            r.grant(new String[]{ PermissionRequest.RESOURCE_VIDEO_CAPTURE });
+                        } else {
+                            pendingCamera = r;
+                            requestPermissions(new String[]{ android.Manifest.permission.CAMERA }, REQ_CAMERA);
+                        }
+                    }
+                });
+            }
+
             @Override
             public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
                 if (fileCallback != null) fileCallback.onReceiveValue(null);
@@ -324,6 +346,14 @@ public class MainActivity extends Activity {
                 }
             });
         }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
+        if (req != REQ_CAMERA || pendingCamera == null) return;
+        if (res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED) pendingCamera.grant(new String[]{ PermissionRequest.RESOURCE_VIDEO_CAPTURE });
+        else pendingCamera.deny();
+        pendingCamera = null;
     }
 
     @Override

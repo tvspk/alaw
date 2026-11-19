@@ -2,7 +2,7 @@
 
 Alaw (velšsky „melodie“): texty písní (hlavně velšských) a jejich učení nazpaměť. Webová aplikace (PWA) pro Android i počítač, funguje offline.
 
-## Co umí (verze 0.2)
+## Co umí (verze 0.3)
 
 - Knihovna písní s hledáním (i v textu, bez ohledu na stříšky), štítky a filtrem jazyka.
 - Přidání písně: prostý text nebo LRC s časy, sloky oddělené prázdným řádkem, načtení ze souboru.
@@ -21,6 +21,8 @@ Alaw (velšsky „melodie“): texty písní (hlavně velšských) a jejich uče
   vysvětlení verše slovo po slovu.
 - **Aplikace pro Android (APK)**: stejná aplikace ve WebView, stahuje stránky sama (bez prostředníka), ukládání souborů,
   tlačítko Zpět, nabídka nové verze. Vydává se automaticky přes GitHub Actions (`android/verze.txt`).
+- **Synchronizace** mezi telefonem a počítačem přes vlastní soukromý repozitář na GitHubu, šifrovaně (AES-256-GCM,
+  párovací kód 8 slov, i jako QR). Písně, překlady, časy i nahrávky; novější úprava vyhrává.
 
 ## Spuštění na počítači
 
@@ -34,5 +36,5 @@ a otevřít http://localhost:8000
 - Bez sestavování: čisté HTML, CSS a JavaScript (ES moduly) v `index.html`, `css/`, `js/`.
 - Po každé změně souborů spusť `python3 scripts/build_sw.py` (aktualizuje seznam souborů a verzi v `sw.js`).
 - Testy: `python3 testy/test_zaklad.py`, `python3 testy/test_hledani.py` (Playwright, Chromium jako Pixel 7, bez sítě),
-  `node testy/test_worker.mjs`. Kontrola zdrojů proti skutečným webům: `python3 testy/zdroje_naostro.py`.
+  `python3 testy/test_sync.py` (napodobený GitHub), `node testy/test_worker.mjs`. Kontrola zdrojů proti skutečným webům: `python3 testy/zdroje_naostro.py`.
 - APK: `sh android/build.sh` (nástroje z npm, Java 17). Prostředník pro počítač: `worker/` (návod v `worker/README.md`).

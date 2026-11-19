@@ -17,4 +17,11 @@
 - APK (`android/`): stránka se servíruje z `https://appassets.androidplatform.net/` (kvůli YouTube a IndexedDB). Nová verze APK:
   zvyš `android/verze.txt` (versionCode +1) a `APP_VERSION` v `js/app.js`. Klíč v Secrets `ALAW_KEYSTORE`, `ALAW_KEYSTORE_PASSWORD` (alias `alaw`).
   Jiný klíč = aktualizace nejde nainstalovat. APK se v prostředí Claude nedá spustit – ověřuje se na telefonu.
-- Plán: 3) verze a sporná místa, 4) pokrok a opakování, 5) synchronizace přes GitHub (vzor: tvspk/gorsaf, tvspk/memochat).
+- Synchronizace (`js/sync.js`, UI `js/syncui.js`): schránka = soukromý `tvspk/alaw-sync` (Claude do ní přístup NEMÁ a mít nemá).
+  Větev na zařízení `al-<12 hex>`, soubor `state` + kousky zvuku `a/<klíč>/<i>` (≤ 8 MiB), AES-GCM, klíč HKDF z 8 slov
+  (salt 'Alaw sync v1'). Píseň = položka, **novější úprava vyhrává** (`updatedAt` přes `stamp()` = hodiny GitHubu),
+  smazání = náhrobek (`meta.tombs`). Zvuk se stahuje hned celý, nezmenšuje se. Nesynchronizuje se: `alaw-prefs`, `alaw-ai`.
+  Ukládat písně jen přes `store.saveSong`/`deleteSong` (razítko času + náhrobek + naplánování synchronizace).
+  Formát stavu `v:1`; při nekompatibilní změně zvýšit. QR: `js/qr.js` (window.GSQR), obsah `ALAW:` + 8 slov, bez tokenu.
+  Test: `python3 testy/test_sync.py` (napodobený GitHub, dvě zařízení). Nikdy netestovat proti skutečnému GitHubu.
+- Plán: 3) verze a sporná místa, 4) pokrok a opakování.

@@ -8,8 +8,10 @@ import { renderEdit } from './edit.js';
 import { renderTapSync } from './tapsync.js';
 import { isAndroid, request } from './net.js';
 import { aiConfig, setAiConfig, pickModel } from './ai.js';
+import { boot as syncBoot, changed as syncChanged } from './sync.js';
+import { syncSection } from './syncui.js';
 
-export const APP_VERSION = '0.2.4';
+export const APP_VERSION = '0.3.0';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně
@@ -159,6 +161,7 @@ async function importFile() {
     await db.putSong(s); // čas změny zůstane ze zálohy
     old ? updated++ : added++;
   }
+  syncChanged();
   for (const [key, dataUrl] of Object.entries(parsed.audio)) {
     try { await putAudioBlob(key, dataUrlToBlob(dataUrl)); audioCount++; } catch { /* poškozená nahrávka */ }
   }
@@ -169,6 +172,7 @@ async function importFile() {
 
 async function renderSettings(root) {
   const prefs = getPrefs();
+  const [syncEl, syncOff] = syncSection();
   const withAudio = el('input', { type: 'checkbox', checked: false });
   const est = await storageEstimate();
   const sizeOut = el('span', { text: `${Math.round(prefs.lyricSize * 100)} %` });
@@ -193,13 +197,13 @@ async function renderSettings(root) {
         el('button', { type: 'button', class: 'btn', text: '⇧ Načíst soubor', onclick: importFile }))),
     searchSection(),
     aiSection(),
-    el('section', { class: 'section' },
-      el('h2', { text: 'Synchronizace' }),
-      el('p', { text: 'Šifrovaná synchronizace přes GitHub mezi telefonem a počítačem přijde v další verzi. Zatím se vše ukládá jen v tomto zařízení.' })),
+    syncEl,
     el('section', { class: 'section' },
       el('h2', { text: 'Úložiště' }),
       el('p', { text: est ? `Využito ${fileSize(est.usage || 0)} z dostupných ${fileSize(est.quota || 0)}.` : 'Prohlížeč velikost úložiště neuvádí.' })),
     el('p', { class: 'empty', style: { padding: '12px' }, text: `Alaw ${APP_VERSION}` })));
+  if (location.hash.includes('sync')) setTimeout(() => syncEl.scrollIntoView({ block: 'start' }), 50);
+  return syncOff;
 }
 
 function searchSection() {
@@ -306,7 +310,15 @@ async function checkUpdate() {
   document.body.append(bar);
 }
 
+// Po synchronizaci překreslit, co je na obrazovce – ale ne pod rukama (otevřená nabídka, formulář, časování, hledání).
+window.addEventListener('alaw-synced', () => {
+  const view = location.hash.replace(/^#\/?/, '').split('/')[0];
+  if (document.querySelector('.sheet-backdrop, .overlay')) return;
+  if (!view || view === 'song') { const y = scrollY; route().then(() => scrollTo(0, y)); }
+});
+
 // ---------- start ----------
+syncBoot();
 syncBars();
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', syncBars);
 setTimeout(checkUpdate, 2000);
