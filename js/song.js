@@ -1,6 +1,7 @@
 // Obrazovka písně: text, režimy učení, přehrávač, smyčka, úprava veršů.
 import { el, iconBtn, ICONS, sheet, menu, toast, download, safeName } from './ui.js';
-import { getSong, saveSong, deleteSong, getAudioBlob, getPrefs, setPrefs } from './store.js';
+import { getSong, saveSong, deleteSong, getAudioBlob, getPrefs, setPrefs, getProgress, resetProgress } from './store.js';
+import { songUnits, songSummary, unitState, lineKey, STATE_LABEL, fmtIvl } from './learn.js';
 import { primaryVersion, formatMs, toLrc, langLabel } from './model.js';
 import { Player, RATES } from './player.js';
 import { hasAi, translateVersion, explainLine } from './ai.js';
@@ -29,6 +30,8 @@ export async function renderSong(root, id, nav) {
   let version = primaryVersion(song);
   const player = new Player();
   player.rate = prefs.rate;
+  const units = songUnits(song);
+  let recs = await getProgress(song.id);
 
   const st = {
     mode: prefs.mode, pct: prefs.clozePct, seed: 1, revealed: new Set(), revealAll: false,
@@ -49,7 +52,7 @@ export async function renderSong(root, id, nav) {
   // ---------- režimy učení ----------
   const segBtns = {};
   const seg = el('div', { class: 'seg', role: 'tablist' },
-    [['read', 'Číst'], ['cloze', 'Mizení'], ['initials', 'Písmena']].map(([m, label]) =>
+    [['read', 'Číst'], ['cloze', 'Mizení'], ['initials', 'Písmena'], ['map', 'Mapa']].map(([m, label]) =>
       (segBtns[m] = el('button', { type: 'button', role: 'tab', text: label, onclick: () => setMode(m) }))));
   const pctLabel = el('span');
   const pctInput = el('input', { type: 'range', min: 10, max: 100, step: 10, value: st.pct, 'aria-label': 'Kolik slov skrýt',
@@ -78,7 +81,7 @@ export async function renderSong(root, id, nav) {
     const has = k => version.lines.some(l => (k === 'contractions' ? l.contractions.length : l[k]));
     const chips = [];
     if (st.mode === 'cloze') chips.push(range, shuffleBtn);
-    if (st.mode !== 'read') { revealBtn.textContent = st.revealAll ? '🙈 Skrýt' : '👁 Odkrýt vše'; chips.push(revealBtn); }
+    if (st.mode === 'cloze' || st.mode === 'initials') { revealBtn.textContent = st.revealAll ? '🙈 Skrýt' : '👁 Odkrýt vše'; chips.push(revealBtn); }
     if (has('translation')) chips.push(togTr);
     if (has('alt')) chips.push(togAlt);
     if (has('literal')) chips.push(togLit);
@@ -94,6 +97,36 @@ export async function renderSong(root, id, nav) {
     setPrefs({ mode: m });
     updateTools(); renderLyrics();
   }
+
+  // ---------- učení: souhrn a mapa písně ----------
+  const learnInfo = el('div', { class: 'grow' });
+  const learnBox = el('div', { class: 'learn-box' }, learnInfo,
+    el('button', { type: 'button', class: 'btn small primary', text: '🎓 Učit se', onclick: () => nav.go(`#/learn/${encodeURIComponent(song.id)}`) }));
+  function updateLearnBox() {
+    const c = songSummary(units, recs);
+    learnBox.hidden = !units.length;
+    const parts = [];
+    if (c.new === c.total) parts.push(`${c.total} veršů k naučení`);
+    else {
+      parts.push(`Umíš ${c.known + c.due} z ${c.total}`);
+      if (c.due) parts.push(`${c.due} k opakování`);
+      if (c.learn) parts.push(`${c.learn} se učíš`);
+      if (c.new) parts.push(`${c.new} nových`);
+    }
+    learnInfo.textContent = parts.join(' · ');
+  }
+  function mapState(line, now) {
+    const rec = recs.get(lineKey(line.text));
+    const state = unitState(rec, now);
+    let txt = STATE_LABEL[state];
+    if (state === 'known') {
+      const days = Math.max(1, Math.round((rec.due - now) / 86400e3));
+      txt += ` · opakování za ${fmtIvl(days)}`;
+    }
+    if (rec && rec.lapses && state !== 'new') txt += ` · zapomenuto ${rec.lapses}×`;
+    return el('div', { class: 'mstate', text: txt });
+  }
+  async function reloadProgress() { recs = await getProgress(song.id); renderLyrics(); }
 
   // ---------- text ----------
   const list = el('ol', { class: 'lyrics' });
@@ -126,7 +159,9 @@ export async function renderSong(root, id, nav) {
 
   function renderLyrics() {
     const p = getPrefs();
-    const learning = st.mode !== 'read' && !st.revealAll;
+    const learning = (st.mode === 'cloze' || st.mode === 'initials') && !st.revealAll;
+    const map = st.mode === 'map', now = Date.now();
+    updateLearnBox();
     const loopRange = loopIdx();
     lineEls = version.lines.map((line, i) => {
       const timed = line.start != null;
@@ -138,8 +173,10 @@ export async function renderSong(root, id, nav) {
         p.showLit && line.literal && !learning ? el('div', { class: 'lit', text: line.literal }) : null,
         p.showContr && line.contractions.length && !learning
           ? el('div', { class: 'contr' }, line.contractions.map(c => el('span', { text: `${c.short} → ${c.full}`, title: c.note }))) : null,
-        line.note && st.mode === 'read' ? el('div', { class: 'note', text: line.note }) : null);
-      const li = el('li', { class: 'lyric' + (line.stanza ? ' stanza' : '') + (timed ? ' timed' : ''), dataset: { i } },
+        line.note && st.mode === 'read' ? el('div', { class: 'note', text: line.note }) : null,
+        map ? mapState(line, now) : null);
+      const ms = map ? unitState(recs.get(lineKey(line.text)), now) : null;
+      const li = el('li', { class: 'lyric' + (line.stanza ? ' stanza' : '') + (timed ? ' timed' : '') + (map ? ` mapped m-${ms}` : ''), dataset: { i } },
         body, el('button', { type: 'button', class: 'icon-btn more', 'aria-label': 'Možnosti verše', html: ICONS.more, onclick: () => openLineMenu(i) }));
       if (i === st.active) li.classList.add('active');
       if (loopRange && i >= loopRange[0] && i <= loopRange[1]) li.classList.add('in-loop');
@@ -153,6 +190,12 @@ export async function renderSong(root, id, nav) {
     const w = e.target.closest('.w.hide');
     if (w) { st.revealed.add(w.dataset.k); renderLyrics(); return; }
     if (e.target.closest('.more')) return;
+    if (st.mode === 'map') {
+      const li = e.target.closest('.lyric');
+      const k = li && lineKey(version.lines[+li.dataset.i].text);
+      if (k) nav.go(`#/learn/${encodeURIComponent(song.id)}/${encodeURIComponent(k)}`);
+      return;
+    }
     const li = e.target.closest('.lyric');
     if (!li || !e.target.closest('.text')) return;
     const i = +li.dataset.i;
@@ -283,7 +326,11 @@ export async function renderSong(root, id, nav) {
         timed && { icon: '🔁', label: 'Opakovat tento verš', action: () => setLoop(i, i) },
         timed && { icon: '⤒', label: r ? 'Smyčka začne tady' : 'Smyčka od tohoto verše…', action: () => setLoop(i, r ? Math.max(r[1], i) : i) },
         timed && r && { icon: '⤓', label: 'Smyčka skončí tady', action: () => setLoop(Math.min(r[0], i), i) },
-        st.mode !== 'read' && { icon: '👁', label: 'Odkrýt verš', action: () => { revealLine(line); } },
+        (st.mode === 'cloze' || st.mode === 'initials') && { icon: '👁', label: 'Odkrýt verš', action: () => { revealLine(line); } },
+        lineKey(line.text) && { icon: '🎓', label: 'Procvičit tento verš', action: () => nav.go(`#/learn/${encodeURIComponent(song.id)}/${encodeURIComponent(lineKey(line.text))}`) },
+        unitState(recs.get(lineKey(line.text))) !== 'new' && { icon: '↺', label: 'Vynulovat pokrok verše', action: async () => {
+          await resetProgress(song.id, [lineKey(line.text)]); await reloadProgress(); toast('Pokrok verše vynulován');
+        } },
         { icon: '✎', label: 'Upravit verš, překlad, poznámku', action: () => editLine(i) },
         { icon: '🤖', label: 'Vysvětlit verš slovo po slovu (AI)', action: () => explain(i) },
       ], close)));
@@ -398,6 +445,11 @@ export async function renderSong(root, id, nav) {
       menu([
         { icon: '✎', label: 'Upravit píseň', action: () => nav.go(`#/edit/${song.id}`) },
         { icon: '⏱', label: 'Časovat verše ťukáním', action: () => nav.go(`#/sync/${song.id}`) },
+        { icon: '🎓', label: 'Učit se', action: () => nav.go(`#/learn/${encodeURIComponent(song.id)}`) },
+        [...recs.values()].some(r => r.st !== 'new') && { icon: '↺', label: 'Vynulovat pokrok celé písně', action: async () => {
+          if (!confirm('Vynulovat pokrok učení u všech veršů této písně?')) return;
+          const n = await resetProgress(song.id, units.map(u => u.k)); await reloadProgress(); toast(`Vynulováno ${n} veršů`);
+        } },
         { icon: '🤖', label: version.lines.some(l => l.translation) ? 'Doplnit překlad pomocí AI' : 'Přeložit pomocí AI', action: () => translate(false) },
         version.lines.some(l => l.translation) && { icon: '🤖', label: 'Přeložit celou píseň znovu (AI)', action: () => translate(true) },
         { icon: '⇩', label: 'Stáhnout text (.lrc)', action: () => download(`${safeName(song.artist + '-' + song.title)}.lrc`, toLrc(song, version), 'text/plain') },
@@ -410,7 +462,7 @@ export async function renderSong(root, id, nav) {
   }
 
   // ---------- sestavení ----------
-  const view = el('div', { class: 'view' }, top, media, mediaError, study, list);
+  const view = el('div', { class: 'view' }, top, media, mediaError, learnBox, study, list);
   root.append(view, bar);
   updateRate(); updateTools(); renderLyrics(); setupMedia();
   const onScroll = () => top.classList.toggle('scrolled', scrollY > 4);

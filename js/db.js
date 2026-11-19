@@ -1,7 +1,8 @@
 // Úložiště v zařízení (IndexedDB).
-// Obchody: songs (písně, klíč id), audio (zvukové soubory jako Blob, klíč = id zvuku), meta (nastavení aplikace).
+// Obchody: songs (písně, klíč id), audio (zvukové soubory jako Blob, klíč = id zvuku), meta (nastavení aplikace),
+// progress (pokrok učení, klíč „idPísně|klíčVerše“, viz learn.js).
 const DB_NAME = 'alaw';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 let dbPromise = null;
 
 function open() {
@@ -13,6 +14,7 @@ function open() {
       if (!db.objectStoreNames.contains('songs')) db.createObjectStore('songs', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('audio')) db.createObjectStore('audio');
       if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta');
+      if (!db.objectStoreNames.contains('progress')) db.createObjectStore('progress', { keyPath: 'id' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -45,6 +47,10 @@ export const db = {
   audioKeys: () => tx('audio', 'readonly', s => s.getAllKeys()).then(k => k || []),
   getMeta: key => tx('meta', 'readonly', s => s.get(key)),
   putMeta: (key, value) => tx('meta', 'readwrite', s => s.put(value, key)),
+  allProgress: () => tx('progress', 'readonly', s => s.getAll()).then(list => list || []),
+  putProgress: rec => tx('progress', 'readwrite', s => s.put(rec)),
+  putProgressMany: recs => tx('progress', 'readwrite', s => { for (const r of recs) s.put(r); }),
+  deleteProgress: ids => tx('progress', 'readwrite', s => { for (const id of ids) s.delete(id); }),
 };
 
 // Požádá prohlížeč, aby data nemazal při nedostatku místa (Android Chrome u nainstalované PWA obvykle vyhoví).

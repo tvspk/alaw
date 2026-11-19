@@ -255,6 +255,33 @@ def main():
         A.wait_for_selector('.song-card'); B.wait_for_selector('.song-card')
         check(A.inner_text('.song-card .title') == 'Verze z B' and B.inner_text('.song-card .title') == 'Verze z B', 'obě zařízení mají novější úpravu (z B)')
 
+        print('Pokrok učení: po verších, naposledy změněný vyhrává')
+        GRADE = """async ([i, gs]) => { const S = await import('./js/store.js'); const L = await import('./js/learn.js');
+          const song = (await S.listSongs())[0], k = L.songUnits(song)[i].k;
+          let r = (await S.getProgress(song.id)).get(k) || L.introduce(L.freshRec(song.id, k));
+          for (const g of gs) r = L.grade(r, g);
+          await S.saveProgress(r); }"""
+        PROG = "async () => (await (await import('./js/db.js')).db.allProgress()).sort((a, b) => a.k < b.k ? -1 : 1).map(r => [r.k.slice(0, 20), r.st, r.lapses])"
+        A.evaluate(GRADE, [0, [4]])          # A: verš 1 umím
+        B.evaluate(GRADE, [1, [3]])          # B: verš 2 se učím
+        sync_now(A); sync_now(B); sync_now(A)
+        pa, pb = A.evaluate(PROG), B.evaluate(PROG)
+        check(len(pa) == 2 and pa == pb, f'oba verše na obou zařízeních: {pa}')
+        A.wait_for_timeout(1100)
+        A.evaluate(GRADE, [0, [1]])          # A později: verš 1 zapomenut
+        sync_now(A); sync_now(B)
+        check({x[0][17:]: x[1:] for x in B.evaluate(PROG)}['rho'] == ['learn', 1], 'novější hodnocení z A vyhrálo i na B')
+        B.evaluate("""async () => { const S = await import('./js/store.js'); const L = await import('./js/learn.js');
+          const song = (await S.listSongs())[0]; await S.resetProgress(song.id, [L.songUnits(song)[1].k]); }""")
+        sync_now(B); sync_now(A)
+        check({x[0][17:]: x[1] for x in A.evaluate(PROG)}['lil'] == 'new', 'vynulování verše na B se dostalo na A')
+        st, _ = gh.state(brA, code)
+        check(len(st['prog']) == 2 and st['v'] == 1, 'pokrok je v šifrovaném stavu (formát v:1)')
+        A.goto(url); A.wait_for_selector('.song-card'); A.click('.song-card')
+        A.wait_for_selector('.learn-box')
+        check('1 se učíš' in A.inner_text('.learn-box'), 'souhrn v písni ukazuje synchronizovaný pokrok')
+        A.goto(url); A.wait_for_selector('.song-card')
+
         print('Rychlé nahrání při odchodu z aplikace')
         A.click('.song-card'); A.click('[aria-label="Další možnosti"]'); A.click('text=Upravit píseň')
         A.fill('input[placeholder="Interpret (nepovinné)"]', 'Jana')
@@ -286,6 +313,7 @@ def main():
         B.wait_for_selector('text=Croeso!')
         check(True, 'smazaná píseň zmizela i na B')
         check(B.evaluate("async () => (await (await import('./js/db.js')).db.audioKeys()).length") == 0, 'zvuk smazané písně uklizen i na B')
+        check(gh.state(brA, code)[0]['prog'] == [], 'pokrok smazané písně se už nesynchronizuje')
 
         print('Vypnutí')
         B.goto(url + '#/settings')

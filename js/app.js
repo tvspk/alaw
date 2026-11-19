@@ -1,17 +1,19 @@
 // Alaw – texty písní a jejich učení. Vstupní bod: směrování mezi obrazovkami, knihovna, nastavení.
 import { el, iconBtn, ICONS, toast, download, pickFile, fileSize } from './ui.js';
-import { listSongs, getSong, putAudioBlob, getAudioBlob, getPrefs, setPrefs } from './store.js';
+import { listSongs, getSong, putAudioBlob, getAudioBlob, getPrefs, setPrefs, getProgress } from './store.js';
 import { db, requestPersistence, storageEstimate } from './db.js';
 import { primaryVersion, isSynced, langLabel, fold, songsFromJson, looksLikeLrc } from './model.js';
 import { renderSong } from './song.js';
 import { renderEdit } from './edit.js';
 import { renderTapSync } from './tapsync.js';
+import { renderLesson } from './lesson.js';
+import { songUnits, songSummary, normalizeRec, recWins } from './learn.js';
 import { isAndroid, request } from './net.js';
 import { aiConfig, setAiConfig, pickModel } from './ai.js';
 import { boot as syncBoot, changed as syncChanged } from './sync.js';
 import { syncSection } from './syncui.js';
 
-export const APP_VERSION = '0.3.0';
+export const APP_VERSION = '0.4.0';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně
@@ -36,6 +38,7 @@ async function route() {
     else if (view === 'edit' && id) cleanup = await renderEdit(root, decodeURIComponent(id), nav);
     else if (view === 'new') { cleanup = await renderEdit(root, null, nav, pendingDraft); pendingDraft = null; }
     else if (view === 'sync' && id) cleanup = await renderTapSync(root, decodeURIComponent(id), nav);
+    else if (view === 'learn' && id) { const [sid, k] = id.split('/'); cleanup = await renderLesson(root, decodeURIComponent(sid), k ? decodeURIComponent(k) : null, nav); }
     else if (view === 'settings') cleanup = await renderSettings(root);
     else cleanup = await renderLibrary(root);
   } catch (e) {
@@ -61,6 +64,9 @@ let libState = { q: '', tag: null };
 
 async function renderLibrary(root) {
   const songs = await listSongs();
+  const progress = await getProgress();
+  const now = Date.now();
+  const sums = new Map(songs.map(s => [s.id, songSummary(songUnits(s), progress.get(s.id) || new Map(), now)]));
   const tags = [...new Set(songs.flatMap(s => s.tags))].sort((a, b) => a.localeCompare(b, 'cs'));
   const langs = [...new Set(songs.map(s => s.language))];
   const filters = [...(langs.length > 1 ? langs.map(l => ({ key: `lang:${l}`, label: langLabel(l) })) : []), ...tags.map(t => ({ key: `tag:${t}`, label: `#${t}` }))];
@@ -91,7 +97,8 @@ async function renderLibrary(root) {
         el('div', { class: 'badges' },
           isSynced(v) ? el('span', { class: 'badge', title: 'Načasováno', text: '⏱' }) : null,
           v.audio ? el('span', { class: 'badge', title: 'Vlastní nahrávka', text: '♪' }) : null,
-          v.youtubeId ? el('span', { class: 'badge', title: 'YouTube', text: '▶' }) : null)));
+          v.youtubeId ? el('span', { class: 'badge', title: 'YouTube', text: '▶' }) : null),
+        learnBar(sums.get(s.id))));
     }));
     if (!songs.length) {
       listEl.replaceChildren(el('li', { class: 'empty' },
@@ -103,11 +110,43 @@ async function renderLibrary(root) {
 
   root.append(el('div', { class: 'view' },
     el('header', { class: 'topbar' }, el('h1', { class: 'brand', text: 'Alaw' }), iconBtn('settings', 'Nastavení', () => nav.go('#/settings'))),
+    reminders(songs, progress, sums),
     songs.length > 4 || libState.q ? search : null,
     chipsEl, listEl),
     el('button', { type: 'button', class: 'fab', html: `${ICONS.plus}<span>Přidat píseň</span>`, onclick: () => nav.go('#/new') }));
   root.querySelector('.fab svg').setAttribute('width', '22');
   draw();
+}
+
+// Proužek pokroku na kartě písně (jen u písní, které se učím).
+function learnBar(sum) {
+  if (!sum || !sum.total || sum.new === sum.total) return null;
+  const pct = n => `${(100 * n / sum.total).toFixed(1)}%`;
+  return el('div', { class: 'lbar', title: `Umíš ${sum.known + sum.due} z ${sum.total} veršů` },
+    el('i', { class: 'known', style: { width: pct(sum.known) } }),
+    el('i', { class: 'due', style: { width: pct(sum.due) } }),
+    el('i', { class: 'learn', style: { width: pct(sum.learn) } }));
+}
+
+// Nenápadná připomínka (rozhodnutí zadavatele: učí se vždy jednu píseň, ostatní jen občas připomenout):
+// písně kromě té, kterou se teď učím (naposledy procvičovaná), kde verše začínají slábnout. Jde skrýt na týden.
+function reminders(songs, progress, sums) {
+  const last = id => Math.max(0, ...[...(progress.get(id) || new Map()).values()].map(r => r.last || 0));
+  const current = songs.map(s => s.id).sort((a, b) => last(b) - last(a))[0];
+  const hidden = getPrefs().remindHidden || {};
+  const now = Date.now();
+  const list = songs.filter(s => s.id !== current && sums.get(s.id).due > 0 && !(hidden[s.id] > now)).slice(0, 2);
+  if (!list.length) return null;
+  return el('div', { class: 'reminders' }, list.map(s => {
+    const n = sums.get(s.id).due;
+    const box = el('div', { class: 'reminder' },
+      el('a', { href: `#/learn/${encodeURIComponent(s.id)}`, text: `„${s.title}“ by chtěla zopakovat (${n} ${n === 1 ? 'verš' : n < 5 ? 'verše' : 'veršů'})` }),
+      el('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Skrýt na týden', title: 'Skrýt na týden', text: '✕', onclick: () => {
+        setPrefs({ remindHidden: { ...Object.fromEntries(Object.entries(getPrefs().remindHidden || {}).filter(([, t]) => t > Date.now())), [s.id]: Date.now() + 7 * 86400e3 } });
+        box.remove();
+      } }));
+    return box;
+  }));
 }
 
 // ---------- nastavení a záloha ----------
@@ -133,7 +172,8 @@ async function exportAll(withAudio) {
       if (blob) audio[v.audio.key] = await blobToDataUrl(blob);
     }
   }
-  const data = { app: 'alaw', v: 1, exportedAt: new Date().toISOString(), songs, audio };
+  const progress = (await db.allProgress()).filter(r => songs.some(s => s.id === r.s));
+  const data = { app: 'alaw', v: 1, exportedAt: new Date().toISOString(), songs, progress, audio };
   const date = new Date().toISOString().slice(0, 10);
   download(`alaw-zaloha-${date}.json`, JSON.stringify(data));
   toast(`Záloha: ${songs.length} písní${withAudio ? `, ${Object.keys(audio).length} nahrávek` : ''}`);
@@ -161,11 +201,19 @@ async function importFile() {
     await db.putSong(s); // čas změny zůstane ze zálohy
     old ? updated++ : added++;
   }
+  // pokrok učení ze zálohy: po záznamech, naposledy změněný vyhrává
+  const raw = JSON.parse(text);
+  let progressCount = 0;
+  if (raw && Array.isArray(raw.progress)) {
+    const cur = new Map((await db.allProgress()).map(r => [r.id, r]));
+    const take = raw.progress.map(normalizeRec).filter(r => r && recWins(r, cur.get(r.id)));
+    if (take.length) { await db.putProgressMany(take); progressCount = take.length; }
+  }
   syncChanged();
   for (const [key, dataUrl] of Object.entries(parsed.audio)) {
     try { await putAudioBlob(key, dataUrlToBlob(dataUrl)); audioCount++; } catch { /* poškozená nahrávka */ }
   }
-  const parts = [added && `${added} nových`, updated && `${updated} aktualizovaných`, skipped && `${skipped} beze změny`, audioCount && `${audioCount} nahrávek`].filter(Boolean);
+  const parts = [added && `${added} nových`, updated && `${updated} aktualizovaných`, skipped && `${skipped} beze změny`, audioCount && `${audioCount} nahrávek`, progressCount && `pokrok ${progressCount} veršů`].filter(Boolean);
   toast(`Načteno: ${parts.join(', ')}`, 4000);
   route();
 }
@@ -188,9 +236,10 @@ async function renderSettings(root) {
       el('label', { class: 'range' }, 'Velikost textu', sizeIn, sizeOut),
       preview,
       el('label', { class: 'check', style: { marginTop: '10px' } }, autoScroll, el('span', { text: 'Při přehrávání posouvat text na aktuální verš' }))),
+    learnSection(),
     el('section', { class: 'section' },
       el('h2', { text: 'Záloha a import' }),
-      el('p', { text: 'Záloha obsahuje všechny písně, překlady, poznámky a časy. Import přijme zálohu, píseň v JSON (i z projektu Lyrics Trainer), nebo text či .lrc soubor.' }),
+      el('p', { text: 'Záloha obsahuje všechny písně, překlady, poznámky, časy a pokrok učení. Import přijme zálohu, píseň v JSON (i z projektu Lyrics Trainer), nebo text či .lrc soubor.' }),
       el('label', { class: 'check', style: { marginBottom: '12px' } }, withAudio, el('span', { text: 'Přiložit i zvukové soubory (záloha bude velká)' })),
       el('div', { class: 'row' },
         el('button', { type: 'button', class: 'btn', text: '⇩ Stáhnout zálohu', onclick: () => exportAll(withAudio.checked) }),
@@ -204,6 +253,21 @@ async function renderSettings(root) {
     el('p', { class: 'empty', style: { padding: '12px' }, text: `Alaw ${APP_VERSION}` })));
   if (location.hash.includes('sync')) setTimeout(() => syncEl.scrollIntoView({ block: 'start' }), 50);
   return syncOff;
+}
+
+function learnSection() {
+  const p = getPrefs();
+  const out = el('span', { text: String(p.newPerDay) });
+  const perDay = el('input', { type: 'range', min: 2, max: 20, step: 1, value: p.newPerDay, 'aria-label': 'Nových veršů denně',
+    oninput: () => { setPrefs({ newPerDay: +perDay.value }); out.textContent = perDay.value; } });
+  const auto = el('input', { type: 'checkbox', checked: p.autoPlayLine, onchange: () => setPrefs({ autoPlayLine: auto.checked }) });
+  const type = el('input', { type: 'checkbox', checked: p.alwaysType, onchange: () => setPrefs({ alwaysType: type.checked }) });
+  return el('section', { class: 'section' },
+    el('h2', { text: 'Učení' }),
+    el('p', { text: 'Pokrok se ukládá po verších a synchronizuje se. Tato nastavení platí jen v tomto zařízení.' }),
+    el('label', { class: 'range' }, 'Nových veršů denně', perDay, out),
+    el('label', { class: 'check', style: { marginTop: '10px' } }, auto, el('span', { text: 'Při učení přehrát verš (když je načasovaný)' })),
+    el('label', { class: 'check', style: { marginTop: '8px' } }, type, el('span', { text: 'Vždy psát zpaměti (i u veršů, které se teprve učím)' })));
 }
 
 function searchSection() {

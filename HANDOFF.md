@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 19. 11. 2026, verze **0.3.0** (APK versionCode 6). Odpovídej zadavateli **česky**.
+> Stav k 19. 11. 2026, verze **0.4.0** (APK versionCode 7). Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -14,7 +14,7 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
 - Kód: veřejný `tvspk/alaw`. Claude má přístup s push (GitHub App). Schránka synchronizace `tvspk/alaw-sync` je soukromá
   a Claude do ní přístup **nemá a mít nemá**.
 
-## Hotovo (kroky 1, 2, 5 původního plánu)
+## Hotovo (kroky 1, 2, 4, 5 původního plánu)
 
 1. **Základ (0.1):** knihovna, přidání písně (text / LRC), přehrávač (YouTube i vlastní soubor, rychlost, smyčka veršů,
    karaoke), časování ťukáním, režimy Číst / Mizení / Písmena, překlad, doslovný překlad, zkratky a poznámky u veršů,
@@ -30,14 +30,25 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
    „synchronizace-pres-github“). Rozhodnutí zadavatele: **novější úprava vyhrává**, **zvuk se stahuje hned celý**,
    **zvuk se nezmenšuje**. Zadavatel ji nastavil na telefonu (APK) i na počítači (web) a funguje.
 
+4. **Učení naostro (0.4):** `js/learn.js` (čisté funkce: klíč verše, SRS, porovnání psaní, slučování),
+   `js/lesson.js` (obrazovka `#/learn/<id>` a `#/learn/<id>/<klíč verše>`), mapa v `js/song.js` (režim Mapa),
+   proužek a připomínka v knihovně (`js/app.js`), sekce Učení v Nastavení. **Rozhodnutí zadavatele:**
+   - učí se **vždy jednu píseň** → opakování jen uvnitř písně, žádná společná denní fronta; ostatní písně úvodní
+     obrazovka jen **nenápadně připomene** (max. 2, kromě naposledy procvičované, ✕ skryje na týden),
+   - hodnotí **vždy sám 4 stupni** (Znovu / Těžké / Dobře / Snadno); u psaní je jen zvýrazněný návrh podle chyb,
+   - **refrén sdílí pokrok** (jednotka učení = verš podle znění, klíč `lineKey` = text bez velikosti, interpunkce a znamének),
+   - **stříšky se při psaní ignorují úplně** (bez upozornění); drobný překlep (1 písmeno od 4 písmen, 2 od 8) se uzná a jen označí.
+   Cvičení: nový → úvodní karta (+ poslech úseku, když je verš načasovaný); 1. krok → první písmena; dál → „Jak verš zní?“
+   (vidíš předchozí verš); interval ≥ 7 dní → psaní zpaměti (volba „Vždy psát“). Kroky učení 1 a 10 min, pak dny (SM-2).
+   Přepsaný verš (jiný klíč) začíná znovu. Pokrok je v IndexedDB `progress` (DB verze 2), v záloze `progress[]`
+   a v synchronizaci `prog[]`: **po záznamech, naposledy změněný vyhrává** (`t` = `stamp()`), vynulování = nový záznam
+   (bez náhrobků), pokrok smazané písně se zahodí. Formát stavu zůstal `v:1` (přidání, starší verze `prog` ignorují).
+
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
+Učení (0.4) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
 
 ## Zbývá (původní plán)
 
-- **Krok 4: učení naostro** (doporučený další krok): pokrok po verších, opakování v intervalech (SRS), psaní zpaměti
-  (tolerance stříšek ŵ ŷ a překlepů), „vybav si další verš“, mapa písně (co umíš / neumíš). Pokrok se má synchronizovat:
-  v `sync.js` přidat vlastní pravidlo (po položkách „naposledy změněné vyhrává“ jako u Gorsafu `syItems`/`syTake`,
-  ne celá píseň), a zvýšit formát stavu, pokud se změní nekompatibilně.
 - **Krok 3: verze a sporná místa:** datový model už verze má (`song.versions[]`, `song.primary`), UI zatím jen první
   verzi. Plán: přidat verzi z jiného zdroje, porovnat verše a slova (bez ohledu na velikost, interpunkci a stříšky),
   zvýraznit rozdíly, rozhodnout poslechem (smyčka 0,75×), stav ✓ ověřeno / ⚠ nejisté, při psaní zpaměti uznat obě varianty.
@@ -69,5 +80,6 @@ Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, 
 Píseň `{ v:1, id, title, artist, language, tags[], createdAt, updatedAt, primary, versions[] }`,
 verze `{ id, label, source, sourceUrl, youtubeId, audio:{key,name,type,size}|null, lines[] }`,
 verš `{ id, start(ms|null), text, literal, translation, alt, contractions[{short,full,note}], note, stanza }`.
-IndexedDB `alaw`: `songs`, `audio` (Blob podle `audio.key`), `meta` (`tombs` = náhrobky pro synchronizaci).
-localStorage: `alaw-prefs` (zařízení), `alaw-ai` (klíč Gemini), `alaw-sync` (token + 8 slov, jen zařízení).
+IndexedDB `alaw` (verze 2): `songs`, `audio` (Blob podle `audio.key`), `meta` (`tombs` = náhrobky pro synchronizaci),
+`progress` (pokrok `{ id:'idPísně|klíč', s, k, st, step, due, ivl, ease, reps, lapses, intro, last, t }`, viz `js/learn.js`).
+localStorage: `alaw-prefs` (zařízení, i `newPerDay`, `alwaysType`, `autoPlayLine`, `remindHidden`), `alaw-ai` (klíč Gemini), `alaw-sync` (token + 8 slov, jen zařízení).

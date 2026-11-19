@@ -2,7 +2,7 @@
 
 Alaw (velšsky „melodie“): texty písní (hlavně velšských) a jejich učení nazpaměť. Webová aplikace (PWA) pro Android i počítač, funguje offline.
 
-## Co umí (verze 0.3)
+## Co umí (verze 0.4)
 
 - Knihovna písní s hledáním (i v textu, bez ohledu na stříšky), štítky a filtrem jazyka.
 - Přidání písně: prostý text nebo LRC s časy, sloky oddělené prázdným řádkem, načtení ze souboru.
@@ -12,7 +12,13 @@ Alaw (velšsky „melodie“): texty písní (hlavně velšských) a jejich uče
 - Časování veršů ťukáním do rytmu (s krokem zpět a posunem všech časů).
 - Režimy učení: Číst, Mizení (nastavitelné procento skrytých slov), Písmena (jen první písmeno); ťuknutím slovo odkryješ.
 - U každého verše překlad, doslovný překlad, hovorové zkratky a vlastní poznámka.
-- Záloha do JSON (volitelně se zvukem) a import, včetně JSON z projektu „Lyrics Trainer“.
+- **Učení naostro** (tlačítko „Učit se“ v písni): nové verše po dvojicích (přečíst a poslechnout), pak podle prvních písmen,
+  „jak verš zní?“ (vybav si verš po předchozím) a u dobře známých veršů psaní zpaměti (stříšky, velikost písmen,
+  interpunkce ani drobný překlep nevadí). Po každém cvičení hodnocení Znovu / Těžké / Dobře / Snadno a opakování
+  v intervalech (1 den, 3, 8…). Refrén se stejným textem se učí jednou. Nových veršů denně nastavitelně (výchozí 6).
+- **Mapa písně** (režim Mapa): co umíš, co se učíš, co je k opakování a kdy; ťuknutím procvičíš jeden verš.
+  Na úvodní obrazovce proužek pokroku u písní a nenápadná připomínka, když verše jiné písně začínají slábnout.
+- Záloha do JSON (volitelně se zvukem, vždy s pokrokem učení) a import, včetně JSON z projektu „Lyrics Trainer“.
 - **Hledání textů** najednou v LRCLIB (i s časy), Welsh Lyrics wiki (welshlyrics.fandom.com, často s anglickým překladem a videem),
   LyricsTranslate, Wicidestun (velšská Wikisource), Bandcamp, We Learn Welsh, Genius a AZLyrics. Náhled, převzetí do písně,
   doplnění časů z LRCLIB podle shodných veršů, anglický překlad ze zdroje u veršů.
@@ -22,7 +28,7 @@ Alaw (velšsky „melodie“): texty písní (hlavně velšských) a jejich uče
 - **Aplikace pro Android (APK)**: stejná aplikace ve WebView, stahuje stránky sama (bez prostředníka), ukládání souborů,
   tlačítko Zpět, nabídka nové verze. Vydává se automaticky přes GitHub Actions (`android/verze.txt`).
 - **Synchronizace** mezi telefonem a počítačem přes vlastní soukromý repozitář na GitHubu, šifrovaně (AES-256-GCM,
-  párovací kód 8 slov, i jako QR). Písně, překlady, časy i nahrávky; novější úprava vyhrává.
+  párovací kód 8 slov, i jako QR). Písně, překlady, časy, nahrávky i pokrok učení; novější úprava vyhrává.
 
 ## Spuštění na počítači
 

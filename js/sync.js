@@ -4,16 +4,20 @@
 // check ověřuje párovací kód. Každé zařízení má vlastní větev al-<12 hex> s commitem bez rodičů (force push, historie neroste):
 //   state           = [IV 12 B][AES-256-GCM(gzip(JSON))], AAD 'state'
 //   a/<klíč>/<i>    = kousky zvukového souboru (≤ 8 MiB), [IV][AES-256-GCM(data)], AAD = cesta
-// JSON stavu: { app:'Alaw', v:1, songs:[…], tombs:{id: čas smazání}, files:{klíč zvuku: [sha kousků]} }
+// JSON stavu: { app:'Alaw', v:1, songs:[…], tombs:{id: čas smazání}, files:{klíč zvuku: [sha kousků]}, prog:[…] }
+//   prog = pokrok učení po verších (learn.js), přidáno ve 0.4 bez zvýšení v: starší verze ho ignorují a nepřepíšou.
 // Klíč: HKDF-SHA-256 z 8 slov párovacího kódu (salt 'Alaw sync v1', info 'state').
 //
 // Slučování (rozhodnuto se zadavatelem): píseň = položka, NOVĚJŠÍ ÚPRAVA VYHRÁVÁ (updatedAt podle hodin GitHubu,
 // vždy vyšší než předchozí verze, při shodě vyhraje „větší“ JSON, aby všechna zařízení skončila stejně).
 // Smazání = náhrobek (tombs), vyhrává nad úpravami staršími než smazání. Zvuk se stahuje HNED CELÝ a nezmenšuje se.
+// Pokrok učení: každý verš zvlášť, NAPOSLEDY ZMĚNĚNÝ ZÁZNAM VYHRÁVÁ (t podle hodin GitHubu); vynulování = nový záznam,
+// takže náhrobky nepotřebuje. Pokrok smazané písně se zahodí.
 // Nesynchronizuje se: nastavení zařízení (alaw-prefs), klíč Gemini (alaw-ai), adresa prostředníka.
 // Token a 8 slov jsou jen v localStorage 'alaw-sync' tohoto zařízení, nikdy v záloze.
 import { db } from './db.js';
 import { normalizeSong } from './model.js';
+import { normalizeRec, recWins } from './learn.js';
 import { WORDS } from './bip39.js';
 
 const CFG_KEY = 'alaw-sync', API = 'https://api.github.com', META = 'alaw-sync.json', APP = 'Alaw', DEFREPO = 'alaw-sync';
@@ -278,6 +282,22 @@ export async function syncNow(manual = false, quick = false) {
       if (l && l.updatedAt <= t) { await db.deleteSong(id); local.delete(id); changed.add(id); }
     }
     await db.putMeta('tombs', tombs);
+
+    // pokrok učení: po záznamech, naposledy změněný vyhrává
+    const prog = new Map((await db.allProgress()).map(r => [r.id, r]));
+    const take = new Map();
+    for (const { d } of fresh) {
+      if (!Array.isArray(d.prog)) continue;
+      for (const raw of d.prog) {
+        const r = normalizeRec(raw);
+        if (!r || !local.has(r.s)) continue;
+        if (recWins(r, take.get(r.id) || prog.get(r.id))) take.set(r.id, r);
+      }
+    }
+    if (take.size) {
+      await db.putProgressMany([...take.values()]);
+      for (const r of take.values()) { prog.set(r.id, r); changed.add(r.s); }
+    }
     for (const { br, cs } of fresh) c.seen[br] = cs;
     if (!short) for (const br in c.seen) if (!present.has(br)) delete c.seen[br];
     save();
@@ -322,7 +342,8 @@ export async function syncNow(manual = false, quick = false) {
     }
     for (const k of Object.keys(c.files)) if (!needed.has(k)) delete c.files[k];
     const live = Object.fromEntries(Object.entries(tombs).filter(([, t]) => Date.now() - t < 400 * 86400e3));
-    const body = JSON.stringify({ app: APP, v: 1, songs: songs.sort((a, b) => (a.id < b.id ? -1 : 1)), tombs: live, files });
+    const progOut = [...prog.values()].filter(r => r.t > 0 && local.has(r.s)).sort((a, b) => (a.id < b.id ? -1 : 1));
+    const body = JSON.stringify({ app: APP, v: 1, songs: songs.sort((a, b) => (a.id < b.id ? -1 : 1)), tombs: live, files, prog: progOut });
     const hs = hash(body);
     if (hs !== c.upHash || !own) {
       setProgress('Nahrávám změny…');

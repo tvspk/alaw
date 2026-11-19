@@ -1,5 +1,5 @@
 # Základní test aplikace v mobilním Chromiu (Playwright): přidání písně, zvuk, režimy učení, smyčka,
-# úprava verše, časování ťukáním, záloha a import. Spuštění: python3 testy/test_zaklad.py [složka_pro_snímky]
+# úprava verše, časování ťukáním, učení (lekce, mapa, psaní), záloha a import. Spuštění: python3 testy/test_zaklad.py [složka_pro_snímky]
 import json, subprocess, sys, tempfile, threading, time
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -164,10 +164,112 @@ def main():
         times = page.locator('.lyric .time').all_inner_texts()
         check(len(times) == 5, f'časy uloženy: {times}')
 
+        print('Učení: výpočty (learn.js)')
+        r = page.evaluate("""async () => {
+          const L = await import('./js/learn.js');
+          const c = (a, b) => { const x = L.compareTyped(a, b); return [x.errors, x.typos, x.suggest]; };
+          let rec = L.introduce(L.freshRec('s', 'k'), 0);
+          const steps = [];
+          for (const g of [3, 3, 3, 3, 1]) { rec = L.grade(rec, g, 0); steps.push([rec.st, rec.step, rec.ivl, rec.lapses]); }
+          const song = { versions: [{ id: 'v', lines: ['Refrén tady', 'Sloka', 'refren, tady!'].map((text, i) => ({ id: 'l' + i, text })) }], primary: 'v' };
+          return {
+            same: c("Ar lan y môr mae rhosys cochion", "ar lan y mor mae rhosys cochion"),
+            typo: c("Ar lan y môr mae rhosys cochion", "Ar lan y mor mae rosys cochion"),
+            miss: c("Ar lan y môr mae rhosys cochion", "Ar lan y mor rhosys cochion"),
+            bad: c("Ar lan y môr mae rhosys cochion", "Ar lan y mor mae lilis gwynion"),
+            empty: c("Ar lan y môr", ""),
+            steps,
+            units: L.songUnits(song).map(u => u.lines),
+            order: [1, 2, 7, 30].map(ivl => [2, 3, 4].map(g => L.grade({ ...L.freshRec('s', 'k'), st: 'review', ivl, ease: 1.3 }, g, 0).ivl)),
+            norm: L.normalizeRec({ s: 'x', k: 'y', st: 'hack', due: 'a', ease: 99 }),
+          };
+        }""")
+        check(r['same'] == [0, 0, 3], 'psaní: stříšky, velikost písmen nevadí')
+        check(r['typo'] == [0, 1, 3], 'psaní: drobný překlep uznán (označen)')
+        check(r['miss'] == [1, 0, 2] and r['bad'][0] == 2 and r['empty'] == [4, 0, 1], 'psaní: chybějící a špatná slova, návrh hodnocení')
+        check([x[0] for x in r['steps']] == ['learn', 'review', 'review', 'review', 'learn'] and r['steps'][2][2] == 3 and r['steps'][3][2] == 8
+              and r['steps'][4][3] == 1, f'opakování v intervalech: {r["steps"]}')
+        check(all(a <= b < c for a, b, c in r['order']), f'Těžké ≤ Dobře < Snadno: {r["order"]}')
+        check(r['units'] == [[0, 2], [1]], 'refrén (stejný text) sdílí pokrok')
+        check(r['norm']['st'] == 'new' and r['norm']['ease'] == 5 and r['norm']['due'] == 0, 'cizí záznam pokroku se ošetří')
+
+        print('Učení: lekce')
+        page.evaluate("() => { const p = JSON.parse(localStorage.getItem('alaw-prefs') || '{}'); p.newPerDay = 2; localStorage.setItem('alaw-prefs', JSON.stringify(p)); }")
+        page.reload()
+        page.wait_for_selector('.learn-box')
+        check('5 veršů k naučení' in page.inner_text('.learn-box'), 'souhrn: 5 veršů k naučení')
+        page.click('.learn-box button')
+        page.wait_for_selector('.lcard')
+        def card():
+            return page.inner_text('.lcard .lex'), page.locator('.lcard .ltext').first.inner_text()
+        def want(lex, sub=''):   # karta se po ťuknutí překreslí až po uložení (async), proto čekat
+            end = time.time() + 5
+            while time.time() < end:
+                try:
+                    c = card()
+                    if c[0] == lex and sub in c[1]: return True
+                except Exception: pass
+                page.wait_for_timeout(100)
+            raise AssertionError(f'čekal jsem kartu {lex!r} {sub!r}, je {card()!r}')
+        check(want('Nový verš', 'rhosys'), 'nový verš 1')
+        check('Začátek písně' in page.text_content('.lprev'), 'u prvního verše je „Začátek písně“')
+        shot(page, '06a-novy-vers')
+        page.click('.lcard button:has-text("Dál")')
+        check(want('Nový verš', 'lilis'), 'nový verš 2 (po dvojicích)')
+        check('rhosys' in page.inner_text('.lprev'), 'předchozí verš jako nápověda')
+        page.click('.lcard button:has-text("Dál")')
+        check(want('Podle prvních písmen', 'rhosys'), 'verš 1: první písmena')
+        page.click('.lcard button:has-text("Odkrýt")')
+        page.wait_for_selector('.grades')
+        check(page.locator('.grade').count() == 4 and '10 min' in page.inner_text('.grade.g3'), 'hodnocení 1–4 s náhledem intervalu')
+        shot(page, '06b-hodnoceni')
+        page.click('.grade.g3')
+        check(want('Podle prvních písmen', 'lilis'), 'verš 2: první písmena')
+        page.click('.lcard button:has-text("Odkrýt")')
+        page.click('.grade.g4')
+        check(want('Jak verš zní?'), 'verš 1: vybav si verš')
+        check(page.locator('.lcard .lq').count() == 1, 'verš skrytý')
+        page.click('.lcard button:has-text("První písmena")')
+        check(page.locator('.lcard .w.hide .first').count() == 7, 'nápověda: první písmena')
+        page.click('.lcard button:has-text("Odkrýt")')
+        page.click('.grade.g3')
+        page.wait_for_selector('.ldone')
+        check('Umíš 2 z 5' in page.inner_text('.ldone'), f'konec lekce: {page.inner_text(".ldone")!r}')
+        check(page.locator('.ldone button:has-text("Naučit se další")').count() == 1, 'nabídka dalších nových veršů')
+        shot(page, '06c-hotovo')
+        page.click('.ldone button:has-text("Zpět k písni")')
+        page.wait_for_selector('.learn-box')
+        check('Umíš 2 z 5' in page.inner_text('.learn-box'), 'souhrn v písni se aktualizoval')
+
+        print('Učení: mapa písně a psaní zpaměti')
+        page.click('.seg button:has-text("Mapa")')
+        page.wait_for_selector('.lyric.mapped')
+        check(page.locator('.lyric.m-known').count() == 2 and page.locator('.lyric.m-new').count() == 3, 'mapa: 2 umím, 3 nové')
+        check('opakování za' in page.locator('.lyric.m-known .mstate').first.inner_text(), 'mapa ukazuje, kdy je další opakování')
+        shot(page, '06d-mapa')
+        page.locator('.lyric .text').first.click()
+        page.wait_for_selector('.lcard')
+        check(want('Jak verš zní?'), 'ťuknutí v mapě = procvičit verš')
+        page.click('.tools .chip:has-text("Vždy psát")')
+        page.wait_for_selector('.ltype')
+        page.fill('.ltype', 'ar lan y mor mae rosys cochion')
+        page.press('.ltype', 'Enter')
+        page.wait_for_selector('.lverdict')
+        check('drobným překlepem' in page.inner_text('.lverdict'), 'psaní zpaměti: uznáno s překlepem')
+        check(page.locator('.diff .x-typo').count() == 1 and page.locator('.grade.sug.g3').count() == 1, 'překlep označen, navrženo „Dobře“')
+        shot(page, '06e-psani')
+        page.click('.grade.g3')
+        page.wait_for_selector('.ldone')
+        page.click('.tools .chip:has-text("Vždy psát")')
+        page.click('.ldone button:has-text("Zpět k písni")')
+        page.wait_for_selector('.lyric.mapped')
+        page.click('.seg button:has-text("Číst")')
+
         print('Knihovna a hledání')
         page.click('[aria-label="Zpět"]')
         page.wait_for_selector('.song-card')
         check(page.locator('.song-card .badge').count() == 2, 'odznaky ⏱ a ♪')
+        check(page.locator('.song-card .lbar .known').count() == 1, 'proužek pokroku na kartě písně')
         shot(page, '07-knihovna')
 
         print('Import JSON (Lyrics Trainer)')
@@ -179,13 +281,14 @@ def main():
         shot(page, '08-nastaveni')
 
         print('Záloha se zvukem a obnova v novém zařízení')
-        page.check('input[type=checkbox] >> nth=1')
+        page.check('label:has-text("Přiložit i zvukové soubory") input')
         with page.expect_download() as dl:
             page.click('text=Stáhnout zálohu')
         backup = TMP / 'zaloha.json'
         dl.value.save_as(backup)
         data = json.loads(backup.read_text())
         check(data['app'] == 'alaw' and len(data['songs']) == 2 and len(data['audio']) == 1, 'záloha: 2 písně, 1 nahrávka')
+        check(len([r for r in data['progress'] if r['st'] == 'review']) == 2, 'záloha obsahuje pokrok učení')
 
         ctx2 = browser.new_context(**p.devices['Pixel 7'])
         page2 = ctx2.new_page()
@@ -205,6 +308,7 @@ def main():
         page2.click('text=Ar Lan y Môr')
         wait(page2, 'document.querySelector(".progress")?.max > 15000')
         check(True, 'nahrávka obnovená ze zálohy hraje')
+        check('Umíš 2 z 5' in page2.inner_text('.learn-box'), 'pokrok obnoven ze zálohy')
 
         print('Offline (service worker)')
         page.goto(url)
