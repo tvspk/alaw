@@ -2,7 +2,7 @@
 import { db } from './db.js';
 import { normalizeSong } from './model.js';
 import { stamp, recordDelete, changed } from './sync.js';
-import { freshRec } from './learn.js';
+import { freshRec, recId } from './learn.js';
 
 export async function listSongs() {
   const songs = (await db.allSongs()).map(normalizeSong).filter(Boolean);
@@ -51,6 +51,17 @@ export async function resetProgress(songId, keys) {
   const recs = keys.filter(k => cur.has(k) && cur.get(k).st !== 'new').map(k => ({ ...freshRec(songId, k), t: cur.get(k).t }));
   if (recs.length) await saveProgress(...recs);
   return recs.length;
+}
+
+// Opravené znění verše (sporné místo → platí druhá verze) si nechá pokrok (rozhodnutí zadavatele).
+// Starý záznam zůstane, kdyby ho ještě sdílel jiný verš se stejným zněním.
+export async function moveProgress(songId, from, to) {
+  if (!from || !to || from === to) return false;
+  const cur = await getProgress(songId);
+  const a = cur.get(from), b = cur.get(to);
+  if (!a || a.st === 'new' || (b && b.st !== 'new' && b.reps >= a.reps)) return false;
+  await saveProgress({ ...a, id: recId(songId, to), k: to, t: Math.max(a.t, b?.t || 0) });
+  return true;
 }
 
 export const getAudioBlob = key => db.getAudio(key);

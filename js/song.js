@@ -1,11 +1,12 @@
 // Obrazovka písně: text, režimy učení, přehrávač, smyčka, úprava veršů.
-import { el, iconBtn, ICONS, sheet, menu, toast, download, safeName } from './ui.js';
+import { el, fill, iconBtn, ICONS, sheet, menu, toast, download, safeName } from './ui.js';
 import { getSong, saveSong, deleteSong, getAudioBlob, getPrefs, setPrefs, getProgress, resetProgress } from './store.js';
 import { songUnits, songSummary, unitState, lineKey, STATE_LABEL, fmtIvl } from './learn.js';
 import { DRILLS } from './drill.js';
 import { primaryVersion, formatMs, toLrc, langLabel } from './model.js';
 import { Player, RATES } from './player.js';
 import { hasAi, translateVersion, explainLine } from './ai.js';
+import { MAX_VERSIONS, analyze, summary } from './versions.js';
 
 const WORD_RE = /^([^\p{L}\p{N}]*)(.*?)([^\p{L}\p{N}]*)$/u;
 
@@ -137,6 +138,28 @@ export async function renderSong(root, id, nav) {
   }
   async function reloadProgress() { recs = await getProgress(song.id); renderLyrics(); }
 
+  // ---------- verze textu: sporná místa ----------
+  const vbar = el('button', { type: 'button', class: 'vbar', hidden: true, onclick: () => nav.go(`#/compare/${encodeURIComponent(song.id)}`) });
+  let flags = new Map(); // verš → { st: 'open'|'unsure', vid }
+  function updateVersions() {
+    flags = new Map();
+    if (song.versions.length < 2) { vbar.hidden = true; return; }
+    const res = analyze(song);
+    for (const r of res) for (const sp of r.items) {
+      if (sp.st === 'ok') continue;
+      for (const li of sp.kind === 'mixed' ? sp.lines : [sp.li]) {
+        if (!flags.has(li) || (flags.get(li).st === 'unsure' && sp.st === 'open')) flags.set(li, { st: sp.st, vid: r.version.id });
+      }
+    }
+    const c = summary(res.flatMap(r => r.items));
+    const names = res.map(r => r.version.label).join(', ');
+    vbar.hidden = false;
+    vbar.classList.toggle('todo', c.open > 0);
+    vbar.textContent = c.open ? `⚖ ${c.open} ${c.open === 1 ? 'sporné místo' : c.open < 5 ? 'sporná místa' : 'sporných míst'} proti verzi ${names} – rozhodnout`
+      : c.total ? `⚖ Verze ${names}: rozhodnuto${c.unsure ? `, ${c.unsure} ${c.unsure === 1 ? 'místo nejisté' : c.unsure < 5 ? 'místa nejistá' : 'míst nejistých'}` : ''}`
+        : `⚖ Verze ${names} se ve slovech shoduje`;
+  }
+
   // ---------- text ----------
   const list = el('ol', { class: 'lyrics' });
   let lineEls = [];
@@ -171,6 +194,7 @@ export async function renderSong(root, id, nav) {
     const learning = (st.mode === 'cloze' || st.mode === 'initials') && !st.revealAll;
     const map = st.mode === 'map', now = Date.now();
     updateLearnBox();
+    updateVersions();
     const loopRange = loopIdx();
     lineEls = version.lines.map((line, i) => {
       const timed = line.start != null;
@@ -185,8 +209,12 @@ export async function renderSong(root, id, nav) {
         line.note && st.mode === 'read' ? el('div', { class: 'note', text: line.note }) : null,
         map ? mapState(line, now) : null);
       const ms = map ? unitState(recs.get(lineKey(line.text)), now) : null;
+      const fl = flags.get(i);
       const li = el('li', { class: 'lyric' + (line.stanza ? ' stanza' : '') + (timed ? ' timed' : '') + (map ? ` mapped m-${ms}` : ''), dataset: { i } },
-        body, el('button', { type: 'button', class: 'icon-btn more', 'aria-label': 'Možnosti verše', html: ICONS.more, onclick: () => openLineMenu(i) }));
+        body,
+        fl ? el('button', { type: 'button', class: `vflag v-${fl.st}`, text: '⚠', title: fl.st === 'open' ? 'Sporné místo – jiná verze má jiné znění' : 'Nejisté místo',
+          'aria-label': 'Sporné místo, porovnat verze', onclick: () => nav.go(`#/compare/${encodeURIComponent(song.id)}/${encodeURIComponent(fl.vid)}/${i}`) }) : null,
+        el('button', { type: 'button', class: 'icon-btn more', 'aria-label': 'Možnosti verše', html: ICONS.more, onclick: () => openLineMenu(i) }));
       if (i === st.active) li.classList.add('active');
       if (loopRange && i >= loopRange[0] && i <= loopRange[1]) li.classList.add('in-loop');
       return li;
@@ -198,7 +226,7 @@ export async function renderSong(root, id, nav) {
   list.addEventListener('click', e => {
     const w = e.target.closest('.w.hide');
     if (w) { st.revealed.add(w.dataset.k); renderLyrics(); return; }
-    if (e.target.closest('.more')) return;
+    if (e.target.closest('.more, .vflag')) return;
     if (st.mode === 'map') {
       const li = e.target.closest('.lyric');
       const k = li && lineKey(version.lines[+li.dataset.i].text);
@@ -443,7 +471,7 @@ export async function renderSong(root, id, nav) {
         line.note = [line.note, txt].filter(Boolean).join('\n\n');
         await saveSong(song); renderLyrics(); toast('Uloženo do poznámky'); save.disabled = true;
       } });
-      body.replaceChildren(table, r.note ? el('p', { class: 'g-note', text: r.note }) : null, save);
+      fill(body, table, r.note ? el('p', { class: 'g-note', text: r.note }) : null, save);
     } catch (e) { body.textContent = e.message; body.classList.add('media-error'); }
   }
 
@@ -454,6 +482,8 @@ export async function renderSong(root, id, nav) {
       menu([
         { icon: '✎', label: 'Upravit píseň', action: () => nav.go(`#/edit/${song.id}`) },
         { icon: '⏱', label: 'Časovat verše ťukáním', action: () => nav.go(`#/sync/${song.id}`) },
+        song.versions.length > 1 && { icon: '⚖', label: 'Porovnat verze textu', action: () => nav.go(`#/compare/${encodeURIComponent(song.id)}`) },
+        song.versions.length < MAX_VERSIONS && { icon: '＋', label: 'Přidat verzi textu z jiného zdroje…', action: () => nav.go(`#/version/${encodeURIComponent(song.id)}/new`) },
         { icon: '🎓', label: 'Učit se', action: () => nav.go(`#/learn/${encodeURIComponent(song.id)}`) },
         { icon: '🎯', label: 'Procvičit celou píseň…', action: openDrills },
         [...recs.values()].some(r => r.st !== 'new') && { icon: '↺', label: 'Vynulovat pokrok celé písně', action: async () => {
@@ -472,7 +502,7 @@ export async function renderSong(root, id, nav) {
   }
 
   // ---------- sestavení ----------
-  const view = el('div', { class: 'view' }, top, media, mediaError, learnBox, study, list);
+  const view = el('div', { class: 'view' }, top, media, mediaError, learnBox, vbar, study, list);
   root.append(view, bar);
   updateRate(); updateTools(); renderLyrics(); setupMedia();
   const onScroll = () => top.classList.toggle('scrolled', scrollY > 4);

@@ -1,12 +1,13 @@
 // Procvičování celé písně nebo sloky (mimo lekci): skládání sloky, rozmazávání, tahák pro zpěv, zkouška celé písně.
 // Adresa #/drill/<id písně>/<režim>. Funguje bez časů; s časy navíc přehrání a smyčka sloky.
 // Pokrok mění jen zkouška: verše, které nevíš, se vrátí do opakování (rozhodnutí zadavatele: známé se nemění).
-import { el, iconBtn, ICONS, toast } from './ui.js';
+import { el, fill, iconBtn, ICONS, toast } from './ui.js';
 import { getSong, getPrefs, getProgress, saveProgress } from './store.js';
 import { primaryVersion } from './model.js';
 import { Player } from './player.js';
 import { lineKey, freshRec, introduce, grade, shuffleNew } from './learn.js';
 import { attachMedia, wordsOf } from './lesson.js';
+import { analyze, unsureSpots } from './versions.js';
 
 export const DRILLS = [
   ['order', '🧩', 'Skládání sloky', 'Přeházené verše sloky poskládej do správného pořadí.'],
@@ -74,7 +75,7 @@ export async function renderDrill(root, id, mode, nav) {
     const range = timedRange(idx);
     function draw(result) {
       const right = idx.map(i => lineKey(lines[i].text));
-      area.replaceChildren(chooser(order),
+      fill(area, chooser(order),
         el('p', { class: 'hint', text: 'Ťukej verše ve správném pořadí. Ťuknutím na poskládaný verš ho vrátíš.' }),
         range && player.ready ? el('div', { class: 'row' }, btn('▶ Poslechnout sloku', () => { stopAt = range[1]; player.playFrom(Math.max(0, range[0] - 150)); }, 'btn small')) : null,
         el('ol', { class: 'ord-placed' }, placed.map((x, j) => el('li', {},
@@ -123,7 +124,7 @@ export async function renderDrill(root, id, mode, nav) {
     }, 'btn small') : null;
     onTick = t => { if (looping && lastT - t > 1000) next(); lastT = t; };
     player.setLoop(null);
-    area.replaceChildren(chooser(blur, true),
+    fill(area, chooser(blur, true),
       el('p', { class: 'hint', text: 'Řekni nebo zazpívej text, pak přidej kolo – text se víc rozmaže. Ťuknutím na verš ho krátce ukážeš.' }),
       loopBtn ? el('div', { class: 'row' }, loopBtn) : null,
       text,
@@ -170,6 +171,7 @@ export async function renderDrill(root, id, mode, nav) {
   // ---------- zkouška celé písně ----------
   async function exam() {
     const recs = await getProgress(song.id);
+    const vres = song.versions.length > 1 ? analyze(song) : [];
     const order = lines.map((l, i) => i).filter(i => lineKey(lines[i].text));
     const failed = new Set();
     let pos = 0;
@@ -185,7 +187,8 @@ export async function renderDrill(root, id, mode, nav) {
         el('div', { class: 'row end' }, btn('Odkrýt', () => {
           cur.replaceChildren(
             el('div', { class: 'lhead' }, el('span', { class: 'lex', text: `Verš ${pos + 1} z ${order.length}` })),
-            el('div', { class: 'ltarget shown' }, el('div', { class: 'ltext', text: lines[i].text })),
+            el('div', { class: 'ltarget shown' }, el('div', { class: 'ltext', text: lines[i].text }),
+              ...(vres.length ? unsureSpots(song, [i], vres) : []).map(sp => el('div', { class: 'lvariant', text: `⚠ Nejisté: jiná verze má ${sp.b ? `„${sp.b}“` : 'tu nic'}${sp.a ? ` místo „${sp.a}“` : ''} – uznej si obojí` }))),
             el('div', { class: 'row', style: { justifyContent: 'center' } },
               btn('✗ Nevěděl(a) jsem', () => answer(false), 'btn danger'),
               btn('✓ Věděl(a) jsem', () => answer(true), 'btn primary')));

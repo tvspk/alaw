@@ -8,13 +8,14 @@ import { renderEdit } from './edit.js';
 import { renderTapSync } from './tapsync.js';
 import { renderLesson } from './lesson.js';
 import { renderDrill } from './drill.js';
+import { renderCompare } from './compare.js';
 import { songUnits, songSummary, normalizeRec, recWins, EXERCISES } from './learn.js';
 import { isAndroid, request } from './net.js';
 import { aiConfig, setAiConfig, pickModel } from './ai.js';
 import { boot as syncBoot, changed as syncChanged } from './sync.js';
 import { syncSection } from './syncui.js';
 
-export const APP_VERSION = '0.5.0';
+export const APP_VERSION = '0.6.0';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně
@@ -39,6 +40,8 @@ async function route() {
     else if (view === 'edit' && id) cleanup = await renderEdit(root, decodeURIComponent(id), nav);
     else if (view === 'new') { cleanup = await renderEdit(root, null, nav, pendingDraft); pendingDraft = null; }
     else if (view === 'sync' && id) cleanup = await renderTapSync(root, decodeURIComponent(id), nav);
+    else if (view === 'version' && id) { const [sid, vid] = id.split('/'); cleanup = await renderEdit(root, decodeURIComponent(sid), nav, null, decodeURIComponent(vid || 'new')); }
+    else if (view === 'compare' && id) { const [sid, vid, li] = id.split('/'); cleanup = await renderCompare(root, decodeURIComponent(sid), vid ? decodeURIComponent(vid) : null, li ? +li : null, nav); }
     else if (view === 'drill' && id) { const [sid, m] = id.split('/'); cleanup = await renderDrill(root, decodeURIComponent(sid), m, nav); }
     else if (view === 'learn' && id) { const [sid, k] = id.split('/'); cleanup = await renderLesson(root, decodeURIComponent(sid), k ? decodeURIComponent(k) : null, nav); }
     else if (view === 'settings') cleanup = await renderSettings(root);

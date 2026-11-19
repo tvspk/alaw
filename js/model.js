@@ -7,6 +7,8 @@
 //   alt = překlad převzatý ze zdroje textu (obvykle anglický), translation = český překlad
 //   start = začátek v ms nebo null (nečasováno); konec verše = začátek dalšího časovaného verše
 //   stanza = true, když verš začíná novou sloku (před ním byl v textu prázdný řádek)
+//   vars = rozhodnutí sporných míst proti jiným verzím (jen u hlavní verze, nepovinné): [{ w, a, b, st: 'ok'|'unsure' }],
+//          viz js/versions.js
 
 export const SONG_FORMAT = 1;
 
@@ -182,6 +184,13 @@ function fromLyricsTrainer(d) {
   });
 }
 
+function normVars(vars) {
+  if (!Array.isArray(vars)) return {};
+  const out = vars.filter(v => v && Number.isInteger(v.w) && v.w >= -1 && typeof v.a === 'string' && typeof v.b === 'string' && (v.st === 'ok' || v.st === 'unsure'))
+    .slice(0, 50).map(v => ({ w: v.w, a: v.a.slice(0, 1000), b: v.b.slice(0, 1000), st: v.st }));
+  return out.length ? { vars: out } : {};
+}
+
 // Ověří a doplní píseň z cizího zdroje (záloha, později synchronizace). Neplatná data zahodí.
 export function normalizeSong(s) {
   if (!s || typeof s !== 'object' || typeof s.title !== 'string' || !Array.isArray(s.versions) || !s.versions.length) return null;
@@ -205,6 +214,7 @@ export function normalizeSong(s) {
         ? l.contractions.filter(c => c && typeof c.short === 'string').map(c => ({ short: str(c.short, 200), full: str(c.full, 200), note: str(c.note, 300) })) : [],
       note: str(l.note, 3000),
       stanza: !!l.stanza,
+      ...normVars(l.vars),
     })),
   }));
   if (!versions.length) return null;

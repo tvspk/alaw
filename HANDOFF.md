@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 19. 11. 2026, verze **0.5.0** (APK versionCode 8). Odpovídej zadavateli **česky**.
+> Stav k 19. 11. 2026, verze **0.6.0** (APK versionCode 9). Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -14,7 +14,7 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
 - Kód: veřejný `tvspk/alaw`. Claude má přístup s push (GitHub App). Schránka synchronizace `tvspk/alaw-sync` je soukromá
   a Claude do ní přístup **nemá a mít nemá**.
 
-## Hotovo (kroky 1, 2, 4, 5 původního plánu)
+## Hotovo (všech 5 kroků původního plánu)
 
 1. **Základ (0.1):** knihovna, přidání písně (text / LRC), přehrávač (YouTube i vlastní soubor, rychlost, smyčka veršů,
    karaoke), časování ťukáním, režimy Číst / Mizení / Písmena, překlad, doslovný překlad, zkratky a poznámky u veršů,
@@ -58,23 +58,50 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
      (nevěděný verš → zpět do učení), známé verše se nemění. Ostatní procvičování pokrok nemění.
    - Testovací háčky: `window.__alawForceEx` (vynutit cvičení), `window.__alawFlashMs` (délka bliknutí).
 
+3. **Verze a sporná místa (0.6):** `js/versions.js` (čisté funkce: porovnání, rozhodnutí, varianty pro učení),
+   `js/compare.js` (obrazovka `#/compare/<id>[/<idVerze>[/<verš>]]`), přidání/úprava verze = `js/edit.js` přes
+   `#/version/<id>/<idVerze|new>`. **Rozhodnutí zadavatele:**
+   - **hlavní + nejvýš 2 další verze** (`MAX_VERSIONS = 3`); reálně spíš jedna další. S jedinou verzí se nic nového neukazuje.
+   - učí se vždy hlavní verze; porovnává se celá píseň **po slovech** (LCS na klíčích slov jako `lineKey`), takže jinak
+     zalomené řádky rozdíl nedělají. Sporné místo = slova v jednom verši hlavní verze; větší přepis přes víc veršů = „mixed“
+     (jen ✓/⚠). Verše jen v jedné verzi zvlášť, nepočítají se jako sporné (často vynechaný refrén); ty z druhé verze jdou
+     přidat do hlavní.
+   - rozhodnutí: ✓ platí hlavní (`st:'ok'`), ⚠ nejisté (`st:'unsure'`), ✓ platí druhá = **přepíše hlavní verzi** a
+     **pokrok verše zůstane** (`store.moveProgress` zkopíruje záznam na nový klíč, starý zůstane).
+   - **obě varianty uzná psaní zpaměti jen u ⚠ nejistých míst** (ne u ověřených ani nerozhodnutých); lekce pak napíše
+     „Uznáno podle jiné verze“. Doplň slovo nehádá nejisté ani nerozhodnuté slovo. Zkouška a odkrytý verš ukážou ⚠ poznámku.
+   - poslech: smyčka verše 0,75× (lze 0,5× / 1×), z nahrávky hlavní verze, nebo druhé verze, má-li vlastní (časy pak z ní).
+     **Nenačasovaný verš → „⏱ Načasovat verš“**: ťuk na začátku a konci; uloží začátek verše a začátek dalšího (když ho nemá).
+   - v písni: ⚠ u verše s nerozhodnutým/nejistým místem (vede na porovnání toho verše), proužek se souhrnem nad textem,
+     v nabídce „Porovnat verze textu“ a „Přidat verzi textu z jiného zdroje…“.
+   - data: `line.vars = [{ w, a, b, st }]` jen u hlavní verze (nepovinné, prázdné se neukládá), formát zůstal `v:1`.
+     **Starší verze aplikace `vars` při synchronizaci zahodí** → na všech zařízeních mít 0.6. Neplatná rozhodnutí uklízí `prune`.
+   - opraveno i dřívější „null“ v kartě lekce (po odkrytí), v procvičování a ve vysvětlení verše (`ui.fill`).
+
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
-Učení (0.4, 0.5) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
+Učení (0.4, 0.5) a verze (0.6) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
 
 ## Zbývá (původní plán)
 
-- **Krok 3: verze a sporná místa:** datový model už verze má (`song.versions[]`, `song.primary`), UI zatím jen první
-  verzi. Plán: přidat verzi z jiného zdroje, porovnat verše a slova (bez ohledu na velikost, interpunkci a stříšky),
-  zvýraznit rozdíly, rozhodnout poslechem (smyčka 0,75×), stav ✓ ověřeno / ⚠ nejisté, při psaní zpaměti uznat obě varianty.
-  Druhá verze může mít vlastní YouTube nebo nahrávku.
+- Původní plán je hotový. Možná rozšíření (zatím nezadaná): sdílení z Androidu rovnou do nové verze, výměna hlavní verze.
 - Drobnosti: pruh nové verze se objeví až po 20 h od poslední kontroly (záměr). Genius z prostředí Claude netestovatelný
   (blokuje servery). Na počítači může prostředník narazit na blokaci u Genius a Bandcampu.
+
+## Známá rizika a doporučení (kontrola před 0.6, nic akutního)
+
+- APK: most `AlawAndroid` (`addJavascriptInterface`) je vidět i ve vloženém přehrávači YouTube. Nemá přístup k tokenům ani
+  datům, `saveFile` vždy potvrzuje uživatel a `open` pouští jen vydání tohoto projektu. Čistší by bylo
+  `WebViewCompat.addWebMessageListener` s povoleným původem jen `https://appassets.androidplatform.net` (vyžaduje knihovnu
+  androidx.webkit a test na telefonu).
+- Prostředník `worker/` ověřuje jen hlavičku `Origin` (mimo prohlížeč jde podvrhnout) → prakticky veřejný prostředník jen na
+  textové stránky do 4 MB, jen https. Pro osobní použití v pořádku; při zneužití stačí ve Cloudflare worker vypnout.
+- Porovnání verzí počítá tabulku slov × slov; nad ~2000 slov na verzi se nepočítá (hláška „příliš dlouhý“).
 
 ## Jak pracovat
 
 - Po každé změně v `index.html`, `css/`, `js/` spusť `python3 scripts/build_sw.py` (workflow jinak selže).
 - Testy (Playwright, Chromium jako Pixel 7, bez sítě):
-  `python3 -u testy/test_zaklad.py`, `python3 -u testy/test_hledani.py`, `python3 -u testy/test_sync.py`,
+  `python3 -u testy/test_zaklad.py`, `python3 -u testy/test_verze.py`, `python3 -u testy/test_hledani.py`, `python3 -u testy/test_sync.py`,
   `node testy/test_worker.mjs`. Kontrola zdrojů proti skutečným webům: `python3 testy/zdroje_naostro.py`.
   Spouštěj s `-u` a výstup do souboru (`> /tmp/x.log`): přes rouru s `grep` se dlouhé testy zasekávaly.
 - Playwright Chromium nemusí být nainstalovaný: `python3 -m playwright install chromium`.
@@ -93,7 +120,7 @@ Učení (0.4, 0.5) zatím jen testy v prostředí Claude – **ověřit na telef
 
 Píseň `{ v:1, id, title, artist, language, tags[], createdAt, updatedAt, primary, versions[] }`,
 verze `{ id, label, source, sourceUrl, youtubeId, audio:{key,name,type,size}|null, lines[] }`,
-verš `{ id, start(ms|null), text, literal, translation, alt, contractions[{short,full,note}], note, stanza }`.
+verš `{ id, start(ms|null), text, literal, translation, alt, contractions[{short,full,note}], note, stanza, vars?[{w,a,b,st}] }`.
 IndexedDB `alaw` (verze 2): `songs`, `audio` (Blob podle `audio.key`), `meta` (`tombs` = náhrobky pro synchronizaci),
 `progress` (pokrok `{ id:'idPísně|klíč', s, k, st, step, due, ivl, ease, reps, lapses, intro, last, t }`, viz `js/learn.js`).
 localStorage: `alaw-prefs` (zařízení, i `newPerDay`, `alwaysType`, `autoPlayLine`, `remindHidden`), `alaw-ai` (klíč Gemini), `alaw-sync` (token + 8 slov, jen zařízení).

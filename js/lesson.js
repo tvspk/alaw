@@ -1,7 +1,7 @@
 // Lekce „Učit se“: nové verše a opakování v intervalech. Cvičení na verš střídá aplikace sama podle síly verše
 // (learn.pickExercise); s nahrávkou (diktát, poslech) jen u načasovaných veršů.
 // Adresa #/learn/<id písně> (celá lekce) nebo #/learn/<id>/<klíč verše> (procvičit jen jeden verš z mapy písně).
-import { el, iconBtn } from './ui.js';
+import { el, fill as fillEl, iconBtn } from './ui.js';
 import { getSong, getAudioBlob, getPrefs, setPrefs, getProgress, saveProgress } from './store.js';
 import { primaryVersion } from './model.js';
 import { Player } from './player.js';
@@ -9,6 +9,7 @@ import {
   songUnits, freshRec, introduce, grade, previews, GRADES, buildQueue, introducedToday, pickExercise,
   compareTyped, songSummary, fmtIvl, lineKey, songWords, wordDistractors, lineDistractors, shuffle, shuffleNew, orderErrors,
 } from './learn.js';
+import { analyze, variantTexts, unsureSpots, shakyWords } from './versions.js';
 
 const WORD_RE = /^([^\p{L}\p{N}]*)(.*?)([^\p{L}\p{N}]*)$/u;
 const TITLES = {
@@ -66,6 +67,7 @@ export async function renderLesson(root, id, focusKey, nav) {
   const units = songUnits(song);
   const byKey = new Map(units.map(u => [u.k, u]));
   const allWords = songWords(song);
+  const vres = song.versions.length > 1 ? analyze(song) : []; // sporná místa proti jiným verzím textu
   let recs = await getProgress(song.id);
   const player = new Player();
   player.rate = getPrefs().rate;
@@ -152,7 +154,12 @@ export async function renderLesson(root, id, focusKey, nav) {
     const line = version.lines[unit.first];
     if (ex === 'choiceWord') {
       const toks = line.text.split(/(\s+)/);
-      const all = toks.map((t, i) => [t, i]).filter(([t]) => lineKey(t));
+      // nejisté a nerozhodnuté slovo (jiná verze ho má jinak) se hádat nebude
+      const shaky = vres.length ? shakyWords(song, unit.first, vres) : new Set();
+      let wi = -1;
+      const raw = toks.map(t => (t && !/^\s+$/.test(t) ? ++wi : -1));
+      const sure = toks.map((t, i) => [t, i]).filter(([t, i]) => lineKey(t) && !shaky.has(raw[i]));
+      const all = sure.length ? sure : toks.map((t, i) => [t, i]).filter(([t]) => lineKey(t));
       const long = all.filter(([t]) => lineKey(t).replace(/ /g, '').length >= 3);
       const pool = long.length ? long : all;
       const [tok, i] = pool[Math.floor(Math.random() * pool.length)];
@@ -186,7 +193,10 @@ export async function renderLesson(root, id, focusKey, nav) {
   }
 
   function extras(line) {
+    const li = version.lines.indexOf(line);
+    const uns = vres.length && li >= 0 && !cur?.variantUsed ? unsureSpots(song, [li], vres) : [];
     return [
+      ...uns.map(sp => el('div', { class: 'lvariant', text: `⚠ Nejisté: jiná verze má ${sp.b ? `„${sp.b}“` : 'tu nic'}${sp.a ? ` místo „${sp.a}“` : ''}` })),
       line.translation ? el('div', { class: 'tr', text: line.translation }) : null,
       line.alt ? el('div', { class: 'alt', text: line.alt }) : null,
       line.literal ? el('div', { class: 'lit', text: line.literal }) : null,
@@ -298,7 +308,7 @@ export async function renderLesson(root, id, focusKey, nav) {
           ex === 'recall' ? hintChip('První písmena', () => hidden.replaceChildren(...wordsOf(line.text, 'initials'))) : null),
         revealRow());
     }
-    card.replaceChildren(head(), ...body);
+    fillEl(card, head(), ...body);
   }
 
   // odkrytá karta: celý verš + hodnocení (suggest = zvýrazněný návrh)
@@ -306,7 +316,7 @@ export async function renderLesson(root, id, focusKey, nav) {
     const line = cur.line;
     cur.revealed = true;
     const ctx = ['fromCz', 'before', 'dictation'].includes(cur.ex) ? null : context();
-    card.replaceChildren(head(), ...(ctx ? [ctx] : []),
+    fillEl(card, head(), ...(ctx ? [ctx] : []),
       el('div', { class: 'ltarget shown' }, ...(top || [el('div', { class: 'ltext', text: line.text })]), ...extras(line)),
       cur.ex === 'before' ? el('div', { class: 'lprev' }, el('div', { class: 'lprev-label', text: 'Pak následuje' }), el('div', { class: 'lprev-text', text: version.lines[cur.unit.first + 1].text })) : null,
       el('div', { class: 'row' }, listenBtn(cur.unit.first, 'Poslechnout verš')),
@@ -333,13 +343,22 @@ export async function renderLesson(root, id, focusKey, nav) {
   }
 
   function check(typed) {
-    const r = compareTyped(cur.line.text, typed);
+    // u nejistých míst se uzná i znění jiné verze (rozhodnutí zadavatele)
+    let r = compareTyped(cur.line.text, typed), used = null;
+    if (vres.length && typed.trim()) {
+      for (const v of variantTexts(song, cur.unit.lines, vres)) {
+        const rv = compareTyped(v.text, typed);
+        if (rv.errors < r.errors || (rv.errors === r.errors && rv.typos < r.typos)) { r = rv; used = v; }
+      }
+    }
     const diff = el('div', { class: 'ltext diff' }, r.parts.flatMap((p, j) => [j ? ' ' : '',
       p.st === 'extra' ? el('s', { class: 'x-extra', text: p.typed, title: 'navíc' })
         : el('span', { class: `x-${p.st}`, text: p.text, title: p.st === 'typo' || p.st === 'bad' ? `napsáno: ${p.typed}` : p.st === 'miss' ? 'chybí' : '' })]));
     const verdict = !typed.trim() ? 'Nevadí, příště to půjde.' : r.errors === 0 ? (r.typos ? 'Správně (s drobným překlepem).' : 'Výborně, přesně!') : `Chyb: ${r.errors}.`;
+    cur.variantUsed = !!used;
+    const note = used ? el('div', { class: 'lvariant ok', text: `Uznáno podle jiné verze (nejisté místo): ${used.spots.map(sp => `„${sp.b || '—'}“ místo „${sp.a || '—'}“`).join(', ')}` }) : null;
     reveal([typed.trim() ? el('div', { class: 'ltyped', text: typed.trim() }) : null, diff,
-      el('div', { class: 'lverdict' + (r.errors ? ' bad' : ' ok'), text: verdict })].filter(Boolean), typed.trim() ? r.suggest : 1,
+      el('div', { class: 'lverdict' + (r.errors ? ' bad' : ' ok'), text: verdict }), note].filter(Boolean), typed.trim() ? r.suggest : 1,
     'Jak to šlo? Zvýrazněné tlačítko je návrh podle chyb.');
   }
 

@@ -26,4 +26,7 @@
   Test: `python3 testy/test_sync.py` (napodobený GitHub, dvě zařízení). Nikdy netestovat proti skutečnému GitHubu.
 - Učení (`js/learn.js` logika a výběr cvičení, `js/lesson.js` lekce, `js/drill.js` procvičování celé písně): pokrok po verších podle znění (`lineKey`), ukládat jen přes
   `store.saveProgress`/`resetProgress` (razítko + synchronizace). V synchronizaci `prog[]`, naposledy změněný záznam vyhrává.
-- **Stav projektu, rozhodnutí a další kroky: `HANDOFF.md`** (přečti jako první). Plán: 3) verze a sporná místa.
+- Verze textu (`js/versions.js` logika, `js/compare.js` obrazovka `#/compare/…`, `#/version/<id>/<idVerze|new>` = `edit.js`): učí se vždy
+  hlavní verze (`song.primary`), nejvýš 3 verze. Rozhodnutí sporných míst jen u veršů hlavní verze (`line.vars`), „platí druhá“ přepíše
+  text a převede pokrok (`store.moveProgress`). Test: `python3 -u testy/test_verze.py`.
+- **Stav projektu, rozhodnutí a další kroky: `HANDOFF.md`** (přečti jako první).

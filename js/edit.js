@@ -1,8 +1,11 @@
 // Přidání a úprava písně: název, interpret, jazyk, štítky, text (prostý nebo LRC), YouTube, zvukový soubor.
+// S versionId upravuje (nebo s 'new' přidává) další verzi textu písně: název verze, text, YouTube, nahrávka (#/version/…).
 import { el, iconBtn, toast, pickFile, fileSize } from './ui.js';
 import { getSong, saveSong, deleteSong, putAudioBlob, deleteAudioBlob } from './store.js';
-import { LANGUAGES, newSong, primaryVersion, parseLyrics, extractYoutubeId, toLrc, toPlainText, isSynced, parseTags, fold, uid, songsFromJson, formatMs, attachAlt } from './model.js';
+import { LANGUAGES, newSong, newVersion, primaryVersion, parseLyrics, extractYoutubeId, toLrc, toPlainText, isSynced, parseTags, fold, uid, songsFromJson, formatMs, attachAlt } from './model.js';
 import { openSearch, askUrl, importFromUrl } from './search.js';
+import { MAX_VERSIONS, prune } from './versions.js';
+import { SOURCES } from './sources.js';
 
 const AUDIO_ACCEPT = 'audio/*,.mp3,.m4a,.aac,.ogg,.oga,.opus,.wav,.flac,.webm';
 
@@ -21,15 +24,20 @@ function mergeLines(oldLines, newLines) {
     nl.literal = ol.literal;
     nl.contractions = ol.contractions;
     nl.note = ol.note;
+    if (ol.vars) nl.vars = ol.vars; // rozhodnutí sporných míst (versions.js); nesedí-li už, uklidí se
     if (nl.start == null) nl.start = ol.start;
   }
   return newLines;
 }
 
-export async function renderEdit(root, id, nav, draft) {
+export async function renderEdit(root, id, nav, draft, versionId = null) {
   const existing = id ? await getSong(id) : null;
-  if (id && !existing) { root.append(el('div', { class: 'view' }, el('p', { class: 'empty', text: 'Píseň nenalezena.' }))); return; }
-  const version = existing ? primaryVersion(existing) : null;
+  const vmode = versionId != null; // úprava / přidání další verze textu
+  const notFound = msg => root.append(el('div', { class: 'view' }, el('p', { class: 'empty', text: msg })));
+  if (id && !existing) { notFound('Píseň nenalezena.'); return; }
+  const version = !existing ? null : !vmode ? primaryVersion(existing) : existing.versions.find(v => v.id === versionId) || null;
+  if (vmode && versionId !== 'new' && (!version || version === primaryVersion(existing))) { notFound('Verze nenalezena.'); return; }
+  if (vmode && !version && existing.versions.length >= MAX_VERSIONS) { notFound(`Píseň už má ${MAX_VERSIONS} verze (hlavní a dvě další). Nejdřív některou smaž.`); return; }
   let newAudio = null;          // File vybraný v tomto formuláři
   let removeAudio = false;
   let picked = null;            // text převzatý z internetu: { source, sourceUrl, altText }
@@ -41,6 +49,7 @@ export async function renderEdit(root, id, nav, draft) {
     tags: el('input', { value: (existing?.tags || []).join(', '), autocomplete: 'off', placeholder: 'hymny, lidovky, rugby' }),
     text: el('textarea', { value: version ? (isSynced(version) ? toLrc(existing, version).split('\n').filter(l => !/^\[(ti|ar):/.test(l)).join('\n').trim() : toPlainText(version).trim()) : draft?.text || '',
       placeholder: 'Vlož text písně. Sloky odděl prázdným řádkem.\nFunguje i formát LRC s časy: [00:12.50]Text verše', spellcheck: false }),
+    label: el('input', { value: version?.label || '', autocomplete: 'off', placeholder: 'Např. Wicidestun, z videa, ze zpěvníku' }),
     youtube: el('input', { value: version?.youtubeId ? `https://youtu.be/${version.youtubeId}` : '', inputmode: 'url', autocomplete: 'off', placeholder: 'https://youtu.be/…' }),
   };
   f.language.value = existing?.language || draft?.language || 'cy';
@@ -61,6 +70,11 @@ export async function renderEdit(root, id, nav, draft) {
     if (f.text.value.trim() && !confirm('Nahradit text ve formuláři nalezeným textem?')) return;
     picked = { source: d.source || 'web', sourceUrl: d.sourceUrl || '', altText: d.altText || '' };
     f.text.value = d.timedLines ? linesToText(d.timedLines) : d.text;
+    if (vmode && !f.label.value.trim()) {
+      let host = '';
+      try { host = d.sourceUrl ? new URL(d.sourceUrl).hostname.replace(/^www\./, '') : ''; } catch { /* nic */ }
+      f.label.value = (SOURCES.find(x => x.id === d.source) || {}).name || host || '';
+    }
     if (!f.title.value.trim() && d.title) f.title.value = d.title;
     if (!f.artist.value.trim() && d.artist) f.artist.value = d.artist;
     if (!f.youtube.value.trim() && d.youtubeId) f.youtube.value = `https://youtu.be/${d.youtubeId}`;
@@ -74,18 +88,20 @@ export async function renderEdit(root, id, nav, draft) {
     el('button', { type: 'button', class: 'btn', text: '🔗 Z odkazu', onclick: () => askUrl(applyPick) }));
 
   const form = el('form', { class: 'form', onsubmit: e => { e.preventDefault(); save(); } },
+    vmode ? el('p', { class: 'hint', text: 'Text písně z jiného zdroje. Porovná se s hlavní verzí a rozdíly rozhodneš poslechem. Učíš se dál hlavní verzi.' }) : null,
     finder,
-    field('Název písně *', f.title),
-    field('Interpret', f.artist),
-    el('div', { class: 'row' }, el('div', { class: 'grow' }, field('Jazyk', f.language)), el('div', { class: 'grow' }, field('Štítky', f.tags))),
+    ...(vmode ? [field('Název verze', f.label, 'Aby bylo poznat, odkud text je.')] : [
+      field('Název písně *', f.title),
+      field('Interpret', f.artist),
+      el('div', { class: 'row' }, el('div', { class: 'grow' }, field('Jazyk', f.language)), el('div', { class: 'grow' }, field('Štítky', f.tags)))]),
     el('div', { class: 'field' },
-      el('span', { text: 'Text písně' }),
+      el('span', { text: vmode ? 'Text verze' : 'Text písně' }),
       f.text,
       el('div', { class: 'row' },
-        el('div', { class: 'hint grow', text: 'Prostý text nebo LRC. Při úpravě zůstanou překlady a poznámky u veršů, které nezměníš.' }),
+        el('div', { class: 'hint grow', text: vmode ? 'Prostý text nebo LRC (s časy půjde poslouchat i nahrávka této verze).' : 'Prostý text nebo LRC. Při úpravě zůstanou překlady a poznámky u veršů, které nezměníš.' }),
         el('button', { type: 'button', class: 'btn small', text: 'Načíst ze souboru', onclick: loadTextFile })),
       pickedNote),
-    field('Video na YouTube', f.youtube, 'Odkaz nebo 11znakové ID videa.'),
+    field('Video na YouTube', f.youtube, vmode ? 'Jen když má tahle verze vlastní video (jinak se poslouchá nahrávka hlavní verze).' : 'Odkaz nebo 11znakové ID videa.'),
     el('div', { class: 'field' },
       el('span', { text: 'Vlastní nahrávka' }),
       el('div', { class: 'file-box' }, audioName, audioRemove,
@@ -97,10 +113,10 @@ export async function renderEdit(root, id, nav, draft) {
         } })),
       el('div', { class: 'hint', text: 'mp3, m4a, ogg, wav, flac… Uloží se jen v tomto telefonu.' })),
     el('div', { class: 'row end' },
-      existing ? el('button', { type: 'button', class: 'btn danger', text: 'Smazat', onclick: remove }) : null,
+      (vmode ? version : existing) ? el('button', { type: 'button', class: 'btn danger', text: vmode ? 'Smazat verzi' : 'Smazat', onclick: remove }) : null,
       el('span', { class: 'grow' }),
       el('button', { type: 'button', class: 'btn', text: 'Zrušit', onclick: () => nav.back() }),
-      el('button', { type: 'submit', class: 'btn primary', text: existing ? 'Uložit' : 'Přidat píseň' })));
+      el('button', { type: 'submit', class: 'btn primary', text: vmode ? (version ? 'Uložit' : 'Přidat verzi') : existing ? 'Uložit' : 'Přidat píseň' })));
 
   async function loadTextFile() {
     const file = await pickFile('.lrc,.txt,.json,text/plain,application/json');
@@ -126,18 +142,26 @@ export async function renderEdit(root, id, nav, draft) {
   }
 
   async function save() {
-    const title = f.title.value.trim();
+    const title = vmode ? existing.title : f.title.value.trim();
     if (!title) { toast('Vyplň název písně.'); f.title.focus(); return; }
     const ytRaw = f.youtube.value.trim();
     const youtubeId = ytRaw ? extractYoutubeId(ytRaw) : null;
     if (ytRaw && !youtubeId) { toast('Odkaz na YouTube nepoznávám.'); f.youtube.focus(); return; }
     const lines = parseLyrics(f.text.value);
+    if (vmode && !lines.length) { toast('Vlož text verze.'); f.text.focus(); return; }
 
     const song = existing || newSong({ title, lines: [] });
-    const v = primaryVersion(song);
-    Object.assign(song, { title, artist: f.artist.value.trim(), language: f.language.value, tags: parseTags(f.tags.value) });
+    let v;
+    if (vmode) {
+      v = version || newVersion([], { label: '' });
+      if (!version) song.versions.push(v);
+      v.label = f.label.value.trim() || `Verze ${song.versions.indexOf(v) + 1}`;
+    } else {
+      v = primaryVersion(song);
+      Object.assign(song, { title, artist: f.artist.value.trim(), language: f.language.value, tags: parseTags(f.tags.value) });
+    }
     if (picked && picked.altText && !attachAlt(lines, picked.altText)) toast('Překlad ze zdroje nesedí počtem řádků na verše, nepřevzal jsem ho.', 3500);
-    v.lines = existing ? mergeLines(v.lines, lines) : lines;
+    v.lines = version ? mergeLines(v.lines, lines) : lines;
     v.youtubeId = youtubeId;
     if (picked) { v.source = picked.source; v.sourceUrl = picked.sourceUrl; }
 
@@ -148,16 +172,28 @@ export async function renderEdit(root, id, nav, draft) {
         await putAudioBlob(key, newAudio);
         v.audio = { key, name: newAudio.name, type: newAudio.type || '', size: newAudio.size };
       }
+      if (existing && existing.versions.length > 1) prune(song);
       await saveSong(song);
     } catch (e) {
       toast(e && e.name === 'QuotaExceededError' ? 'V telefonu došlo místo pro uložení.' : 'Uložení se nepovedlo.');
       return;
     }
+    if (vmode && !version) { toast('Verze přidána'); nav.replace(`#/compare/${song.id}/${v.id}`); return; }
     toast(existing ? 'Uloženo' : 'Píseň přidána');
     if (existing) nav.back(); else nav.replace(`#/song/${song.id}`);
   }
 
   async function remove() {
+    if (vmode) {
+      if (!confirm(`Smazat verzi „${version.label}“${version.audio ? ' i s její nahrávkou' : ''}? Rozhodnutí sporných míst proti ní se zapomenou.`)) return;
+      if (version.audio) await deleteAudioBlob(version.audio.key);
+      existing.versions = existing.versions.filter(x => x !== version);
+      prune(existing);
+      await saveSong(existing);
+      toast('Verze smazána');
+      nav.back();
+      return;
+    }
     if (!confirm(`Smazat „${existing.title}“ včetně zvukového souboru? Nejde to vrátit.`)) return;
     await deleteSong(existing);
     toast('Smazáno');
@@ -166,9 +202,12 @@ export async function renderEdit(root, id, nav, draft) {
 
   updateAudio();
   root.append(el('div', { class: 'view' },
-    el('header', { class: 'topbar' }, iconBtn('back', 'Zpět', () => nav.back()), el('h1', { text: existing ? 'Upravit píseň' : 'Nová píseň' })),
+    el('header', { class: 'topbar' }, iconBtn('back', 'Zpět', () => nav.back()),
+      vmode ? el('h1', {}, el('span', { text: version ? 'Upravit verzi' : 'Přidat verzi textu' }), el('small', { text: existing.title }))
+        : el('h1', { text: existing ? 'Upravit píseň' : 'Nová píseň' })),
     form));
   if (draft?.shareUrl) importFromUrl(draft.shareUrl, applyPick);
   else if (draft?.shareText) applyPick({ text: draft.shareText, source: 'sdílení' });
   else if (!existing && !f.title.value) f.title.focus();
+  else if (vmode && !version) f.text.focus();
 }

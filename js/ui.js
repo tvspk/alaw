@@ -21,6 +21,12 @@ export function el(tag, props = {}, ...children) {
   return node;
 }
 
+// replaceChildren bez null/false (nativní by je vypsal jako text „null“)
+export function fill(node, ...children) {
+  node.replaceChildren(...children.flat(Infinity).filter(c => c != null && c !== false));
+  return node;
+}
+
 const svg = path => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
 export const ICONS = {
   back: svg('<path d="M15 18l-6-6 6-6"/>'),
