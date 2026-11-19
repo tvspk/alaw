@@ -2,6 +2,7 @@
 import { el, iconBtn, ICONS, sheet, menu, toast, download, safeName } from './ui.js';
 import { getSong, saveSong, deleteSong, getAudioBlob, getPrefs, setPrefs, getProgress, resetProgress } from './store.js';
 import { songUnits, songSummary, unitState, lineKey, STATE_LABEL, fmtIvl } from './learn.js';
+import { DRILLS } from './drill.js';
 import { primaryVersion, formatMs, toLrc, langLabel } from './model.js';
 import { Player, RATES } from './player.js';
 import { hasAi, translateVersion, explainLine } from './ai.js';
@@ -101,7 +102,15 @@ export async function renderSong(root, id, nav) {
   // ---------- učení: souhrn a mapa písně ----------
   const learnInfo = el('div', { class: 'grow' });
   const learnBox = el('div', { class: 'learn-box' }, learnInfo,
+    el('button', { type: 'button', class: 'btn small', text: '🎯 Procvičit', onclick: openDrills }),
     el('button', { type: 'button', class: 'btn small primary', text: '🎓 Učit se', onclick: () => nav.go(`#/learn/${encodeURIComponent(song.id)}`) }));
+  function openDrills() {
+    sheet(close => el('div', {},
+      el('h3', { text: 'Procvičit celou píseň' }),
+      el('div', { class: 'sub', text: 'Mimo lekci, kdykoli. Pokrok mění jen zkouška (co nevíš, vrátí se do opakování).' }),
+      el('div', { class: 'menu' }, DRILLS.map(([m, icon, label, desc]) => el('button', { type: 'button', onclick: () => { close(); nav.go(`#/drill/${encodeURIComponent(song.id)}/${m}`); } },
+        el('span', { class: 'ic', text: icon }), el('span', {}, el('div', { text: label }), el('small', { class: 'menu-desc', text: desc })))))));
+  }
   function updateLearnBox() {
     const c = songSummary(units, recs);
     learnBox.hidden = !units.length;
@@ -446,6 +455,7 @@ export async function renderSong(root, id, nav) {
         { icon: '✎', label: 'Upravit píseň', action: () => nav.go(`#/edit/${song.id}`) },
         { icon: '⏱', label: 'Časovat verše ťukáním', action: () => nav.go(`#/sync/${song.id}`) },
         { icon: '🎓', label: 'Učit se', action: () => nav.go(`#/learn/${encodeURIComponent(song.id)}`) },
+        { icon: '🎯', label: 'Procvičit celou píseň…', action: openDrills },
         [...recs.values()].some(r => r.st !== 'new') && { icon: '↺', label: 'Vynulovat pokrok celé písně', action: async () => {
           if (!confirm('Vynulovat pokrok učení u všech veršů této písně?')) return;
           const n = await resetProgress(song.id, units.map(u => u.k)); await reloadProgress(); toast(`Vynulováno ${n} veršů`);

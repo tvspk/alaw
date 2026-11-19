@@ -117,13 +117,84 @@ export function introducedToday(recs, now = Date.now()) {
   return n;
 }
 
-// Jaké cvičení: nový → úvodní karta; první krok → první písmena; dál → vybav si verš; silný verš (≥ 7 dní) → napiš zpaměti.
-export function exerciseFor(rec, alwaysType = false) {
+// ---------- cvičení na verš ----------
+// Aplikace je střídá sama podle síly verše (rozhodnutí zadavatele); v Nastavení jde každé vypnout (prefs.exOff).
+// Cvičení s nahrávkou (diktát) se nabídne jen u načasovaného verše, když nahrávka hraje.
+export const EXERCISES = [
+  ['initials', 'Podle prvních písmen'],
+  ['choiceWord', 'Doplň slovo z nabídky'],
+  ['scramble', 'Skládání slov'],
+  ['flash', 'Bliknutí (verš se ukáže jen na chvilku)'],
+  ['recall', 'Jak verš zní? (vybav si ho po předchozím)'],
+  ['choice3', 'Výběr ze tří (který verš následuje)'],
+  ['fromCz', 'Z češtiny do velštiny (jen u veršů s překladem)'],
+  ['before', 'Napřeskáčku (co je před veršem)'],
+  ['dictation', 'Diktát (jen u načasovaných veršů)'],
+  ['type', 'Psaní zpaměti'],
+];
+const LEVELS = [
+  ['initials', 'choiceWord', 'scramble'],                 // učím se, první krok
+  ['recall', 'flash', 'choice3', 'dictation'],            // učím se dál / interval do 2 dnů
+  ['recall', 'fromCz', 'before', 'choice3', 'dictation'], // interval 3–6 dní
+  ['type', 'scramble', 'dictation', 'fromCz'],            // interval od 7 dnů
+];
+export function levelOf(rec) {
+  if (rec.st === 'learn') return rec.step === 0 ? 0 : 1;
+  return rec.ivl < 3 ? 1 : rec.ivl < 7 ? 2 : 3;
+}
+// ctx: { words, others (slova písně mimo verš), units, hasTr, hasNext, timed } – co cvičení potřebuje
+const AVAILABLE = {
+  choiceWord: c => c.others >= 3, scramble: c => c.words >= 3, choice3: c => c.units >= 3,
+  fromCz: c => c.hasTr, before: c => c.hasNext, dictation: c => c.timed,
+};
+export function pickExercise(rec, ctx, { off = {}, alwaysType = false, last = null, rnd = Math.random } = {}) {
   if (!rec || rec.st === 'new') return 'intro';
   if (alwaysType) return 'type';
-  if (rec.st === 'learn') return rec.step === 0 ? 'initials' : 'recall';
-  return rec.ivl >= 7 ? 'type' : 'recall';
+  let c = LEVELS[levelOf(rec)].filter(ex => !off[ex] && (!AVAILABLE[ex] || AVAILABLE[ex](ctx)));
+  if (c.length > 1) c = c.filter(ex => ex !== last);
+  if (!c.length) return levelOf(rec) === 3 && !off.type ? 'type' : levelOf(rec) === 0 && !off.initials ? 'initials' : 'recall';
+  return c[Math.floor(rnd() * c.length)];
 }
+export const exerciseFor = (rec, alwaysType = false) => pickExercise(rec, {}, { alwaysType, rnd: () => 0 });
+
+export function shuffle(arr, rnd = Math.random) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+// Zamíchat tak, aby pořadí nebylo stejné jako původní (podle klíče), pokud to jde.
+export function shuffleNew(arr, key = x => x, rnd = Math.random) {
+  const orig = arr.map(key).join('\n');
+  for (let t = 0; t < 12; t++) { const s = shuffle(arr, rnd); if (s.map(key).join('\n') !== orig) return s; }
+  return arr.slice().reverse();
+}
+
+// Špatné možnosti ze stejné písně, co nejpodobnější správné (rozhodnutí zadavatele).
+const wordKey = w => lineKey(w).replace(/ /g, '');
+export function songWords(song) {
+  const m = new Map();
+  for (const l of primaryVersion(song).lines) for (const w of l.text.split(/\s+/)) {
+    const k = wordKey(w);
+    const core = (w.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/u) || [''])[0];
+    if (k && core && !m.has(k)) m.set(k, core);
+  }
+  return m; // klíč → slovo, jak je v textu
+}
+// exclude = slova, která už ve verši jsou vidět (nedávají smysl jako možnost)
+export function wordDistractors(correct, words, n = 3, rnd = Math.random, exclude = '') {
+  const ck = wordKey(correct);
+  const ex = new Set(String(exclude).split(/\s+/).map(wordKey));
+  const score = k => (k[0] === ck[0] ? 2 : 0) + (Math.abs(k.length - ck.length) <= 2 ? 1 : 0) + rnd();
+  return [...words.keys()].filter(k => k !== ck && !ex.has(k)).sort((a, b) => score(b) - score(a)).slice(0, n).map(k => words.get(k));
+}
+export function lineDistractors(target, units, n = 2, rnd = Math.random) {
+  const tw = new Set(target.k.split(' '));
+  const score = u => u.k.split(' ').filter(w => tw.has(w)).length + (u.k.split(' ')[0] === target.k.split(' ')[0] ? 1 : 0) + rnd() * 1.5;
+  return units.filter(u => u.k !== target.k).sort((a, b) => score(b) - score(a)).slice(0, n);
+}
+
+// Porovnání poskládaného pořadí: kolik položek je na špatném místě (podle klíče, refrén se může prohodit).
+export const orderErrors = (placed, correct) => placed.reduce((n, x, i) => n + (x !== correct[i] ? 1 : 0), 0);
 
 // ---------- psaní zpaměti ----------
 // Porovnání bez ohledu na velikost písmen, interpunkci, apostrofy a znaménka (stříšky se ignorují úplně – rozhodnutí

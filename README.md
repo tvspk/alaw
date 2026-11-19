@@ -2,7 +2,7 @@
 
 Alaw (velšsky „melodie“): texty písní (hlavně velšských) a jejich učení nazpaměť. Webová aplikace (PWA) pro Android i počítač, funguje offline.
 
-## Co umí (verze 0.4)
+## Co umí (verze 0.5)
 
 - Knihovna písní s hledáním (i v textu, bez ohledu na stříšky), štítky a filtrem jazyka.
 - Přidání písně: prostý text nebo LRC s časy, sloky oddělené prázdným řádkem, načtení ze souboru.
@@ -16,6 +16,11 @@ Alaw (velšsky „melodie“): texty písní (hlavně velšských) a jejich uče
   „jak verš zní?“ (vybav si verš po předchozím) a u dobře známých veršů psaní zpaměti (stříšky, velikost písmen,
   interpunkce ani drobný překlep nevadí). Po každém cvičení hodnocení Znovu / Těžké / Dobře / Snadno a opakování
   v intervalech (1 den, 3, 8…). Refrén se stejným textem se učí jednou. Nových veršů denně nastavitelně (výchozí 6).
+- **Další cvičení v lekci** (aplikace je střídá sama podle síly verše, nevyhovující jdou vypnout v Nastavení → Učení):
+  doplň slovo z nabídky, skládání slov verše, bliknutí, výběr ze tří („který verš následuje?“), z češtiny do velštiny,
+  napřeskáčku („co je před tímto veršem?“) a diktát (jen u načasovaných veršů). Špatné možnosti jsou ze stejné písně.
+- **Procvičit celou píseň** (tlačítko 🎯 v písni): skládání sloky, rozmazávání (po kolech, s časy i smyčka sloky),
+  tahák pro zpěv (první slovo nebo první písmena veršů) a zkouška celé písně (co nevíš, vrátí se do opakování).
 - **Mapa písně** (režim Mapa): co umíš, co se učíš, co je k opakování a kdy; ťuknutím procvičíš jeden verš.
   Na úvodní obrazovce proužek pokroku u písní a nenápadná připomínka, když verše jiné písně začínají slábnout.
 - Záloha do JSON (volitelně se zvukem, vždy s pokrokem učení) a import, včetně JSON z projektu „Lyrics Trainer“.

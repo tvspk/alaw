@@ -382,3 +382,54 @@ a { color: var(--accent); }
 .ldone { text-align: center; padding: 18px 4px; }
 .ldone .big { font-family: var(--serif); font-size: 1.4rem; font-weight: 600; margin-bottom: 6px; }
 .ldone p { color: var(--muted); line-height: 1.5; }
+
+/* ---------- 0.5: další cvičení a procvičování ---------- */
+.learn-box .btn.small { padding: 5px 10px; }
+.choices { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.choices.lines { grid-template-columns: 1fr; }
+.choice {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 11px 12px; min-height: 48px;
+  font-family: var(--serif); font-size: 1.05rem; text-align: left; line-height: 1.35;
+}
+.choice:active { background: var(--surface-2); }
+.blank { display: inline-block; min-width: 3.5em; border-bottom: 2px solid var(--accent); color: transparent; }
+.sc-placed { display: flex; flex-wrap: wrap; gap: 6px; min-height: 44px; align-items: center; }
+.sc-pool { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.sc-word {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 12px;
+  font-family: var(--serif); font-size: 1.08rem; box-shadow: 0 1px 0 var(--line);
+}
+.sc-word.on { background: var(--accent-soft); border-color: var(--accent); }
+.lq.small { font-family: var(--sans); font-size: .85rem; letter-spacing: 0; }
+.flashbar { height: 4px; background: var(--surface-2); border-radius: 2px; overflow: hidden; }
+.flashbar i { display: block; height: 100%; background: var(--accent); animation: flashbar linear forwards; }
+@keyframes flashbar { from { width: 100%; } to { width: 0; } }
+.lprev-text.cz { font-family: var(--sans); font-style: italic; color: var(--ink); font-size: 1.05rem; }
+.ex-list { display: grid; gap: 8px; }
+.menu-desc { display: block; color: var(--faint); font-size: .8rem; margin-top: 1px; line-height: 1.3; }
+.drill-ctrl { justify-content: center; margin: 0 0 8px; }
+.play.small { width: 44px; height: 44px; }
+.play.small svg { width: 22px; height: 22px; }
+.ord-placed { list-style: decimal; padding-left: 26px; margin: 8px 0; display: grid; gap: 6px; }
+.ord-placed:empty { display: none; }
+.ord-pool { display: grid; gap: 6px; margin-top: 10px; }
+.ord-line {
+  width: 100%; text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 9px 12px;
+  font-family: var(--serif); font-size: var(--lyric-size); line-height: 1.35;
+}
+.ord-placed .ord-line { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.ord-line.ok { border-color: var(--st-known); background: color-mix(in srgb, var(--st-known) 14%, var(--surface)); }
+.ord-line.bad { border-color: var(--mark); background: var(--mark-soft); }
+.blur-text { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; margin-top: 8px; }
+.blur-line { font-family: var(--serif); font-size: var(--lyric-size); line-height: 1.5; filter: blur(var(--blur, 0)); transition: filter .4s; cursor: pointer; }
+.blur-line.stanza { margin-top: 14px; }
+.blur-line.peek { filter: none; }
+.blur-round { font-size: .9rem; color: var(--muted); font-weight: 600; }
+.btn.on { background: var(--accent-soft); border-color: var(--accent); }
+.cheat .text { cursor: pointer; }
+.exam-done { list-style: none; padding: 0; margin: 6px 0 12px; display: grid; gap: 2px; }
+.exam-done li { font-family: var(--serif); font-size: .98rem; color: var(--muted); padding-left: 22px; position: relative; }
+.exam-done li.stanza { margin-top: 10px; }
+.exam-done li::before { position: absolute; left: 0; font-family: var(--sans); }
+.exam-done li.ok::before { content: "✓"; color: var(--st-known); }
+.exam-done li.bad::before { content: "✗"; color: var(--mark); }
