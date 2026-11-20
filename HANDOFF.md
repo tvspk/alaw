@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 20. 11. 2026, verze **0.13.0** (APK versionCode 17). Odpovídej zadavateli **česky**.
+> Stav k 20. 11. 2026 (noc), verze **0.13.0** (APK versionCode 17). Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -194,25 +194,48 @@ Zadavatel po vydání 0.12 napsal „ok všechno v pohodě“ (Bangor na Windows
 zda přepis přes Bangor opravdu proběhl). CZ/EN (0.10) a dva překlady + stažení textu (0.11) viděl („perfektní“), zkouší.
 Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna verze/mazání (0.8) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
 
-## Rozpracováno a další kroky (stav 20. 11. 2026 večer, verze 0.13.0)
+## Rozpracováno a další kroky (stav 20. 11. 2026 v noci, verze 0.13.0)
 
 Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „hotovo“.
 
-1. **DALŠÍ ÚKOL: přejmenování nahrávek na PC na „Interpret - Název“** (zadavatel chce; rozhodnuto v 0.7). Zadavatel má na PC
-   složku s ~100+ nahrávkami (mp3 + wav, ~1,1 GB). Dělá se v **aplikaci Claude pro počítač** se složkou připojenou přes „+“ →
-   „Add folder“ (bez toho Claude na soubory nedosáhne – pak zadavateli říct, jak složku připojit). Postup:
-   - Projít názvy souborů a údaje uvnitř (ID3v2/v1 u mp3, RIFF INFO / id3 u wav – stejná logika jako `bulk.js`), navrhnout nový
-     název `Interpret - Název.přípona` (číslo stopy pryč, zachovat diakritiku a velštinu, zakázané znaky Windows `\ / : * ? " < > |` nahradit).
-   - Ukázat **tabulku starý → nový ke schválení**; nejisté (neznámý interpret/název) **nepřejmenovávat** – zadavatel doplní ručně.
-     Duplicitní cílové názvy řešit (` (2)`). Nic nemazat.
-   - Před přejmenováním uložit do složky **seznam pro vrácení** (`alaw-prejmenovani.csv`: starý;nový) a nabídnout vrácení.
-   - Přejmenovat až po „ano“. Obsah souborů se nemění (zvuk se nezmenšuje, wav nepřevádět).
-2. **Hromadné přidání nahrávek** (Knihovna → Písně z nahrávek, na počítači i celá složka) a **Najít texty**; k nenalezeným Claude
-   připraví **soubor s odkazy** (jen odkazy, nikdy texty; formát v bodě 6 výše) a vysvětlí „📄 Načíst odkazy ze souboru“. Ke zbytku
-   přepis z nahrávky (Gemini / Groq / Bangor). Riziko: 1,1 GB zvuku v synchronizaci (bod 6).
-3. **Hodnocení přepisu u zadavatele:** Groq vs. Gemini vs. Bangor na téže písni; velká WAV přes Gemini (Files API neověřeno).
+**Hotovo 20. 11. večer (bez změny kódu):**
+- **Přejmenování nahrávek na PC – HOTOVO.** Složka zadavatele `D:\Cerdd alaw` (Windows), 277 souborů (mp3, 1 flac, 3 wav;
+  některé „.mp3“ jsou ve skutečnosti MP4/AAC – aplikaci to nevadí). Přejmenováno 276 na `Interpret - Název[ vN].přípona`.
+  Postup: Claude přes most k počítači (bez device_bash – jen výpis, stažení kopie, zápis souborů) připravil tabulku
+  `alaw-prejmenovani.csv` a program `alaw-prejmenovat.bat`/`.ps1` (PowerShell, přejmenuje podle tabulky, shoda názvu i po
+  normalizaci + velikost, nic nemaže), zadavatel ho spustil dvojklikem. Vrácení: `alaw-vratit.bat` podle `alaw-vraceni.csv`.
+  - Pravidla zadavatele: **hranaté závorky za názvem pryč** (kódy YouTube), **stejná píseň víckrát → „ v1“, „ v2“** (jen stejný
+    interpret i název; stejný název od jiného interpreta se nečísluje), **velké písmeno na začátku**, slova celá velkými se
+    převedou (kromě zkratek jako LOL), dovětky „(Fideo)“, „(Lyric Video)“, „(geiriau ⧸ lyrics)“ pryč, „(Acwstig)“, „(Sesiwn …)“ zůstávají.
+  - Interpreti: z názvu souboru, z ID3, **u stažených z YouTube podle kódu videa** (`youtube.com/oembed` → kanál „Interpret - Topic“
+    = spolehlivé; kanál „Amrywiol“ = různí interpreti, nebrat), zbytek doplnil zadavatel.
+- **Písně z nahrávek** přidány (277 písní). **Najít texty:** LRCLIB + soubor s odkazy `alaw-odkazy.txt` (74 písní: Welsh Lyrics
+  wiki s kontrolou interpreta na stránce, LyricsTranslate, Bandcamp jen se zjištěným textem) → **65 písní má text, ~212 ne.**
+  Druhé kolo (Bandcamp/LyricsTranslate jen podle názvu, webové hledání) skoro nic nenašlo (`alaw-odkazy-2.txt`, 1 odkaz).
+  Last.fm (má texty části velšských písní) není v povolených doménách prostředí Claude – případně zadavatel povolí v claude.ai
+  → Settings → Capabilities. Skripty (hledání odkazů, přejmenování) jsou v předávacím balíku, ne v repozitáři.
+- Synchronizace po přidání 1,1 GB zvuku běží (průběžné zápisy po 200 MB); telefon pak stáhnout **na Wi-Fi**.
+
+**Poznatky z provozu (možná oprava 0.13.1 – zadavateli nabídnuto, zatím nezadáno):**
+- „Najít texty“ hlásí u části písní **„Web nás nepustil (429)“** (LRCLIB omezuje rychlost; `bulk.js` `run()` čeká jen 250 ms
+  a na 429 nereaguje). Návrh: při `NetError` se stavem 429 počkat (např. 60 s, pak 2 min) a zkusit znovu, pauza mezi dotazy ~1 s.
+  Zatím obchvat: po doběhnutí počkat 5–10 min a „Hledat znovu nenalezené“.
+- „Alaw nereaguje“ po „Načíst odkazy ze souboru“ = **okno výběru souboru Windows schované za oknem aplikace** (Alt+Tab).
+- Při odesílání velkého zvuku může UI na počítači krátce zadrhávat (`b64()` + šifrování kousků po 8 MiB v hlavním vlákně).
+
+**Další kroky:**
+1. **DALŠÍ ÚKOL: přepis zbývajících ~212 písní bez textu přes Bangor** (zadavatel souhlasí, chce provést krok po kroku).
+   Nastavení → Přepis z nahrávky → Bangor (nápověda „?“): stáhnout program z vydání, rozbalit, spustit `alaw-bangor.bat`
+   (poprvé Python + model ~1,6 GB), v aplikaci „Zapnout a ověřit“ (Chrome se zeptá na přístup k místní síti/aplikacím – povolit),
+   vybrat službu Bangor. Nejdřív **zkouška na 1–2 písních** (Najít texty → u písně přepis, nebo v písni), zadavatel posoudí kvalitu.
+   Pak „🎧 Přepsat nenalezené z nahrávek“. Bez NVIDIA běží na procesoru – 200 písní spíš přes noc; Alaw i okno programu nechat
+   otevřené, počítač neuspávat. Přepis = text bez časů, může mít chyby u zpěvu. Groq jen jako doplněk (denní limit).
+   Zjistit, jestli zadavatel má grafiku NVIDIA (okno programu ukazuje GPU/CPU).
+2. Případně 0.13.1 (výše) – jen když zadavatel chce.
+3. Hodnocení přepisu: Bangor vs. Groq vs. Gemini na téže písni; velká WAV přes Gemini (Files API neověřeno).
 4. Zadavatel vyzkouší CZ/EN a dva překlady; připomínky k angličtině do `js/i18n-en.js`.
-5. Ověřit na telefonu: učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7), přepis/mazání/výměna verze (0.8, 0.9).
+5. Ověřit na telefonu: učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7), přepis/mazání/výměna verze (0.8, 0.9);
+   že telefon stáhl 1,1 GB zvuku (Wi-Fi, místo v telefonu).
 
 Možná rozšíření (nezadaná): sdílení z Androidu rovnou do nové verze.
 - Drobnosti: pruh nové verze se objeví až po 20 h od poslední kontroly (záměr). Genius z prostředí Claude netestovatelný
