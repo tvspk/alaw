@@ -1,5 +1,6 @@
 import { t, isEn } from './i18n.js';
 import { toSpeechWav } from './audioprep.js';
+import { trOf, setTr } from './model.js';
 
 // Gemini: český překlad veršů, doslovný překlad, hovorové zkratky, vysvětlení verše a přepis textu z nahrávky.
 // Klíč je uložený jen v tomto zařízení (localStorage 'alaw-ai'), nezálohuje se a nesynchronizuje.
@@ -148,9 +149,10 @@ Rules:
 - If a line has no contractions, return an empty array.
 - Return every line with the same "id" you received. Do not repeat the original text.`;
 
-// Přeloží verše (ty bez překladu, nebo všechny při overwrite). onProgress(hotovo, celkem).
-export async function translateVersion(song, version, { overwrite = false, onProgress = () => {}, onWait = () => {} } = {}) {
-  const todo = version.lines.filter(l => l.text.trim() && (overwrite || !l.translation));
+// Přeloží verše do jazyka lang (cs/en, výchozí jazyk rozhraní): ty bez překladu v tom jazyce, nebo všechny při overwrite.
+// Překlad v druhém jazyce zůstane. onProgress(hotovo, celkem).
+export async function translateVersion(song, version, { lang = isEn ? 'en' : 'cs', overwrite = false, onProgress = () => {}, onWait = () => {} } = {}) {
+  const todo = version.lines.filter(l => l.text.trim() && (overwrite || !trOf(l, lang).translation));
   const BATCH = 12;
   let done = 0;
   onProgress(0, todo.length);
@@ -162,7 +164,7 @@ export async function translateVersion(song, version, { overwrite = false, onPro
       whole_song: version.lines.map(l => l.text).join('\n'),
       lines: chunk.map(l => ({ id: l.id, original: l.text })),
     };
-    const res = await generate(isEn ? TRANSLATE_PROMPT_EN : TRANSLATE_PROMPT, JSON.stringify(payload), S('OBJECT', {
+    const res = await generate(lang === 'en' ? TRANSLATE_PROMPT_EN : TRANSLATE_PROMPT, JSON.stringify(payload), S('OBJECT', {
       properties: {
         lines: S('ARRAY', { items: S('OBJECT', {
           properties: {
@@ -178,9 +180,11 @@ export async function translateVersion(song, version, { overwrite = false, onPro
     for (const l of chunk) {
       const x = byId.get(l.id);
       if (!x) continue;
-      l.translation = String(x.translation || '').trim();
-      l.literal = String(x.literal || '').trim();
-      l.contractions = (x.contractions || []).filter(c => c && c.short).map(c => ({ short: String(c.short), full: String(c.full || ''), note: String(c.note || '') }));
+      setTr(l, lang, {
+        translation: String(x.translation || '').trim(),
+        literal: String(x.literal || '').trim(),
+        contractions: (x.contractions || []).filter(c => c && c.short).map(c => ({ short: String(c.short), full: String(c.full || ''), note: String(c.note || '') })),
+      });
       done++;
     }
     onProgress(Math.min(i + BATCH, todo.length), todo.length);

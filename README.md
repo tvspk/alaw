@@ -4,8 +4,12 @@ Alaw (velšsky „melodie“): texty písní (hlavně velšských) a jejich uče
 
 *Alaw (Welsh for ‘melody’): song lyrics, mainly Welsh, and learning them by heart. Available in Czech and British English – switch CZ | EN on the home screen.*
 
-## Co umí (verze 0.10)
+## Co umí (verze 0.11)
 
+- **Překlad česky i anglicky** (0.11): u verše může být český i anglický překlad (i doslovný a zkratky); AI překládá do jazyka
+  rozhraní, druhý jazyk na vyžádání (Nastavení → Překlady pomocí AI). V písni přepínač CZ / EN u tlačítka Překlad.
+- **Stažení textu** (nabídka písně → Stáhnout text…): s časy (.lrc), bez časů (.txt), jen překlad (.txt) a text s překladem
+  pod každým veršem (.txt), překlad v češtině i angličtině.
 - **Čeština a britská angličtina** (0.10): přepínač CZ | EN v záhlaví knihovny, volba platí pro zařízení (výchozí podle jazyka
   prohlížeče/telefonu). Data písní se nepřekládají; AI překlad a vysvětlení verše vznikají v jazyce rozhraní.
 - Knihovna písní s hledáním (i v textu, bez ohledu na stříšky), štítky a filtrem jazyka.
@@ -71,6 +75,6 @@ a otevřít http://localhost:8000
 
 - Bez sestavování: čisté HTML, CSS a JavaScript (ES moduly) v `index.html`, `css/`, `js/`.
 - Po každé změně souborů spusť `python3 scripts/build_sw.py` (aktualizuje seznam souborů a verzi v `sw.js`).
-- Testy: `python3 testy/test_zaklad.py`, `python3 testy/test_verze.py`, `python3 testy/test_hledani.py`, `python3 testy/test_hromadne.py`, `python3 testy/test_prepis.py`, `python3 testy/test_anglictina.py` (angličtina: slovník + obrazovky; Playwright, Chromium jako Pixel 7, bez sítě),
+- Testy: `python3 testy/test_zaklad.py`, `python3 testy/test_verze.py`, `python3 testy/test_hledani.py`, `python3 testy/test_hromadne.py`, `python3 testy/test_prepis.py`, `python3 testy/test_anglictina.py` (angličtina: slovník + obrazovky), `python3 testy/test_preklady.py` (dva překlady, export; Playwright, Chromium jako Pixel 7, bez sítě),
   `python3 testy/test_sync.py` (napodobený GitHub), `node testy/test_worker.mjs`. Kontrola zdrojů proti skutečným webům: `python3 testy/zdroje_naostro.py`.
 - APK: `sh android/build.sh` (nástroje z npm, Java 17). Prostředník pro počítač: `worker/` (návod v `worker/README.md`).

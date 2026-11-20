@@ -2,9 +2,12 @@
 // (learn.pickExercise); s nahrávkou (diktát, poslech) jen u načasovaných veršů.
 // Adresa #/learn/<id písně> (celá lekce) nebo #/learn/<id>/<klíč verše> (procvičit jen jeden verš z mapy písně).
 import { el, fill as fillEl, iconBtn } from './ui.js';
-import { t, pl } from './i18n.js';
+import { t, pl, lang as uiLang } from './i18n.js';
 import { getSong, getAudioBlob, getPrefs, setPrefs, getProgress, saveProgress } from './store.js';
-import { primaryVersion } from './model.js';
+import { primaryVersion, trOf, trText, anyTr, otherLang } from './model.js';
+
+// Překlad pro lekci: v jazyce rozhraní, jinak v druhém jazyce.
+const trLangFor = line => (trText(line, uiLang) || !trText(line, otherLang(uiLang)) ? uiLang : otherLang(uiLang));
 import { Player } from './player.js';
 import {
   songUnits, freshRec, introduce, grade, previews, GRADES, buildQueue, introducedToday, pickExercise,
@@ -131,7 +134,7 @@ export async function renderLesson(root, id, focusKey, nav) {
     return {
       words: line.text.split(/\s+/).filter(w => lineKey(w)).length, units: units.length,
       others: (own => [...allWords.keys()].filter(k => !own.has(k)).length)(new Set(line.text.split(/\s+/).map(w => lineKey(w).replace(/ /g, '')))),
-      hasTr: !!(line.translation || line.alt),
+      hasTr: !!anyTr(line, uiLang),
       hasNext: !!next && !!lineKey(next.text) && lineKey(next.text) !== unit.k,
       timed: canPlay(unit.first),
     };
@@ -198,10 +201,11 @@ export async function renderLesson(root, id, focusKey, nav) {
     const uns = vres.length && li >= 0 && !cur?.variantUsed ? unsureSpots(song, [li], vres) : [];
     return [
       ...uns.map(sp => el('div', { class: 'lvariant', text: '⚠ ' + (sp.a ? t('Nejisté: jiná verze má {b} místo „{a}“', { b: sp.b ? `„${sp.b}“` : t('tu nic'), a: sp.a }) : t('Nejisté: jiná verze má {b}', { b: sp.b ? `„${sp.b}“` : t('tu nic') })) })),
-      line.translation ? el('div', { class: 'tr', text: line.translation }) : null,
-      line.alt ? el('div', { class: 'alt', text: line.alt }) : null,
-      line.literal ? el('div', { class: 'lit', text: line.literal }) : null,
-      line.contractions.length ? el('div', { class: 'contr' }, line.contractions.map(c => el('span', { text: `${c.short} → ${c.full}`, title: c.note }))) : null,
+      ...(lg => { const tr = trText(line, lg), x = trOf(line, lg); return [
+        tr ? el('div', { class: tr.src ? 'alt' : 'tr', text: tr.text }) : null,
+        line.alt && !(tr && tr.src) && lg === 'cs' ? el('div', { class: 'alt', text: line.alt }) : null,
+        x.literal ? el('div', { class: 'lit', text: x.literal }) : null,
+        x.contractions.length ? el('div', { class: 'contr' }, x.contractions.map(c => el('span', { text: `${c.short} → ${c.full}`, title: c.note }))) : null]; })(trLangFor(line)),
       line.note ? el('div', { class: 'note', text: line.note }) : null,
     ];
   }
@@ -222,7 +226,7 @@ export async function renderLesson(root, id, focusKey, nav) {
     const { unit, ex, line, data } = cur;
     const body = [];
     const hintBox = el('div', { class: 'lhint' });
-    const trHint = () => (line.translation || line.alt) ? hintChip(t('Nápověda: překlad'), () => hintBox.append(el('div', { class: 'tr', text: line.translation || line.alt }))) : null;
+    const trHint = () => anyTr(line, uiLang) ? hintChip(t('Nápověda: překlad'), () => hintBox.append(el('div', { class: 'tr', text: anyTr(line, uiLang) }))) : null;
 
     if (ex === 'intro') {
       body.push(context(),
@@ -285,8 +289,8 @@ export async function renderLesson(root, id, focusKey, nav) {
       }, ms);
 
     } else if (ex === 'fromCz') {
-      body.push(el('div', { class: 'lprev' }, el('div', { class: 'lprev-label', text: t('Česky') }),
-        el('div', { class: 'lprev-text cz', text: line.translation || line.alt })),
+      body.push(el('div', { class: 'lprev' }, el('div', { class: 'lprev-label', text: t('Překlad') }),
+        el('div', { class: 'lprev-text cz', text: anyTr(line, uiLang) })),
       el('div', { class: 'ltarget' }, el('div', { class: 'ltext' }, hidden3())),
       el('p', { class: 'hint', text: t('Jak tenhle verš zní v originále? Řekni ho nahlas, pak odkryj.') }),
       revealRow());
@@ -302,7 +306,7 @@ export async function renderLesson(root, id, focusKey, nav) {
     } else { // initials, recall
       const hidden = el('div', { class: 'ltext' }, ex === 'initials' ? wordsOf(line.text, 'initials') : hidden3());
       body.push(context(),
-        el('div', { class: 'ltarget' }, hidden, ex === 'initials' && line.translation ? el('div', { class: 'tr', text: line.translation }) : null, hintBox),
+        el('div', { class: 'ltarget' }, hidden, ex === 'initials' && anyTr(line, uiLang) ? el('div', { class: 'tr', text: anyTr(line, uiLang) }) : null, hintBox),
         el('p', { class: 'hint', text: ex === 'initials' ? t('Řekni si celý verš nahlas, pak ho odkryj a ohodnoť, jak to šlo.') : t('Jak pokračuje píseň? Řekni si verš nahlas, pak ho odkryj a ohodnoť, jak to šlo.') }),
         el('div', { class: 'row' },
           ex === 'recall' ? trHint() : null,

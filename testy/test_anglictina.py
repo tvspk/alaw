@@ -55,7 +55,7 @@ def dictionary_check():
 def visible_text(page):
     # text + popisky (placeholder, title, aria-label), bez dat písní (.lyric .text, názvy) a bez přepínače jazyka
     return page.evaluate("""() => {
-      const skip = n => n.closest('.lang-switch, .lyric .text, .ltext, .lprev-text, .choices, .sc-pool, .sc-placed, .blur-text, .vtext, .r-preview, .title, .artist, .bulk-title strong, textarea, .gloss, .song-title');
+      const skip = n => n.closest('.lang-switch, .lyric .text, .lyric .tr, .lyric .lit, .ltext, .lprev-text, .choices, .sc-pool, .sc-placed, .blur-text, .vtext, .r-preview, .title, .artist, .bulk-title strong, textarea, .gloss, .song-title');
       const out = [];
       const pseudo = n => ['::before', '::after'].map(p => getComputedStyle(n, p).content).filter(c => c && c !== 'none' && c !== 'normal').map(c => c.replace(/^"|"$/g, ''));
       const walk = n => {
@@ -93,7 +93,7 @@ SEED = """async ([lrc, other]) => {
   const blob = new Blob([buf], { type: 'audio/wav' });
   await store.putAudioBlob('a-test', blob);
   const lines = model.parseLyrics(lrc);
-  lines.forEach((l, i) => { l.translation = 'By the sea ' + i; l.literal = 'On shore the sea ' + i; });
+  lines.forEach((l, i) => { l.translation = 'U moře ' + i; l.literal = 'Na břehu moře ' + i; l.en = { translation: 'By the sea ' + i, literal: 'On shore the sea ' + i, contractions: [] }; });
   const s = model.newSong({ title: 'Ar Lan y Môr', artist: 'Lidová', tags: ['hymns'], lines,
     versionExtra: { audio: { key: 'a-test', name: 'ar-lan-y-mor.wav', type: 'audio/wav', size: blob.size } } });
   s.versions.push(model.newVersion(model.parseLyrics(other), { label: 'Přepis (Whisper)', source: 'přepis' }));
@@ -128,7 +128,10 @@ def screens(page, url):
     for i, name in enumerate(['cloze', 'initials', 'map']):
         page.click(f'.seg button >> nth={i + 1}'); no_czech(page, f'píseň – režim {name}')
     page.click('.seg button >> nth=0')
-    page.click('.topbar .icon-btn >> nth=-1'); page.wait_for_selector('.sheet'); no_czech(page, 'nabídka písně'); page.keyboard.press('Escape')
+    page.click('.topbar .icon-btn >> nth=-1'); page.wait_for_selector('.sheet'); no_czech(page, 'nabídka písně')
+    page.click('.sheet .menu button:has-text("Download lyrics…")'); page.wait_for_selector('.sheet h3:has-text("Download lyrics")')
+    no_czech(page, 'stáhnout text'); page.keyboard.press('Escape')
+    page.click('.tr-switch button:has-text("CZ")'); no_czech(page, 'píseň – překlad CZ'); page.click('.tr-switch button:has-text("EN")')
     page.click('.lyric .more >> nth=0'); page.wait_for_selector('.sheet'); no_czech(page, 'nabídka verše')
     page.click('.sheet .menu button:has-text("Edit line")'); page.wait_for_selector('.sheet .form'); no_czech(page, 'úprava verše'); page.keyboard.press('Escape')
     page.click('.learn-box button >> nth=0'); page.wait_for_selector('.sheet'); no_czech(page, 'procvičit – výběr'); page.keyboard.press('Escape')

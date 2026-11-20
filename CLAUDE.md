@@ -41,4 +41,7 @@
   verš = line, sloka = verse, text písně = lyrics, nahrávka = recording, procvičit = practise). Data písní se nepřekládají;
   výchozí popisky verzí (`Hlavní`, `Přepis (…)`) se ukládají česky a zobrazují přes `vlabel()`. Proměnnou ani parametr
   nepojmenovávej `t` (zastínilo by překlad). Test: `python3 -u testy/test_anglictina.py` (ostatní testy běží v `cs-CZ`).
+- **Překlad verše ve dvou jazycích** (0.11): český = pole verše `translation`, `literal`, `contractions`; anglický = `line.en`
+  `{ translation, literal, contractions }` (prázdný se neukládá). Číst a zapisovat jen přes `model.trOf`/`setTr`, zobrazit přes
+  `trText` (anglicky záloha `alt` = překlad ze zdroje, označený), v učení `anyTr`. Export `model.toTxt`. Test: `python3 -u testy/test_preklady.py`.
 - **Stav projektu, rozhodnutí a další kroky: `HANDOFF.md`** (přečti jako první).

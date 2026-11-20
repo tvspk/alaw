@@ -1,10 +1,10 @@
 // Obrazovka písně: text, režimy učení, přehrávač, smyčka, úprava veršů.
 import { el, fill, iconBtn, ICONS, sheet, menu, toast, download, safeName } from './ui.js';
-import { t, pl, vlabel, num } from './i18n.js';
+import { t, pl, vlabel, num, lang as uiLang } from './i18n.js';
 import { getSong, saveSong, deleteSong, getAudioBlob, getPrefs, setPrefs, getProgress, resetProgress } from './store.js';
 import { songUnits, songSummary, unitState, lineKey, STATE_LABEL, fmtIvl } from './learn.js';
 import { DRILLS } from './drill.js';
-import { primaryVersion, formatMs, toLrc, langLabel } from './model.js';
+import { primaryVersion, formatMs, toLrc, toTxt, langLabel, isSynced, trOf, setTr, trText, trLangs, otherLang } from './model.js';
 import { Player, RATES } from './player.js';
 import { hasAi, translateVersion, explainLine } from './ai.js';
 import { MAX_VERSIONS, analyze, summary } from './versions.js';
@@ -72,6 +72,18 @@ export async function renderSong(root, id, nav) {
   const tools = el('div', { class: 'tools' });
   const study = el('div', { class: 'study' }, seg, tools);
 
+  // Jazyk zobrazeného překladu (CZ/EN): volba v prefs.trLang, jinak jazyk rozhraní; když píseň ten překlad nemá, druhý.
+  function dispLang() {
+    const av = trLangs(version), want = getPrefs().trLang || uiLang;
+    return av.includes(want) ? want : av[0] || uiLang;
+  }
+  function trSwitch() {
+    const dl = dispLang();
+    return el('div', { class: 'tr-switch', role: 'group', 'aria-label': t('Jazyk překladu') }, ['cs', 'en'].map(lg =>
+      el('button', { type: 'button', class: dl === lg ? 'on' : '', text: lg === 'cs' ? 'CZ' : 'EN', 'aria-pressed': String(dl === lg),
+        onclick: () => { setPrefs({ trLang: lg }); updateTools(); renderLyrics(); } })));
+  }
+
   function toggleChip(label, key) {
     const b = el('button', { type: 'button', class: 'chip', text: label, onclick: () => { setPrefs({ [key]: !getPrefs()[key] }); updateTools(); renderLyrics(); } });
     b.dataset.key = key;
@@ -83,11 +95,14 @@ export async function renderSong(root, id, nav) {
   function updateTools() {
     for (const [m, b] of Object.entries(segBtns)) { b.classList.toggle('on', st.mode === m); b.setAttribute('aria-selected', st.mode === m); }
     const p = getPrefs();
-    const has = k => version.lines.some(l => (k === 'contractions' ? l.contractions.length : l[k]));
+    const dl = dispLang();
+    const has = k => version.lines.some(l => (k === 'translation' ? trText(l, dl) : k === 'alt' ? dl === 'cs' && l.alt
+      : k === 'contractions' ? trOf(l, dl).contractions.length : trOf(l, dl)[k]));
     const chips = [];
     if (st.mode === 'cloze') chips.push(range, shuffleBtn);
     if (st.mode === 'cloze' || st.mode === 'initials') { revealBtn.textContent = st.revealAll ? t('🙈 Skrýt') : t('👁 Odkrýt vše'); chips.push(revealBtn); }
     if (has('translation')) chips.push(togTr);
+    if (p.showTr && trLangs(version).length > 1) chips.push(trSwitch());
     if (has('alt')) chips.push(togAlt);
     if (has('literal')) chips.push(togLit);
     if (has('contractions')) chips.push(togContr);
@@ -193,7 +208,7 @@ export async function renderSong(root, id, nav) {
   }
 
   function renderLyrics() {
-    const p = getPrefs();
+    const p = getPrefs(), dl = dispLang();
     const learning = (st.mode === 'cloze' || st.mode === 'initials') && !st.revealAll;
     const map = st.mode === 'map', now = Date.now();
     updateLearnBox();
@@ -204,11 +219,15 @@ export async function renderSong(root, id, nav) {
       const body = el('div', { class: 'body' },
         timed && st.mode === 'read' ? el('div', { class: 'time', text: formatMs(line.start, false) }) : null,
         el('div', { class: 'text' }, wordNodes(line)),
-        p.showTr && line.translation && !learning ? el('div', { class: 'tr', text: line.translation }) : null,
-        p.showAlt && line.alt && !learning ? el('div', { class: 'alt', text: line.alt }) : null,
-        p.showLit && line.literal && !learning ? el('div', { class: 'lit', text: line.literal }) : null,
-        p.showContr && line.contractions.length && !learning
-          ? el('div', { class: 'contr' }, line.contractions.map(c => el('span', { text: `${c.short} → ${c.full}`, title: c.note }))) : null,
+        ...(learning ? [] : (() => {
+          const tr = p.showTr ? trText(line, dl) : null, x = trOf(line, dl);
+          return [
+            tr ? el('div', { class: tr.src ? 'alt' : 'tr', text: tr.text, title: tr.src ? t('Překlad ze zdroje') : null }) : null,
+            p.showAlt && dl === 'cs' && line.alt ? el('div', { class: 'alt', text: line.alt }) : null,
+            p.showLit && x.literal ? el('div', { class: 'lit', text: x.literal }) : null,
+            p.showContr && x.contractions.length
+              ? el('div', { class: 'contr' }, x.contractions.map(c => el('span', { text: `${c.short} → ${c.full}`, title: c.note }))) : null];
+        })()),
         line.note && st.mode === 'read' ? el('div', { class: 'note', text: line.note }) : null,
         map ? mapState(line, now) : null);
       const ms = map ? unitState(recs.get(lineKey(line.text)), now) : null;
@@ -368,7 +387,7 @@ export async function renderSong(root, id, nav) {
     const r = loopIdx();
     sheet(close => el('div', {},
       el('h3', { text: line.text }),
-      line.translation ? el('div', { class: 'sub', text: line.translation }) : null,
+      trText(line, dispLang()) ? el('div', { class: 'sub', text: trText(line, dispLang()).text }) : null,
       menu([
         timed && { icon: '🔁', label: t('Opakovat tento verš'), action: () => setLoop(i, i) },
         timed && { icon: '⤒', label: r ? t('Smyčka začne tady') : t('Smyčka od tohoto verše…'), action: () => setLoop(i, r ? Math.max(r[1], i) : i) },
@@ -393,21 +412,31 @@ export async function renderSong(root, id, nav) {
     const line = version.lines[i];
     const f = {
       text: el('textarea', { class: 'short', value: line.text }),
-      translation: el('textarea', { class: 'short', value: line.translation }),
-      literal: el('textarea', { class: 'short', value: line.literal }),
       alt: el('textarea', { class: 'short', value: line.alt }),
-      contractions: el('textarea', { class: 'short', value: line.contractions.map(c => `${c.short} = ${c.full}${c.note ? ' — ' + c.note : ''}`).join('\n'), placeholder: t('dwi = rydw i — hovorově') }),
       note: el('textarea', { class: 'short', value: line.note, placeholder: t('Pomůcka, poznámka k výslovnosti…') }),
       start: el('input', { value: line.start != null ? formatMs(line.start) : '', inputmode: 'decimal', placeholder: 'mm:ss.cc' }),
     };
+    // překlad, doslovný překlad a zkratky v obou jazycích, jazyk rozhraní první
+    const langs = [uiLang, otherLang(uiLang)];
+    const lname = lg => (lg === 'cs' ? t('čeština') : t('angličtina'));
+    const tf = Object.fromEntries(langs.map(lg => { const x = trOf(line, lg); return [lg, {
+      translation: el('textarea', { class: 'short', value: x.translation }),
+      literal: el('textarea', { class: 'short', value: x.literal }),
+      contractions: el('textarea', { class: 'short', value: x.contractions.map(c => `${c.short} = ${c.full}${c.note ? ' — ' + c.note : ''}`).join('\n'), placeholder: t('dwi = rydw i — hovorově') }),
+    }]; }));
+    const parseContr = v => v.split('\n').map(s => s.trim()).filter(Boolean).map(s => {
+      const [pair, ...noteParts] = s.split(/\s+[—–-]\s+/);
+      const [short, full = ''] = pair.split('=').map(x => x.trim());
+      return { short, full, note: noteParts.join(' – ').trim() };
+    }).filter(c => c.short);
     const field = (label, node, hint) => el('label', { class: 'field' }, el('span', { text: label }), node, hint ? el('div', { class: 'hint', text: hint }) : null);
     sheet(close => el('div', { class: 'form' },
       el('h3', { text: t('Verš {n}', { n: i + 1 }) }),
       field(t('Text'), f.text),
-      field(t('Překlad'), f.translation),
-      field(t('Doslovně'), f.literal),
+      langs.map(lg => field(t('Překlad – {l}', { l: lname(lg) }), tf[lg].translation)),
+      langs.map(lg => field(t('Doslovně – {l}', { l: lname(lg) }), tf[lg].literal)),
       field(t('Překlad ze zdroje'), f.alt),
-      field(t('Zkratky a hovorové tvary'), f.contractions, t('Jeden na řádek: krátký tvar = plný tvar — poznámka')),
+      langs.map((lg, j) => field(t('Zkratky a hovorové tvary – {l}', { l: lname(lg) }), tf[lg].contractions, j ? null : t('Jeden na řádek: krátký tvar = plný tvar — poznámka'))),
       field(t('Poznámka'), f.note),
       field(t('Začátek verše'), f.start, t('Např. 01:23.45. Prázdné = bez času.')),
       el('div', { class: 'row end' },
@@ -418,17 +447,11 @@ export async function renderSong(root, id, nav) {
           if (!f.text.value.trim()) { toast(t('Text verše nesmí být prázdný.')); return; }
           Object.assign(line, {
             text: f.text.value.replace(/\s+/g, ' ').trim(),
-            translation: f.translation.value.trim(),
-            literal: f.literal.value.trim(),
             alt: f.alt.value.trim(),
             note: f.note.value.trim(),
             start,
-            contractions: f.contractions.value.split('\n').map(s => s.trim()).filter(Boolean).map(s => {
-              const [pair, ...noteParts] = s.split(/\s+[—–-]\s+/);
-              const [short, full = ''] = pair.split('=').map(x => x.trim());
-              return { short, full, note: noteParts.join(' – ').trim() };
-            }).filter(c => c.short),
           });
+          for (const lg of langs) setTr(line, lg, { translation: tf[lg].translation.value.trim(), literal: tf[lg].literal.value.trim(), contractions: parseContr(tf[lg].contractions.value) });
           await saveSong(song);
           close(); updateTools(); renderLyrics(); applyLoop(false);
           toast(t('Uloženo'));
@@ -441,19 +464,20 @@ export async function renderSong(root, id, nav) {
     return true;
   }
 
-  async function translate(overwrite) {
+  // lg = jazyk překladu (výchozí jazyk rozhraní); překlad v druhém jazyce zůstane
+  async function translate(overwrite, lg = uiLang) {
     if (needAi()) return;
-    if (overwrite && !confirm(t('Přepsat všechny překlady, doslovné překlady a zkratky novými z AI?'))) return;
+    if (overwrite && !confirm(lg === 'cs' ? t('Přepsat český překlad (i doslovný a zkratky) novým z AI? Anglický zůstane.') : t('Přepsat anglický překlad (i doslovný a zkratky) novým z AI? Český zůstane.'))) return;
     const status = el('div', { class: 'ai-status', text: t('Posílám verše Gemini…') });
     const closeSheet = sheet(() => el('div', {}, el('h3', { text: t('Překlad pomocí AI') }), status));
     let progress = '';
     try {
-      const n = await translateVersion(song, version, { overwrite,
+      const n = await translateVersion(song, version, { overwrite, lang: lg,
         onProgress: (d, total) => { progress = total ? t('Přeloženo {d} z {n} veršů', { d, n: total }) : ''; status.textContent = progress || t('Všechny verše už překlad mají.'); },
         onWait: msg => { status.textContent = [progress, msg].filter(Boolean).join(' · '); } });
       await saveSong(song);
       closeSheet();
-      setPrefs({ showTr: true });
+      setPrefs({ showTr: true, trLang: lg });
       updateTools(); renderLyrics();
       toast(n ? pl(n, 'Přeložen {n} verš', 'Přeloženy {n} verše', 'Přeloženo {n} veršů') : t('Všechny verše už překlad mají.'));
     } catch (e) {
@@ -485,6 +509,35 @@ export async function renderSong(root, id, nav) {
     } catch (e) { body.textContent = e.message; body.classList.add('media-error'); }
   }
 
+  const hasTrIn = lg => version.lines.some(l => trOf(l, lg).translation);
+  // Nastavení → „Nabízet i překlad do druhého jazyka“: doplnit, nebo (když už je celý) přeložit znovu
+  function otherTrItem() {
+    const o = otherLang(uiLang);
+    const full = version.lines.some(l => l.text.trim()) && version.lines.every(l => !l.text.trim() || trOf(l, o).translation);
+    const label = o === 'en' ? (full ? t('Přeložit znovu do angličtiny (AI)') : t('Přeložit i do angličtiny (AI)'))
+      : (full ? t('Přeložit znovu do češtiny (AI)') : t('Přeložit i do češtiny (AI)'));
+    return { icon: '🤖', label, action: () => translate(full, o) };
+  }
+
+  // Stažení textu: s časy (.lrc), bez časů, překlad, text s překladem pod každým veršem (.txt)
+  function openExport() {
+    const base = safeName(song.artist + '-' + song.title);
+    const lname = lg => (lg === 'cs' ? t('čeština') : t('angličtina'));
+    const txt = (name, content) => () => download(name, content, 'text/plain');
+    const av = trLangs(version);
+    sheet(close => el('div', {},
+      el('h3', { text: t('Stáhnout text') }),
+      el('div', { class: 'sub', text: av.length ? t('Textové soubory otevřeš v telefonu i v počítači.') : t('Píseň zatím nemá překlad – přeložíš ho v nabídce písně.') }),
+      menu([
+        { icon: '📄', label: t('Text bez časů (.txt)'), action: txt(`${base}.txt`, toTxt(song, version, 'text')) },
+        isSynced(version) && { icon: '⏱', label: t('Text s časy (.lrc)'), action: txt(`${base}.lrc`, toLrc(song, version)) },
+        ...av.flatMap(lg => [
+          { icon: '🌐', label: t('Překlad – {l} (.txt)', { l: lname(lg) }), action: txt(`${base}-${lg}.txt`, toTxt(song, version, 'tr', lg)) },
+          { icon: '📖', label: t('Text a pod veršem překlad – {l} (.txt)', { l: lname(lg) }), action: txt(`${base}-${song.language || 'text'}-${lg}.txt`, toTxt(song, version, 'both', lg)) },
+        ]),
+      ], close)));
+  }
+
   function openSongMenu() {
     sheet(close => el('div', {},
       el('h3', { text: song.title }),
@@ -501,9 +554,10 @@ export async function renderSong(root, id, nav) {
           if (!confirm(t('Vynulovat pokrok učení u všech veršů této písně?'))) return;
           const n = await resetProgress(song.id, units.map(u => u.k)); await reloadProgress(); toast(pl(n, 'Vynulován {n} verš', 'Vynulovány {n} verše', 'Vynulováno {n} veršů'));
         } },
-        { icon: '🤖', label: version.lines.some(l => l.translation) ? t('Doplnit překlad pomocí AI') : t('Přeložit pomocí AI'), action: () => translate(false) },
-        version.lines.some(l => l.translation) && { icon: '🤖', label: t('Přeložit celou píseň znovu (AI)'), action: () => translate(true) },
-        { icon: '⇩', label: t('Stáhnout text (.lrc)'), action: () => download(`${safeName(song.artist + '-' + song.title)}.lrc`, toLrc(song, version), 'text/plain') },
+        { icon: '🤖', label: hasTrIn(uiLang) ? t('Doplnit překlad pomocí AI') : t('Přeložit pomocí AI'), action: () => translate(false) },
+        hasTrIn(uiLang) && { icon: '🤖', label: t('Přeložit celou píseň znovu (AI)'), action: () => translate(true) },
+        getPrefs().trBoth && otherTrItem(),
+        { icon: '⇩', label: t('Stáhnout text…'), action: openExport },
         { icon: '⇩', label: t('Stáhnout píseň (.json)'), action: () => download(`${safeName(song.artist + '-' + song.title)}.json`, JSON.stringify(song, null, 2)) },
         { icon: '🗑', label: t('Smazat píseň'), danger: true, action: async () => {
           if (!confirm(t('Smazat „{t}“ včetně zvukového souboru? Nejde to vrátit.', { t: song.title }))) return;

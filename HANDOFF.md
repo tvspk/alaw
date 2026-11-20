@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 20. 11. 2026, verze **0.10.0** (APK versionCode 14). Odpovídej zadavateli **česky**.
+> Stav k 20. 11. 2026, verze **0.11.0** (APK versionCode 15). Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -153,6 +153,20 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
      ~60 obrazovek/stavů v en-GB včetně všech cvičení lekce a hodnocení; přepínač a zapamatování volby). Seznam klíčů
      `testy/i18n_klice.py`. Ostatní testy mají `locale='cs-CZ'` (Playwright jinak hlásí en-US → anglicky).
 
+10. **Dva překlady a stažení textu (0.11)** – rozhodnutí zadavatele (po brainstormingu):
+   - U verše **český i anglický** překlad, doslovný překlad a zkratky (poznámky). Český = dosavadní pole verše (dosavadní
+     překlady se berou jako české), anglický = `line.en`. Poznámka u verše jen jedna. Formát zůstal `v:1` (nepovinné pole);
+     **starší verze aplikace `en` při synchronizaci zahodí** – zadavatel to řešit nechce (aktualizovat všechna zařízení).
+   - AI překládá do jazyka rozhraní; **Nastavení → Překlady pomocí AI → „Nabízet v nabídce písně i překlad do angličtiny/češtiny“**
+     (`prefs.trBoth`) přidá do nabídky písně „Přeložit i do …“ (doplní chybějící) / „Přeložit znovu do …“ (když je celý).
+     „Přeložit celou píseň znovu“ přepíše jen jazyk rozhraní.
+   - V písni **přepínač CZ / EN** vedle tlačítka Překlad (jen když má píseň oba), volba `prefs.trLang` (zařízení). Překlad ze zdroje
+     (`alt`, z webu) se v EN ukáže místo chybějícího vlastního anglického (🌐); tlačítko „Ze zdroje“ jen v CZ pohledu.
+   - Učení: překlad v jazyce rozhraní, jinak druhý. Úprava verše: pole pro oba jazyky (jazyk rozhraní první).
+   - **Nabídka písně → Stáhnout text…**: text bez časů (.txt), s časy (.lrc, jen načasovaná), jen překlad (.txt, chybějící = „…“),
+     text s překladem pod každým veršem (.txt; dvojice oddělené prázdným řádkem, sloky dvěma) – překlad pro každý jazyk, který
+     píseň má. Hlavička „Název – Interpret“. Soubory `interpret-nazev.txt`, `…-cs.txt`, `…-cy-cs.txt`.
+
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
 Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna verze/mazání (0.8) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
 
@@ -160,6 +174,7 @@ Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna ve
 
 Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „hotovo“.
 
+0. **Dva překlady a stažení textu – HOTOVO v 0.11.0** (bod 10 výše); zadavatel vyzkouší.
 1. **CZ/EN verze aplikace – HOTOVO v 0.10.0** (popis výše v bodě 9). Zbývá: zadavatel vyzkouší přepínač na telefonu i počítači
    a projde anglické texty; připomínky k angličtině doplnit do `js/i18n-en.js`.
    Původní zadání: aplikace (web i APK) česky i anglicky,

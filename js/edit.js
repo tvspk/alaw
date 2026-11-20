@@ -24,6 +24,7 @@ function mergeLines(oldLines, newLines) {
     if (!nl.alt) nl.alt = ol.alt;
     nl.literal = ol.literal;
     nl.contractions = ol.contractions;
+    if (ol.en) nl.en = ol.en;
     nl.note = ol.note;
     if (ol.vars) nl.vars = ol.vars; // rozhodnutí sporných míst (versions.js); nesedí-li už, uklidí se
     if (nl.start == null) nl.start = ol.start;

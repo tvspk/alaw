@@ -20,7 +20,7 @@ import { importFromUrl, showPreview } from './search.js';
 import { cleanText } from './sources.js';
 import { groqKey, setGroqKey, checkGroq, availableEngines, defaultEngine, ENGINES } from './stt.js';
 
-export const APP_VERSION = '0.10.0';
+export const APP_VERSION = '0.11.0';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně
@@ -395,6 +395,9 @@ function aiSection() {
     el('p', {}, t('Klíč získáš zdarma v '), el('a', { href: 'https://aistudio.google.com/apikey', target: '_blank', rel: 'noopener', text: t('Google AI Studiu') }),
       t('. Uloží se jen v tomto zařízení – nezálohuje se a nesynchronizuje.')),
     el('label', { class: 'field' }, el('span', { text: t('Klíč API') }), input),
+    el('label', { class: 'check', style: { marginTop: '10px' } },
+      el('input', { type: 'checkbox', checked: !!getPrefs().trBoth, onchange: e => setPrefs({ trBoth: e.target.checked }) }),
+      el('span', { text: lang === 'en' ? t('Nabízet v nabídce písně i překlad do češtiny') : t('Nabízet v nabídce písně i překlad do angličtiny') })),
     el('div', { class: 'row', style: { marginTop: '8px' } },
       el('button', { type: 'button', class: 'btn small', text: t('Uložit a ověřit'), onclick: async () => {
         const key = input.value.replace(/\s+/g, '');

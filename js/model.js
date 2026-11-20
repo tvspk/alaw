@@ -3,8 +3,9 @@
 // Píseň = { v, id, title, artist, language, tags[], createdAt, updatedAt, primary, versions[] }
 // Verze = { id, label, source, sourceUrl, youtubeId, audio, lines[] }
 //   audio = { key, name, type, size } | null   (soubor samotný je v IndexedDB pod klíčem key)
-// Verš  = { id, start, text, literal, translation, alt, contractions[], note, stanza }
-//   alt = překlad převzatý ze zdroje textu (obvykle anglický), translation = český překlad
+// Verš  = { id, start, text, literal, translation, alt, contractions[], note, stanza, en? }
+//   alt = překlad převzatý ze zdroje textu (obvykle anglický), translation/literal/contractions = český překlad
+//   en = anglický překlad { translation, literal, contractions[] } (nepovinné, 0.11; prázdný se neukládá), viz trOf/setTr
 //   start = začátek v ms nebo null (nečasováno); konec verše = začátek dalšího časovaného verše
 //   stanza = true, když verš začíná novou sloku (před ním byl v textu prázdný řádek)
 //   vars = rozhodnutí sporných míst proti jiným verzím (jen u hlavní verze, nepovinné): [{ w, a, b, st: 'ok'|'unsure' }],
@@ -133,6 +134,50 @@ export function toLrc(song, version) {
   return out.join('\n') + '\n';
 }
 
+// ---------- překlady po jazycích (cs = pole verše, en = line.en) ----------
+
+export const TR_LANGS = ['cs', 'en'];
+export const otherLang = lang => (lang === 'en' ? 'cs' : 'en');
+
+export function trOf(line, lang) {
+  const src = lang === 'en' ? line.en || {} : line;
+  return { translation: src.translation || '', literal: src.literal || '', contractions: src.contractions || [] };
+}
+
+export function setTr(line, lang, { translation = '', literal = '', contractions = [] }) {
+  if (lang !== 'en') { Object.assign(line, { translation, literal, contractions }); return; }
+  if (translation || literal || contractions.length) line.en = { translation, literal, contractions };
+  else delete line.en;
+}
+
+// Překlad verše k zobrazení v jazyce lang; anglicky jinak překlad ze zdroje (alt, src: true). Nic → null.
+export function trText(line, lang) {
+  const tr = trOf(line, lang).translation;
+  if (tr) return { text: tr, src: false };
+  if (lang === 'en' && line.alt) return { text: line.alt, src: true };
+  return null;
+}
+
+// Pro učení: překlad v jazyce lang, jinak v druhém jazyce (cokoli je lepší než nic).
+export const anyTr = (line, lang) => (trText(line, lang) || trText(line, otherLang(lang)) || { text: '' }).text;
+
+// Které jazyky překladu verze má (cs, en; en i jen ze zdroje).
+export const trLangs = version => TR_LANGS.filter(lang => version.lines.some(l => trText(l, lang)));
+
+// Export do .txt: what = 'text' (jen text bez časů), 'tr' (jen překlad), 'both' (verš a pod ním překlad).
+export function toTxt(song, version, what = 'text', lang = 'cs') {
+  const out = [song.artist ? `${song.title} – ${song.artist}` : song.title, ''];
+  version.lines.forEach((l, i) => {
+    const tr = trText(l, lang);
+    if (l.stanza && i) out.push('');
+    if (what === 'text') out.push(l.text);
+    else if (what === 'tr') out.push(tr ? tr.text : '…');
+    else { out.push(l.text); if (tr) out.push(tr.text); out.push(''); }
+  });
+  while (out.length && out[out.length - 1] === '') out.pop();
+  return out.join('\n') + '\n';
+}
+
 export const toPlainText = version =>
   version.lines.map(l => (l.stanza ? '\n' : '') + l.text).join('\n').trim() + '\n';
 
@@ -186,6 +231,16 @@ function fromLyricsTrainer(d) {
   });
 }
 
+function normEn(en, str) {
+  if (!en || typeof en !== 'object') return {};
+  const out = { translation: str(en.translation, 1000), literal: str(en.literal, 1000), contractions: normContr(en.contractions, str) };
+  return out.translation || out.literal || out.contractions.length ? { en: out } : {};
+}
+function normContr(list, str) {
+  return Array.isArray(list)
+    ? list.filter(c => c && typeof c.short === 'string').map(c => ({ short: str(c.short, 200), full: str(c.full, 200), note: str(c.note, 300) })) : [];
+}
+
 function normVars(vars) {
   if (!Array.isArray(vars)) return {};
   const out = vars.filter(v => v && Number.isInteger(v.w) && v.w >= -1 && typeof v.a === 'string' && typeof v.b === 'string' && (v.st === 'ok' || v.st === 'unsure'))
@@ -212,11 +267,11 @@ export function normalizeSong(s) {
       literal: str(l.literal, 1000),
       translation: str(l.translation, 1000),
       alt: str(l.alt, 1000),
-      contractions: Array.isArray(l.contractions)
-        ? l.contractions.filter(c => c && typeof c.short === 'string').map(c => ({ short: str(c.short, 200), full: str(c.full, 200), note: str(c.note, 300) })) : [],
+      contractions: normContr(l.contractions, str),
       note: str(l.note, 3000),
       stanza: !!l.stanza,
       ...normVars(l.vars),
+      ...normEn(l.en, str),
     })),
   }));
   if (!versions.length) return null;

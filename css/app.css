@@ -63,7 +63,10 @@ a { color: var(--accent); }
 .brand { font-family: var(--serif); font-size: 1.6rem !important; letter-spacing: .01em; }
 .brand::after { content: "·"; color: var(--mark); margin-left: 2px; }
 
-/* přepínač jazyka CZ | EN v záhlaví knihovny */
+/* přepínač jazyka CZ | EN v záhlaví knihovny a jazyka překladu v písni */
+.tr-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; flex: none; }
+.tr-switch button { border: 0; background: transparent; color: var(--muted); font: 600 .75rem/1 var(--sans); padding: 7px 9px; min-height: 30px; cursor: pointer; }
+.tr-switch button.on { background: var(--accent-soft); color: var(--ink); }
 .lang-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; flex: none; }
 .lang-switch button { border: 0; background: transparent; color: var(--muted); font: 600 .78rem/1 var(--sans); letter-spacing: .04em; padding: 8px 10px; min-width: 40px; min-height: 34px; cursor: pointer; }
 .lang-switch button.on { background: var(--accent); color: var(--accent-ink); }
