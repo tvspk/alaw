@@ -476,3 +476,19 @@ mark.gap { font-family: var(--sans); font-weight: 700; padding: 0 4px; }
 .btn.ghost { border-color: transparent; background: none; }
 .lvariant { font-size: .86rem; color: var(--mark); }
 .lvariant.ok { color: var(--st-due); }
+
+/* hromadné přidání z nahrávek a hledání textů (bulk.js) */
+.bulk-list { display: grid; gap: 8px; margin: 12px 0 96px; }
+.bulk-row { display: flex; gap: 10px; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.bulk-row.dup { opacity: .6; }
+.bulk-row .check, .bulk-row > input[type=checkbox] { flex: none; width: 20px; height: 20px; margin-top: 10px; accent-color: var(--accent); }
+.bulk-names { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.bulk-names input { width: 100%; font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg, transparent); color: inherit; }
+.bulk-row.noartist .bulk-names input:first-child { border-style: dashed; }
+.bulk-names .hint { font-size: .8rem; color: var(--faint); overflow-wrap: anywhere; }
+.bulk-title { overflow-wrap: anywhere; }
+.bulk-cand { border-left: 3px solid var(--line); padding: 2px 0 2px 10px; margin: 2px 0 6px; }
+.bulk-cand.sure { border-left-color: var(--accent); }
+.bulk-row .ok { color: var(--accent); font-weight: 600; }
+.bulk-foot { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: var(--surface); border-top: 1px solid var(--line); padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); display: grid; gap: 6px; max-width: 760px; margin: 0 auto; }
+.bulk-sum { font-size: .92rem; }

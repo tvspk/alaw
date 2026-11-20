@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 19. 11. 2026, verze **0.6.0** (APK versionCode 9). Odpovídej zadavateli **česky**.
+> Stav k 20. 11. 2026, verze **0.7.0** (APK versionCode 10). Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -14,7 +14,7 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
 - Kód: veřejný `tvspk/alaw`. Claude má přístup s push (GitHub App). Schránka synchronizace `tvspk/alaw-sync` je soukromá
   a Claude do ní přístup **nemá a mít nemá**.
 
-## Hotovo (všech 5 kroků původního plánu)
+## Hotovo (všech 5 kroků původního plánu + rozšíření)
 
 1. **Základ (0.1):** knihovna, přidání písně (text / LRC), přehrávač (YouTube i vlastní soubor, rychlost, smyčka veršů,
    karaoke), časování ťukáním, režimy Číst / Mizení / Písmena, překlad, doslovný překlad, zkratky a poznámky u veršů,
@@ -78,8 +78,25 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
      **Starší verze aplikace `vars` při synchronizaci zahodí** → na všech zařízeních mít 0.6. Neplatná rozhodnutí uklízí `prune`.
    - opraveno i dřívější „null“ v kartě lekce (po odkrytí), v procvičování a ve vysvětlení verše (`ui.fill`).
 
+6. **Písně z nahrávek (0.7):** `js/bulk.js`, obrazovky `#/bulk` (přidání) a `#/lyrics` (hledání textů).
+   Zadavatel má ve složce na PC přes 100 nahrávek (mp3 a wav, ~1,1 GB), žádné texty. **Rozhodnutí zadavatele:** přidat
+   **všechny**, **wav nepřevádět** (zvuk se nezmenšuje), soubory si nechá přejmenovat na „Interpret - Název“ (s Claude přes
+   aplikaci Claude pro počítač; neznámého interpreta doplní ručně).
+   - Název/interpret: název souboru s „ - “ (i –, —; číslo stopy pryč; spojovník uvnitř slova nedělí) > údaje v souboru
+     (ID3v2/v1, RIFF INFO nebo id3 kousek ve wav) > název souboru. Duplicity (stejný interpret+název, nebo soubor stejného
+     jména a velikosti) jsou předem odškrtnuté. Výběr víc souborů (`ui.pickFiles`), na počítači i celá složka
+     (`webkitdirectory`); APK `MainActivity` přijímá víc souborů (`EXTRA_ALLOW_MULTIPLE` + `ClipData`).
+   - Píseň = `newSong` s `source:'nahrávka'`, nahrávka, `lines:[]`. Formát se nemění (`v:1`).
+   - Texty: LRCLIB (`lrclib.search` vrací i `dur`), `rankLyrics` + `isSure` (název ≥ 0,8, interpret ≥ 0,5, délka ±3 s;
+     bez nahrávky interpret ≥ 0,8). **Nic se neuloží bez potvrzení** (po jedné, nebo „Převzít všechny jisté“).
+     Časy z LRCLIB jen když sedí délka, jinak prostý text. `applyLyrics` přepíše jen prázdnou hlavní verzi (z „Hledat jinde“
+     a náhledu i neprázdnou). Doplní interpreta, když chybí. V knihovně proužek „N písní nemá text“.
+   - Riziko: 1,1 GB zvuku v synchronizaci = schránka na GitHubu přes 1 GB (GitHub doporučuje do 1 GB, tvrdě do 5 GB)
+     a telefon stáhne vše. Nahrávání je po souborech zapamatované (`c.files`), po přerušení pokračuje.
+   - Test: `python3 -u testy/test_hromadne.py` (napodobené LRCLIB, ffmpeg vyrobí mp3 s ID3 a wav s INFO).
+
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
-Učení (0.4, 0.5) a verze (0.6) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
+Učení (0.4, 0.5), verze (0.6) a písně z nahrávek (0.7) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
 
 ## Zbývá (původní plán)
 
@@ -101,7 +118,7 @@ Učení (0.4, 0.5) a verze (0.6) zatím jen testy v prostředí Claude – **ov�
 
 - Po každé změně v `index.html`, `css/`, `js/` spusť `python3 scripts/build_sw.py` (workflow jinak selže).
 - Testy (Playwright, Chromium jako Pixel 7, bez sítě):
-  `python3 -u testy/test_zaklad.py`, `python3 -u testy/test_verze.py`, `python3 -u testy/test_hledani.py`, `python3 -u testy/test_sync.py`,
+  `python3 -u testy/test_zaklad.py`, `python3 -u testy/test_verze.py`, `python3 -u testy/test_hledani.py`, `python3 -u testy/test_hromadne.py`, `python3 -u testy/test_sync.py`,
   `node testy/test_worker.mjs`. Kontrola zdrojů proti skutečným webům: `python3 testy/zdroje_naostro.py`.
   Spouštěj s `-u` a výstup do souboru (`> /tmp/x.log`): přes rouru s `grep` se dlouhé testy zasekávaly.
 - Playwright Chromium nemusí být nainstalovaný: `python3 -m playwright install chromium`.

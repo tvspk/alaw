@@ -96,6 +96,19 @@ export function pickFile(accept) {
   });
 }
 
+// Víc souborů najednou; folder = celá složka i s podsložkami (jen počítač). Zrušení → [].
+export function pickFiles(accept, { folder = false } = {}) {
+  return new Promise(resolve => {
+    const input = el('input', { type: 'file', accept, multiple: true, style: { display: 'none' } });
+    if (folder) input.webkitdirectory = true;
+    const done = files => { resolve(files); input.remove(); };
+    input.addEventListener('change', () => done([...input.files]));
+    input.addEventListener('cancel', () => done([]));
+    document.body.append(input);
+    input.click();
+  });
+}
+
 export const fileSize = bytes => bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(bytes / 1024))} kB`;
 
 export const safeName = s => String(s || 'pisen').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'pisen';

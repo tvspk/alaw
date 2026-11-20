@@ -122,7 +122,7 @@ const lrclib = {
       seen.add(k); return true;
     }).map(x => ({
       title: x.trackName, artist: x.artistName, detail: [x.albumName, x.duration ? `${Math.floor(x.duration / 60)}:${String(Math.round(x.duration % 60)).padStart(2, '0')}` : ''].filter(Boolean).join(' · '),
-      synced: !!x.syncedLyrics, preview: firstLines(x.plainLyrics || x.syncedLyrics.replace(/\[\d+:[\d.]+\]/g, '')),
+      synced: !!x.syncedLyrics, dur: Number.isFinite(x.duration) ? x.duration : null, preview: firstLines(x.plainLyrics || x.syncedLyrics.replace(/\[\d+:[\d.]+\]/g, '')),
       url: `https://lrclib.net/api/get/${x.id}`,
       load: async () => ({ text: x.syncedLyrics || x.plainLyrics, synced: !!x.syncedLyrics, plain: x.plainLyrics || '', url: `https://lrclib.net/api/get/${x.id}` }),
     }));

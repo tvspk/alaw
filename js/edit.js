@@ -88,6 +88,7 @@ export async function renderEdit(root, id, nav, draft, versionId = null) {
     el('button', { type: 'button', class: 'btn', text: '🔗 Z odkazu', onclick: () => askUrl(applyPick) }));
 
   const form = el('form', { class: 'form', onsubmit: e => { e.preventDefault(); save(); } },
+    !existing && !vmode && !draft ? el('p', { class: 'hint' }, 'Máš víc nahrávek? ', el('a', { href: '#/bulk', text: 'Přidej písně z nahrávek najednou' }), '.') : null,
     vmode ? el('p', { class: 'hint', text: 'Text písně z jiného zdroje. Porovná se s hlavní verzí a rozdíly rozhodneš poslechem. Učíš se dál hlavní verzi.' }) : null,
     finder,
     ...(vmode ? [field('Název verze', f.label, 'Aby bylo poznat, odkud text je.')] : [

@@ -7,6 +7,8 @@ import { primaryVersion, formatMs, toLrc, langLabel } from './model.js';
 import { Player, RATES } from './player.js';
 import { hasAi, translateVersion, explainLine } from './ai.js';
 import { MAX_VERSIONS, analyze, summary } from './versions.js';
+import { applyLyrics } from './bulk.js';
+import { openSearch } from './search.js';
 
 const WORD_RE = /^([^\p{L}\p{N}]*)(.*?)([^\p{L}\p{N}]*)$/u;
 
@@ -220,7 +222,13 @@ export async function renderSong(root, id, nav) {
       return li;
     });
     list.replaceChildren(...lineEls);
-    if (!version.lines.length) list.append(el('p', { class: 'empty', text: 'Píseň zatím nemá text. Doplň ho v Upravit.' }));
+    if (!version.lines.length) list.append(el('div', { class: 'empty' },
+      el('p', { text: 'Píseň zatím nemá text.' }),
+      el('div', { class: 'row', style: { justifyContent: 'center' } },
+        el('button', { type: 'button', class: 'btn primary', text: '🔍 Najít text', onclick: () => openSearch({ title: song.title, artist: song.artist }, async d => {
+          try { await applyLyrics(song.id, d); toast('Text uložen'); nav.replace(`#/song/${encodeURIComponent(song.id)}`); } catch (e) { toast(e.message); }
+        }) }),
+        el('button', { type: 'button', class: 'btn', text: 'Vložit ručně', onclick: () => nav.go(`#/edit/${encodeURIComponent(song.id)}`) }))));
   }
 
   list.addEventListener('click', e => {

@@ -29,4 +29,6 @@
 - Verze textu (`js/versions.js` logika, `js/compare.js` obrazovka `#/compare/…`, `#/version/<id>/<idVerze|new>` = `edit.js`): učí se vždy
   hlavní verze (`song.primary`), nejvýš 3 verze. Rozhodnutí sporných míst jen u veršů hlavní verze (`line.vars`), „platí druhá“ přepíše
   text a převede pokrok (`store.moveProgress`). Test: `python3 -u testy/test_verze.py`.
+- Písně z nahrávek a hledání textů (`js/bulk.js`, `#/bulk`, `#/lyrics`): texty se ukládají jen po potvrzení uživatelem,
+  časy z LRCLIB jen při shodné délce nahrávky. Test: `python3 -u testy/test_hromadne.py`.
 - **Stav projektu, rozhodnutí a další kroky: `HANDOFF.md`** (přečti jako první).

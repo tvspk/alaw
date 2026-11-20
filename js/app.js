@@ -14,8 +14,9 @@ import { isAndroid, request } from './net.js';
 import { aiConfig, setAiConfig, pickModel } from './ai.js';
 import { boot as syncBoot, changed as syncChanged } from './sync.js';
 import { syncSection } from './syncui.js';
+import { renderBulk, renderFindLyrics, songsWithoutText } from './bulk.js';
 
-export const APP_VERSION = '0.6.0';
+export const APP_VERSION = '0.7.0';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně
@@ -44,6 +45,8 @@ async function route() {
     else if (view === 'compare' && id) { const [sid, vid, li] = id.split('/'); cleanup = await renderCompare(root, decodeURIComponent(sid), vid ? decodeURIComponent(vid) : null, li ? +li : null, nav); }
     else if (view === 'drill' && id) { const [sid, m] = id.split('/'); cleanup = await renderDrill(root, decodeURIComponent(sid), m, nav); }
     else if (view === 'learn' && id) { const [sid, k] = id.split('/'); cleanup = await renderLesson(root, decodeURIComponent(sid), k ? decodeURIComponent(k) : null, nav); }
+    else if (view === 'bulk') cleanup = await renderBulk(root, nav);
+    else if (view === 'lyrics') cleanup = await renderFindLyrics(root, nav);
     else if (view === 'settings') cleanup = await renderSettings(root);
     else cleanup = await renderLibrary(root);
   } catch (e) {
@@ -108,19 +111,29 @@ async function renderLibrary(root) {
     if (!songs.length) {
       listEl.replaceChildren(el('li', { class: 'empty' },
         el('strong', { text: 'Croeso!' }),
-        'Zatím tu žádná píseň není. Přidej první tlačítkem dole, nebo načti zálohu či JSON v ',
-        el('a', { href: '#/settings', text: 'Nastavení' }), '.'));
+        'Zatím tu žádná píseň není. Přidej první tlačítkem dole, ',
+        el('a', { href: '#/bulk', text: 'přidej víc písní z nahrávek najednou' }),
+        ', nebo načti zálohu či JSON v ', el('a', { href: '#/settings', text: 'Nastavení' }), '.'));
     } else if (!shown.length) listEl.replaceChildren(el('li', { class: 'empty', text: 'Nic neodpovídá hledání.' }));
   }
 
   root.append(el('div', { class: 'view' },
     el('header', { class: 'topbar' }, el('h1', { class: 'brand', text: 'Alaw' }), iconBtn('settings', 'Nastavení', () => nav.go('#/settings'))),
     reminders(songs, progress, sums),
+    noTextBar(songs),
     songs.length > 4 || libState.q ? search : null,
     chipsEl, listEl),
     el('button', { type: 'button', class: 'fab', html: `${ICONS.plus}<span>Přidat píseň</span>`, onclick: () => nav.go('#/new') }));
   root.querySelector('.fab svg').setAttribute('width', '22');
   draw();
+}
+
+// Písně bez textu (typicky po přidání z nahrávek) → hledání textů.
+function noTextBar(songs) {
+  const n = songsWithoutText(songs);
+  if (!n) return null;
+  return el('div', { class: 'reminders' }, el('div', { class: 'reminder' },
+    el('a', { href: '#/lyrics', text: `${n} ${n === 1 ? 'píseň nemá' : n < 5 ? 'písně nemají' : 'písní nemá'} text – najít texty` })));
 }
 
 // Proužek pokroku na kartě písně (jen u písní, které se učím).
@@ -248,7 +261,9 @@ async function renderSettings(root) {
       el('label', { class: 'check', style: { marginBottom: '12px' } }, withAudio, el('span', { text: 'Přiložit i zvukové soubory (záloha bude velká)' })),
       el('div', { class: 'row' },
         el('button', { type: 'button', class: 'btn', text: '⇩ Stáhnout zálohu', onclick: () => exportAll(withAudio.checked) }),
-        el('button', { type: 'button', class: 'btn', text: '⇧ Načíst soubor', onclick: importFile }))),
+        el('button', { type: 'button', class: 'btn', text: '⇧ Načíst soubor', onclick: importFile })),
+      el('p', { style: { marginTop: '14px' }, text: 'Máš nahrávky písní ve složce? Přidej je všechny najednou, texty pak dohledáš.' }),
+      el('div', { class: 'row' }, el('button', { type: 'button', class: 'btn', text: '♪ Přidat písně z nahrávek', onclick: () => nav.go('#/bulk') }))),
     searchSection(),
     aiSection(),
     syncEl,

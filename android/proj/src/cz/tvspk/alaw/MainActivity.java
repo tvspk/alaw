@@ -126,6 +126,7 @@ public class MainActivity extends Activity {
                 Intent i = new Intent(Intent.ACTION_GET_CONTENT);
                 i.addCategory(Intent.CATEGORY_OPENABLE);
                 i.setType(type);
+                if (p.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE) i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                 try { startActivityForResult(Intent.createChooser(i, null), REQ_FILE); }
                 catch (Exception e) { fileCallback = null; return false; }
                 return true;
@@ -327,7 +328,15 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int req, int result, Intent data) {
         if (req == REQ_FILE) {
-            if (fileCallback != null) fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result, data));
+            if (fileCallback != null) {
+                Uri[] uris = null;
+                if (result == RESULT_OK && data != null && data.getClipData() != null) {
+                    android.content.ClipData clip = data.getClipData();
+                    uris = new Uri[clip.getItemCount()];
+                    for (int k = 0; k < uris.length; k++) uris[k] = clip.getItemAt(k).getUri();
+                } else uris = WebChromeClient.FileChooserParams.parseResult(result, data);
+                fileCallback.onReceiveValue(uris);
+            }
             fileCallback = null;
         } else if (req == REQ_SAVE) {
             final byte[] bytes = pendingSave;
