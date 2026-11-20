@@ -174,6 +174,24 @@ Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna ve
 
 Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „hotovo“.
 
+**DALŠÍ ÚKOL (zadaný, nezačatý): nápověda „?“ u klíčů a přístupů v Nastavení.** Zadavatel: „u API rozhraní by byl malinký
+otazník, na který když klikneš, zobrazí se stručný návod v pár bodech, jak se to dělá.“ Navržený postup (zadavatel souhlasil
+s myšlenkou, detaily jsou rozumné výchozí volby):
+   - Malé kulaté tlačítko **?** vedle nadpisu sekce v Nastavení (`app.js` `aiSection`, `sttSection`, `searchSection` jen na
+     počítači; `syncui.js` sekce Synchronizace). Ťuknutí → spodní panel (`ui.sheet`) s nadpisem, **3–6 číslovanými kroky**,
+     odkazem na web služby (nový panel, `target=_blank`) a krátkou poznámkou (zdarma? platební karta? klíč zůstává jen v zařízení,
+     nikomu ho neposílat). Tlačítko Zavřít. Společná funkce např. `ui.helpBtn(title, steps, link)`.
+   - Obsah: **Gemini** (aistudio.google.com/apikey → přihlásit Googlem → Create API key → zkopírovat celý, začíná `AQ.`/`AIza`
+     → vložit → Uložit a ověřit; zdarma s denním limitem), **Groq** (console.groq.com/keys → účet → Create API Key → zkopírovat
+     hned, později už nejde zobrazit, začíná `gsk_`; zdarma bez karty), **Synchronizace** (soukromý repozitář na GitHubu
+     s README, fine-grained token jen na ten repozitář s Contents: Read and write, začíná `github_pat_`; 8 slov si zapsat),
+     **Prostředník** (Cloudflare Workers, odkaz na `worker/README.md` v repozitáři). **Před psaním ověřit aktuální podobu
+     stránek webovým hledáním** (názvy tlačítek se mění) a kroky psát obecně, bez snímků.
+   - Vše přes `t()` + anglický překlad v `js/i18n-en.js` (britská angličtina). Test: otevřít každou nápovědu v CZ i EN
+     (doplnit do `test_anglictina.py`, případně do `test_zaklad.py`). Vydání 0.12.0 (versionCode 16).
+   - Otázky k zadavateli až u hotového návrhu (není potřeba se ptát předem): stačí tyto čtyři sekce? Má být „?“ i jinde
+     (např. u soboru s odkazy v Najít texty, u přepisu z nahrávky)?
+
 0. **Dva překlady a stažení textu – HOTOVO v 0.11.0** (bod 10 výše); zadavatel vyzkouší.
 1. **CZ/EN verze aplikace – HOTOVO v 0.10.0** (popis výše v bodě 9). Zbývá: zadavatel vyzkouší přepínač na telefonu i počítači
    a projde anglické texty; připomínky k angličtině doplnit do `js/i18n-en.js`.
