@@ -64,5 +64,6 @@ jobs:
           V="$(cat android/build/version)"
           if [ "$(cat android/build/release)" != "yes" ]; then echo "Bez klíče (Secrets) – nevydává se."; exit 0; fi
           if gh release view "v$V" >/dev/null 2>&1; then echo "Vydání v$V už existuje – pro nové zvyšte verzi v android/verze.txt."; exit 0; fi
-          gh release create "v$V" android/out/alaw.apk --title "Alaw $V" --latest \
-            --notes "Alaw $V pro Android. Nainstalujte alaw.apk přes předchozí verzi, písně zůstanou."
+          mkdir -p /tmp/z/alaw-bangor && cp bangor/* /tmp/z/alaw-bangor/ && (cd /tmp/z && zip -qr "$GITHUB_WORKSPACE/android/out/alaw-bangor.zip" alaw-bangor)
+          gh release create "v$V" android/out/alaw.apk android/out/alaw-bangor.zip --title "Alaw $V" --latest \
+            --notes "Alaw $V pro Android. Nainstalujte alaw.apk přes předchozí verzi, písně zůstanou. alaw-bangor.zip = přepis velšského zpěvu na počítači s Windows (Bangor)."

@@ -1,0 +1,40 @@
+Alaw – přepis velšského zpěvu na tomto počítači (Bangor)
+=========================================================
+
+Program přepisuje text písní z nahrávek modelem Bangorské univerzity
+(techiaith, učený na velštině). Běží jen na tomto počítači: nahrávky
+nikam neodcházejí, nic se neplatí a nemá limity.
+
+1. Rozbal celý zip do libovolné složky (např. Dokumenty\alaw-bangor).
+   Nespouštěj soubor přímo ze zipu.
+2. Dvakrát klikni na alaw-bangor.bat.
+   Poprvé si program doinstaluje Python a stáhne model (asi 1,6 GB,
+   s grafickou kartou NVIDIA ještě 1,3 GB knihoven). Trvá to podle
+   připojení desítky minut. Další spuštění jsou hned.
+   Když se Windows zeptají („Windows ochránil váš počítač“), klikni
+   na „Další informace“ → „Přesto spustit“.
+3. Až okno napíše „Program běží“, nech ho otevřené (stačí minimalizovat).
+4. V Alaw (v prohlížeči na tomto počítači): Nastavení → Přepis z nahrávky
+   → Bangor → „Zapnout a ověřit“. Když se Chrome zeptá, jestli smí
+   stránka přistupovat k aplikacím v tomto zařízení, povol to.
+
+Bez grafické karty NVIDIA počítá procesor – funguje, jen pomaleji.
+Program se ukončí zavřením okna. Data jsou ve složce
+%LOCALAPPDATA%\AlawBangor (program) a %USERPROFILE%\.cache\huggingface (model).
+
+
+Alaw – Welsh song transcription on this computer (Bangor)
+=========================================================
+
+Transcribes lyrics from recordings with Bangor University's Welsh model.
+Runs only on this computer: recordings stay here, free, no limits.
+
+1. Extract the whole zip into a folder (don't run it from inside the zip).
+2. Double-click alaw-bangor.bat. The first run installs Python and
+   downloads the model (about 1.6 GB, plus 1.3 GB of libraries with an
+   NVIDIA graphics card). If Windows SmartScreen appears, click
+   "More info" → "Run anyway".
+3. When the window says the program is running, leave it open.
+4. In Alaw (in the browser on this computer): Settings → Transcription
+   from a recording → Bangor → "Turn on and check". If Chrome asks
+   whether the page may access apps on this device, allow it.

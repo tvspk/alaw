@@ -45,7 +45,7 @@ Alaw (velšsky „melodie“): texty písní (hlavně velšských) a jejich uče
   Načtení **souboru s odkazy** na stránky s texty (třeba od Clauda): texty se stáhnou z odkazů, nefunkční odkaz → LRCLIB.
 - **Hledat na Googlu** (v okně hledání): otevře Google s dotazem; stránku pak sdílíš do Alaw (Android) nebo vložíš odkaz
   („🔗 Vložit odkaz“). Sdílená stránka se nabídne k písni, ke které se text hledal (3 hodiny).
-- **Přepis textu z nahrávky** (Gemini nebo Whisper přes Groq – zdarma bez karty; klíče v Nastavení → Přepis z nahrávky): u písně bez textu, v nabídce písně a hromadně v Najít texty
+- **Přepis textu z nahrávky** (Gemini nebo Whisper přes Groq – zdarma bez karty; klíče v Nastavení → Přepis z nahrávky; na počítači s Windows i **velšský model z Bangoru** – program `bangor/`, ve vydání `alaw-bangor.zip`): u písně bez textu, v nabídce písně a hromadně v Najít texty
   („Přepsat nenalezené z nahrávek“). Verše i s časy začátků; bez textu = hlavní verze, s textem = další verze k porovnání
   (a nenačasovaný text si z přepisu převezme časy u shodných veršů). Velké nahrávky se pro přepis posílají jako zmenšená kopie
   (mono 16 kHz; uložená nahrávka se nemění). Přepis oběma službami = dvě verze, rozdíly ukážou nejistá místa.

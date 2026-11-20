@@ -18,9 +18,9 @@ import { syncSection } from './syncui.js';
 import { renderBulk, renderFindLyrics, songsWithoutText, applyLyrics } from './bulk.js';
 import { importFromUrl, showPreview } from './search.js';
 import { cleanText } from './sources.js';
-import { groqKey, setGroqKey, checkGroq, availableEngines, defaultEngine, ENGINES } from './stt.js';
+import { groqKey, setGroqKey, checkGroq, availableEngines, defaultEngine, ENGINES, bangorPossible, checkBangor, bangorZip } from './stt.js';
 
-export const APP_VERSION = '0.11.0';
+export const APP_VERSION = '0.12.0';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně
@@ -416,7 +416,7 @@ function sttSection() {
   const choice = el('div', {});
   function drawChoice() {
     const av = availableEngines();
-    if (av.length < 2) { fill(choice, el('p', { class: 'hint', text: av.length ? t('Přepisuje: {e}.', { e: ENGINES[av[0]].label }) : t('Zatím není nastavená žádná služba: vlož klíč Groq níže, nebo klíč Gemini výše.') })); return; }
+    if (av.length < 2) { fill(choice, el('p', { class: 'hint', text: av.length ? t('Přepisuje: {e}.', { e: ENGINES[av[0]].label }) : t('Zatím není nastavená žádná služba: vlož klíč Groq níže nebo klíč Gemini výše, případně zapni Bangor.') })); return; }
     const sel = el('select', { onchange: () => setPrefs({ stt: sel.value }) }, av.map(k => el('option', { value: k, text: ENGINES[k].label })));
     sel.value = defaultEngine();
     fill(choice, el('label', { class: 'field' }, el('span', { text: t('Předvybraná služba (při přepisu se stejně zeptám)') }), sel));
@@ -424,10 +424,12 @@ function sttSection() {
   drawChoice();
   return el('section', { class: 'section' },
     el('h2', { text: t('Přepis z nahrávky') }),
-    el('p', {}, t('Text písně přepíše z vlastní nahrávky Gemini (klíč výše) nebo Whisper přes Groq – zdarma, bez platební karty. Klíč Groq získáš na '),
-      el('a', { href: 'https://console.groq.com/keys', target: '_blank', rel: 'noopener', text: 'console.groq.com' }),
-      t('. Uloží se jen v tomto zařízení. Přepis zpěvu nebývá přesný – obě služby můžeš porovnat.')),
+    el('p', { text: t('Text písně přepíše z vlastní nahrávky Gemini (klíč výše), Whisper přes Groq, nebo na počítači velšský model z Bangoru. Přepis zpěvu nebývá přesný – služby můžeš porovnat.') }),
     choice,
+    el('h3', { class: 'sub-h', text: t('Whisper přes Groq') }),
+    el('p', {}, t('Zdarma, bez platební karty. Klíč získáš na '),
+      el('a', { href: 'https://console.groq.com/keys', target: '_blank', rel: 'noopener', text: 'console.groq.com' }),
+      t('. Uloží se jen v tomto zařízení.')),
     el('label', { class: 'field' }, el('span', { text: t('Klíč Groq') }), input),
     el('div', { class: 'row', style: { marginTop: '8px' } },
       el('button', { type: 'button', class: 'btn small', text: t('Uložit a ověřit'), onclick: async () => {
@@ -439,7 +441,50 @@ function sttSection() {
         drawChoice();
       } }),
       groqKey() ? el('button', { type: 'button', class: 'btn small danger', text: t('Smazat klíč'), onclick: () => { setGroqKey(''); input.value = ''; status.textContent = t('Klíč smazán.'); drawChoice(); } }) : null),
-    status);
+    status,
+    bangorBlock(drawChoice));
+}
+
+// Bangor: velšský Whisper z Bangorské univerzity – malý program na počítači s Windows (složka bangor/, zip ve vydání).
+function bangorBlock(drawChoice) {
+  const head = el('h3', { class: 'sub-h', text: t('Bangor – velšský model na tomto počítači') });
+  if (!bangorPossible()) {
+    return el('div', {}, head, el('p', { text: t('Bangor běží jen na počítači s Windows. Písně, které přepíšeš na počítači, se sem dostanou synchronizací.') }));
+  }
+  const box = el('div', { id: 'bangor' });
+  const status = el('div', { class: 'ai-status' });
+  const describe = h => !h.ready && h.stage === 'error' ? t('Program běží, ale nemohl připravit model: {e}', { e: h.error || '?' })
+    : !h.ready && h.stage === 'download' ? t('Program běží a stahuje model (poprvé asi 1,6 GB). Průběh uvidíš v jeho okně; přepisovat půjde, až bude hotovo.')
+    : !h.ready ? t('Program běží a načítá model…')
+    : h.device === 'gpu' ? t('✓ Program běží – počítá na grafické kartě.') : t('✓ Program běží – počítá na procesoru (pomaleji, ale funguje).');
+  const downHint = () => t('Program na tomto počítači neběží. Spusť alaw-bangor.bat a počkej, až napíše „Program běží“. Když se prohlížeč ptal na přístup k aplikacím v tomto zařízení, musí být povolený (ikona vlevo od adresy stránky).');
+  async function check(turnOn) {
+    status.textContent = t('Ověřuji…');
+    try {
+      const h = await checkBangor();
+      if (turnOn) setPrefs({ bangor: true });
+      draw(describe(h));
+    } catch {
+      draw(getPrefs().bangor ? t('Zapnuto, ale program teď neběží – před přepisem ho spusť (alaw-bangor.bat).') : downHint());
+    }
+  }
+  function draw(msg) {
+    const on = !!getPrefs().bangor;
+    status.textContent = msg || '';
+    fill(box,
+      el('p', { text: t('Model Bangorské univerzity učený na velštině. Běží přímo na tomto počítači (Windows): nahrávky nikam neodcházejí, je zdarma a bez limitů. Potřebuje spuštěný malý program.') }),
+      on ? null : el('p', { class: 'hint', text: t('Stáhni program, rozbal zip, spusť alaw-bangor.bat a počkej, až napíše „Program běží“ (poprvé stahuje asi 1,6 GB). Pak klikni na Zapnout a ověřit.') }),
+      el('div', { class: 'row', style: { marginTop: '8px' } },
+        el('a', { class: 'btn small', href: bangorZip(), target: '_blank', rel: 'noopener', text: t('⬇ Stáhnout program (Windows)') }),
+        on ? el('button', { type: 'button', class: 'btn small', text: t('Ověřit spojení'), onclick: () => check(false) })
+          : el('button', { type: 'button', class: 'btn small primary', text: t('Zapnout a ověřit'), onclick: () => check(true) }),
+        on ? el('button', { type: 'button', class: 'btn small danger', text: t('Vypnout'), onclick: () => { setPrefs({ bangor: false }); draw(t('Bangor vypnutý.')); } }) : null),
+      status);
+    drawChoice();
+  }
+  draw('');
+  if (getPrefs().bangor) check(false);
+  return el('div', {}, head, box);
 }
 
 // Sdílení z jiné aplikace (Android: „Sdílet → Alaw“): ?share-url=…&share-text=…&share-title=…

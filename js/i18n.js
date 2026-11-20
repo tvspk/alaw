@@ -48,7 +48,7 @@ export function vlabel(label) {
   if (!isEn || !label) return label;
   const m = String(label).match(/^(.*?)( \d+)?$/);
   const known = { 'Hlavní': t('Hlavní'), 'Původní hlavní': t('Původní hlavní'), 'Přepis (Gemini)': t('Přepis (Gemini)'),
-    'Přepis (Whisper)': t('Přepis (Whisper)'), 'Verze': t('Verze') };
+    'Přepis (Whisper)': t('Přepis (Whisper)'), 'Přepis (Bangor)': t('Přepis (Bangor)'), 'Verze': t('Verze') };
   return m[1] in known ? known[m[1]] + (m[2] || '') : label;
 }
 

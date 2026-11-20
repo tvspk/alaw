@@ -413,7 +413,7 @@ export async function renderFindLyrics(root, nav) {
     if (!list0.length) return;
     const engine = await pickEngine();
     if (!engine) return;
-    if (!confirm(pl(list0.length, 'Přepsat {n} píseň z nahrávek ({e})?', 'Přepsat {n} písně z nahrávek ({e})?', 'Přepsat {n} písní z nahrávek ({e})?', { e: ENGINES[engine].label }) + ' ' + (engine === 'groq' ? t('Nahrávky se pošlou do Groq.') : t('Nahrávky se pošlou do Googlu.')) + ' ' + t('Přepis zpěvu nebývá přesný, texty pak zkontroluj poslechem.'))) return;
+    if (!confirm(pl(list0.length, 'Přepsat {n} píseň z nahrávek ({e})?', 'Přepsat {n} písně z nahrávek ({e})?', 'Přepsat {n} písní z nahrávek ({e})?', { e: ENGINES[engine].label }) + ' ' + (engine === 'bangor' ? t('Nahrávky zůstanou na tomto počítači.') : engine === 'groq' ? t('Nahrávky se pošlou do Groq.') : t('Nahrávky se pošlou do Googlu.')) + ' ' + t('Přepis zpěvu nebývá přesný, texty pak zkontroluj poslechem.'))) return;
     running = true; stop = false;
     startBtn.textContent = '■ Zastavit'; trAllBtn.hidden = true; takeAllBtn.hidden = true;
     let waits = 0;
@@ -427,7 +427,7 @@ export async function renderFindLyrics(root, nav) {
           await new Promise(res => setTimeout(res, window.__alawLimitWait ?? 60000));
           if (!stop) { i--; continue; }
         }
-        if (e.limit || /denní limit|nemá přístup|není platný|klíč|daily limit|access|not valid|\bkey\b/i.test(e.message || '')) { toast(`${e.message} ` + t('Přepis zastaven.'), 6000); break; }
+        if (e.limit || e.stop || /denní limit|nemá přístup|není platný|klíč|daily limit|access|not valid|\bkey\b/i.test(e.message || '')) { toast(`${e.message} ` + t('Přepis zastaven.'), 6000); break; }
       }
     }
     running = false;
@@ -552,7 +552,7 @@ export const transcribable = song => song.versions.some(v => v.audio);
 // Přepíše text z nahrávky písně. Bez textu → hlavní verze; s textem → další verze k porovnání (rozhodnutí zadavatele),
 // a když hlavní verze nemá časy, převezme je z přepisu u shodných veršů. Vrací { song, as: 'main'|'version', version }.
 export async function transcribeToSong(songId, onWait = () => {}, engine = defaultEngine()) {
-  if (!engine || !ENGINES[engine]) throw new Error(t('Nejdřív vlož klíč pro Gemini nebo Groq v Nastavení.'));
+  if (!engine || !ENGINES[engine]) throw new Error(t('Nejdřív nastav přepis v Nastavení → Přepis z nahrávky.'));
   let song = await getSong(songId);
   if (!song) throw new Error(t('Píseň nenalezena.'));
   const src = [primaryVersion(song), ...song.versions].find(v => v.audio);
@@ -594,13 +594,13 @@ export async function transcribeToSong(songId, onWait = () => {}, engine = defau
 // Kterou službou přepisovat: jediná dostupná rovnou, dvě → zeptat se (null = zrušeno / žádná).
 export function pickEngine() {
   const av = availableEngines();
-  if (!av.length) { toast(t('Přepis dělá Gemini nebo Whisper (Groq): nejdřív vlož klíč v Nastavení → Přepis z nahrávky.'), 5000); return Promise.resolve(null); }
+  if (!av.length) { toast(t('Přepis dělá Gemini, Whisper (Groq) nebo na počítači Bangor: nejdřív ho nastav v Nastavení → Přepis z nahrávky.'), 5000); return Promise.resolve(null); }
   if (av.length === 1) return Promise.resolve(av[0]);
   return new Promise(resolve => {
     let picked = null;
     sheet(c => el('div', {},
       el('h3', { text: t('Čím přepsat?') }),
-      el('div', { class: 'sub', text: t('Pro porovnání můžeš píseň přepsat oběma – rozdíly ukážou nejistá místa.') }),
+      el('div', { class: 'sub', text: av.length > 2 ? t('Pro porovnání můžeš píseň přepsat víc službami – rozdíly ukážou nejistá místa.') : t('Pro porovnání můžeš píseň přepsat oběma – rozdíly ukážou nejistá místa.') }),
       el('div', { class: 'row end' }, av.map(k => el('button', { type: 'button', class: 'btn' + (k === defaultEngine() ? ' primary' : ''), text: ENGINES[k].label,
         onclick: () => { picked = k; c(); resolve(k); } })))));
     const obs = new MutationObserver(() => { if (!document.body.contains(document.querySelector('.sheet'))) { obs.disconnect(); if (!picked) resolve(null); } });

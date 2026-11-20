@@ -9,7 +9,8 @@ TMP = Path(tempfile.mkdtemp())
 
 # Vymyšlené verše (ne skutečná píseň).
 LINES = ["Mae'r haul yn codi dros y bryn", "A'r gwynt yn chwythu'n ysgafn", "Dewch i ganu gyda ni", "Yn llon ar fore braf"]
-calls = {'gen': 0, 'upload': 0, 'delete': 0, 'parts': [], 'upload_rate': None, 'groq': []}
+calls = {'gen': 0, 'upload': 0, 'delete': 0, 'parts': [], 'upload_rate': None, 'groq': [], 'bangor': []}
+bangor_state = {'up': False, 'health': 0, 'polls': 0}
 
 def tone(path, seconds):
     subprocess.run(['ffmpeg', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', f'sine=frequency=330:duration={seconds}', '-ac', '1', '-ar', '22050', str(path)], check=True)
@@ -69,6 +70,32 @@ def groq(route):
             {'start': 15.0, 'end': 17.0, 'text': ' la la la la la la la la la la', 'no_speech_prob': 0.1, 'avg_logprob': -0.4, 'compression_ratio': 3.4}]
     return route.fulfill(json={'text': '', 'segments': segs}, headers=h)
 
+def bangor(route):
+    # napodobený program bangor/alaw_bangor.py na http://127.0.0.1:8765
+    req = route.request
+    if not bangor_state['up']:
+        return route.abort('connectionrefused')
+    h = {'access-control-allow-origin': '*'}
+    if req.method == 'OPTIONS':
+        return route.fulfill(status=204, headers={**h, 'access-control-allow-headers': '*', 'access-control-allow-methods': '*'})
+    path = req.url.split('8765', 1)[1]
+    if path.startswith('/health'):
+        bangor_state['health'] += 1
+        ready = bangor_state['health'] > 1  # poprvé ještě načítá model
+        return route.fulfill(json={'app': 'alaw-bangor', 'version': '1.0', 'ready': ready, 'stage': 'ready' if ready else 'loading', 'device': 'cpu', 'busy': 0}, headers=h)
+    if path.startswith('/transcribe'):
+        calls['bangor'].append({'url': req.url, 'size': len(req.post_data_buffer or b'')})
+        bangor_state['polls'] = 0
+        return route.fulfill(json={'id': 'abc123'}, headers=h)
+    if path.startswith('/jobs/abc123'):
+        bangor_state['polls'] += 1
+        if bangor_state['polls'] < 3:
+            return route.fulfill(json={'state': 'running', 'progress': 0.4, 'segments': [], 'error': None}, headers=h)
+        segs = [{'start': 1.0, 'end': 3.5, 'text': ' ' + LINES[0], 'no_speech_prob': 0.05, 'avg_logprob': -0.3, 'compression_ratio': 1.2},
+                {'start': 3.6, 'end': 5.5, 'text': " A'r gwynt yn chwythu'n gryf", 'no_speech_prob': 0.05, 'avg_logprob': -0.3, 'compression_ratio': 1.2}]
+        return route.fulfill(json={'state': 'done', 'progress': 1, 'segments': segs, 'error': None}, headers=h)
+    return route.fulfill(status=404, json={'error': '?'}, headers=h)
+
 def lrclib(route):
     return route.fulfill(json=[])
 
@@ -87,8 +114,9 @@ def main():
         page.route('https://generativelanguage.googleapis.com/**', gemini)
         page.route('https://lrclib.net/**', lrclib)
         page.route('https://api.groq.com/**', groq)
+        page.route('http://127.0.0.1:8765/**', bangor)
         page.add_init_script("""if (!localStorage.getItem('alaw-ai')) localStorage.setItem('alaw-ai', JSON.stringify({ key: 'zkusebni-klic', model: 'gemini-3-flash', models: ['gemini-3-flash'] }));
-          window.__alawAiPoll = 50; window.__alawBulkDelay = 0; window.__alawInlineMax = 1048576; window.__alawGroqMax = 200000;""")
+          window.__alawAiPoll = 50; window.__alawBulkDelay = 0; window.__alawInlineMax = 1048576; window.__alawGroqMax = 200000; window.__alawBangorPoll = 50;""")
         page.goto(url)
         page.wait_for_selector('text=Croeso!')
 
@@ -182,6 +210,45 @@ def main():
         check(r[0] == 'Přepis (Whisper)' and [l[0] for l in r[1]] == LINES[:3], 'Whisper: verše bez hudby (♪), halucinací a opakování')
         check([l[1] for l in r[1]] == [1000, 3600, 10000] and [l[2] for l in r[1]] == [False, False, True], 'časy úseků a nová sloka po pauze')
 
+        print('Bangor (na tomto počítači): nastavení a přepis')
+        page.goto(url + '#/settings')
+        page.wait_for_selector('#bangor')
+        check(page.locator('#bangor a', has_text='Stáhnout program').get_attribute('href').endswith('/releases/latest/download/alaw-bangor.zip'), 'odkaz na program ve vydání')
+        page.click('#bangor button:has-text("Zapnout a ověřit")')
+        page.wait_for_selector('text=/Program na tomto počítači neběží/')
+        check(not page.evaluate("JSON.parse(localStorage.getItem('alaw-prefs') || '{}').bangor"), 'neběžící program → Bangor se nezapne')
+        bangor_state['up'] = True
+        page.click('#bangor button:has-text("Zapnout a ověřit")')
+        page.wait_for_selector('text=Program běží a načítá model…')
+        check(page.locator('#bangor >> text=Vypnout').count() == 1, 'zapnuto (běží) → tlačítko Vypnout')
+        shot(page, 'p4-bangor')
+        page.click('#bangor >> text=Ověřit spojení')
+        page.wait_for_selector('text=/Program běží – počítá na procesoru/')
+        check(page.locator('select option', has_text='Bangor (na tomto PC)').count() == 1, 'Bangor ve výběru předvybrané služby')
+        page.goto(url + '#/song/' + tri)
+        page.click('button[aria-label="Další možnosti"]')
+        page.click('text=Přepsat z nahrávky jako další verzi (AI)')
+        page.wait_for_selector('text=Čím přepsat?')
+        check(page.locator('.sheet button').count() >= 3, 'na výběr tři služby')
+        page.click('.sheet >> text=Bangor (na tomto PC)')
+        wait(page, "location.hash.startsWith('#/compare/')", 30000)
+        b = calls['bangor'][-1]
+        check('language=cy' in b['url'] and 'prompt=C%C3%A2n+Tri' in b['url'] and b['size'] > 10000, 'Bangor: původní nahrávka, velština, název jako nápověda')
+        v = page.evaluate("async id => (await (await import('./js/store.js')).getSong(id)).versions.map(v => [v.label, v.lines.map(l => l.text)])", tri)
+        check(v[1] == ['Přepis (Bangor)', [LINES[0], "A'r gwynt yn chwythu'n gryf"]], 'přepis Bangor přidán jako další verze')
+        bangor_state['up'] = False
+        page.goto(url + '#/song/' + tri)
+        page.click('button[aria-label="Další možnosti"]')
+        page.click('text=Přepsat z nahrávky jako další verzi (AI)')
+        page.click('.sheet >> text=Bangor (na tomto PC)')
+        page.wait_for_selector('text=/Program pro přepis Bangor na tomto počítači neběží/')
+        check(True, 'neběžící program → srozumitelná hláška')
+        page.goto(url + '#/settings')
+        page.wait_for_selector('text=/Zapnuto, ale program teď neběží/')
+        page.click('#bangor >> text=Vypnout')
+        page.wait_for_selector('#bangor button:has-text("Zapnout a ověřit")')
+        check(page.locator('select option', has_text='Bangor').count() == 0, 'vypnutý Bangor zmizí z výběru')
+
         print('Hromadné mazání')
         page.goto(url + '#/')
         page.wait_for_selector('.song-card')
@@ -201,7 +268,7 @@ def main():
         page.wait_for_selector('.fab')
         check(page.locator('.fab').count() == 1, 'po smazání zpět normální knihovna')
         browser.close()
-    real = [e for e in errors if 'favicon' not in e and '401 (Unauthorized)' not in e]  # 401 = schválně špatný klíč Groq
+    real = [e for e in errors if 'favicon' not in e and '401 (Unauthorized)' not in e and 'ERR_CONNECTION_REFUSED' not in e]  # 401 = schválně špatný klíč Groq
     check(not real, f'bez chyb v konzoli {real}')
     print('HOTOVO')
 

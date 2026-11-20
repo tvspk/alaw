@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 20. 11. 2026, verze **0.11.0** (APK versionCode 15). Odpovídej zadavateli **česky**.
+> Stav k 20. 11. 2026, verze **0.12.0** (APK versionCode 16). Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -167,6 +167,20 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
      text s překladem pod každým veršem (.txt; dvojice oddělené prázdným řádkem, sloky dvěma) – překlad pro každý jazyk, který
      píseň má. Hlavička „Název – Interpret“. Soubory `interpret-nazev.txt`, `…-cs.txt`, `…-cy-cs.txt`.
 
+11. **Bangor – velšský Whisper na počítači (0.12):** zadavatel (Windows) chtěl Bangor dřív než nápovědu „?“, aby nápověda
+   pokryla i ho; „nejde o rychlost, jde o rozhraní“. Bangor nemá veřejnou službu s klíčem; modely jsou volně na Hugging Face.
+   - Program `bangor/` (zip `alaw-bangor.zip` ve vydání, ve workflow): `alaw-bangor.bat` (první spuštění: Python 3.12 přes winget,
+     venv v `%LOCALAPPDATA%\AlawBangor`, `faster-whisper==1.2.1`, `av==16.1.0` (novější av s faster-whisper 1.2.1 padá), `ctranslate2==4.9.0`;
+     s `nvidia-smi` i `nvidia-cublas-cu12`, `nvidia-cudnn-cu12==9.*`), `alaw_bangor.py` (server `127.0.0.1:8765`, model
+     `techiaith/whisper-large-ft-cy-en-ct2` int8 ~1,6 GB; GPU `int8_float16`, jinak CPU), `CTI-ME.txt` (návod CZ/EN).
+     Starší názvy modelů `whisper-large-v3-ft-…` na HF už nejsou veřejné.
+   - Aplikace: služba `bangor` v `stt.js` (jen mimo APK, zapnutá `prefs.bangor`), úloha s průběhem v %, čekání na stažení/načtení
+     modelu; nepřístupný program = hláška a zastavení hromadného přepisu (`e.stop`). Popisek verze „Přepis (Bangor)“. Nastavení →
+     Přepis z nahrávky má podsekce **Whisper přes Groq** a **Bangor** (stáhnout program, Zapnout a ověřit / Ověřit spojení / Vypnout,
+     stav GPU/CPU). Na telefonu jen věta, že přepisy přijdou synchronizací. CSP `http://127.0.0.1:8765`.
+   - Ověřeno v prostředí Claude: skutečný program s malým modelem (`Systran/faster-whisper-tiny`) + aplikace v Chromiu z localhostu.
+     **Neověřeno: Windows (bat, winget, CUDA) a výzva Chrome k přístupu z `tvspk.github.io` – ověří zadavatel.**
+
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
 Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna verze/mazání (0.8) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
 
@@ -174,7 +188,9 @@ Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna ve
 
 Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „hotovo“.
 
-**DALŠÍ ÚKOL (zadaný, nezačatý): nápověda „?“ u klíčů a přístupů v Nastavení.** Zadavatel: „u API rozhraní by byl malinký
+**Bangor (0.12) – HOTOVO, čeká na zkoušku zadavatele na Windows** (bod 11 výše).
+
+**DALŠÍ ÚKOL (zadaný, nezačatý): nápověda „?“ u klíčů a přístupů v Nastavení – včetně Bangoru.** Zadavatel: „u API rozhraní by byl malinký
 otazník, na který když klikneš, zobrazí se stručný návod v pár bodech, jak se to dělá.“ Navržený postup (zadavatel souhlasil
 s myšlenkou, detaily jsou rozumné výchozí volby):
    - Malé kulaté tlačítko **?** vedle nadpisu sekce v Nastavení (`app.js` `aiSection`, `sttSection`, `searchSection` jen na
@@ -185,10 +201,12 @@ s myšlenkou, detaily jsou rozumné výchozí volby):
      → vložit → Uložit a ověřit; zdarma s denním limitem), **Groq** (console.groq.com/keys → účet → Create API Key → zkopírovat
      hned, později už nejde zobrazit, začíná `gsk_`; zdarma bez karty), **Synchronizace** (soukromý repozitář na GitHubu
      s README, fine-grained token jen na ten repozitář s Contents: Read and write, začíná `github_pat_`; 8 slov si zapsat),
+     **Bangor** (bez klíče: stáhnout zip, rozbalit, spustit `alaw-bangor.bat`, SmartScreen „Další informace → Přesto spustit“,
+     počkat na „Program běží“, Zapnout a ověřit, v Chrome povolit přístup k aplikacím v zařízení; podsekce `bangorBlock`),
      **Prostředník** (Cloudflare Workers, odkaz na `worker/README.md` v repozitáři). **Před psaním ověřit aktuální podobu
      stránek webovým hledáním** (názvy tlačítek se mění) a kroky psát obecně, bez snímků.
    - Vše přes `t()` + anglický překlad v `js/i18n-en.js` (britská angličtina). Test: otevřít každou nápovědu v CZ i EN
-     (doplnit do `test_anglictina.py`, případně do `test_zaklad.py`). Vydání 0.12.0 (versionCode 16).
+     (doplnit do `test_anglictina.py`, případně do `test_zaklad.py`). Vydání 0.13.0 (versionCode 17).
    - Otázky k zadavateli až u hotového návrhu (není potřeba se ptát předem): stačí tyto čtyři sekce? Má být „?“ i jinde
      (např. u soboru s odkazy v Najít texty, u přepisu z nahrávky)?
 
@@ -214,11 +232,7 @@ s myšlenkou, detaily jsou rozumné výchozí volby):
      lyrics, recording, sync).
 2. **Zkouška přepisu u zadavatele (čeká se na výsledek):** Groq na 1 písni (hodnocení přesnosti), pak Gemini na téže,
    pak velká WAV. Podle výsledku případně:
-3. **Velšský Whisper z Bangoru na PC (navrženo, NEZADÁNO – zadavatel zatím jen zjišťoval, jak by to šlo):** lokální
-   program (Python + faster-whisper + model `techiaith/whisper-large-…-ct2`, int8), malý server na `http://127.0.0.1:<port>`
-   s CORS pro `https://tvspk.github.io` (a `Access-Control-Allow-Private-Network`), v aplikaci třetí služba v `stt.js`
-   „Bangor (na tomto PC)“, CSP `connect-src` doplnit localhost. Spouštění `spustit-prepis.bat`. Otázky k zadavateli:
-   Windows/Mac, grafika NVIDIA. Model učený na řeči, ne zpěvu; bez GPU pomalé (100 písní ~ noc).
+3. **Velšský Whisper z Bangoru na PC – hotovo v 0.12.0** (bod 11). Zadavatel vyzkouší na Windows; připomínky k rozhraní.
 4. **Přejmenování souborů na PC na „Interpret - Název“** (zadavatel chce; Claude přes aplikaci Claude pro počítač
    s připojenou složkou: tabulka starý → nový ke schválení, nejisté neprejmenovávat, seznam pro vrácení). Zadavatel zatím
    chat v aplikaci pro počítač neotevřel.

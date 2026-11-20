@@ -4,6 +4,7 @@ import { hasAi, transcribeAudio, cleanTranscript } from './ai.js';
 import { t } from './i18n.js';
 import { toSpeechWav } from './audioprep.js';
 import { getPrefs } from './store.js';
+import { isAndroid } from './net.js';
 
 const GROQ = 'https://api.groq.com/openai/v1';
 const GROQ_KEY = 'alaw-groq';
@@ -82,10 +83,69 @@ export async function transcribeGroq(blob, { title = '', language = 'cy', name =
   return whisperLines(data.segments);
 }
 
+// ---------- Bangor: velšský Whisper na tomto počítači (program bangor/alaw_bangor.py) ----------
+// Jen na počítači (v APK ne). Zapíná se v Nastavení po úspěšném ověření (prefs.bangor = true).
+export const BANGOR = 'http://127.0.0.1:8765';
+const BANGOR_ZIP = 'https://github.com/tvspk/alaw/releases/latest/download/alaw-bangor.zip';
+export const bangorZip = () => BANGOR_ZIP;
+export const bangorPossible = () => !isAndroid();
+export const hasBangor = () => bangorPossible() && !!getPrefs().bangor;
+const BANGOR_LANGS = new Set(['cy', 'en']);
+const bangorDown = () => Object.assign(new SttError(t('Program pro přepis Bangor na tomto počítači neběží. Spusť alaw-bangor.bat, počkej na „Program běží“ a zkus to znovu.')), { stop: true });
+
+async function bangorFetch(path, opts = {}, timeout = 8000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
+  let r;
+  // targetAddressSpace: Chrome se jednou zeptá na povolení přístupu k aplikacím v tomto zařízení
+  try { r = await fetch(BANGOR + path, { ...opts, targetAddressSpace: 'loopback', cache: 'no-store', signal: ctrl.signal }); }
+  catch { throw bangorDown(); }
+  finally { clearTimeout(timer); }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new SttError(t('Bangor: {e}', { e: data.error || r.status })), { status: r.status });
+  return data;
+}
+
+// Stav programu: { ready, stage, device, model, busy } (vyhodí chybu, když neběží).
+export async function checkBangor() {
+  const h = await bangorFetch('/health', {}, 4000);
+  if (h.app !== 'alaw-bangor') throw bangorDown();
+  return h;
+}
+
+const sleep = ms => new Promise(res => setTimeout(res, ms));
+const POLL = () => window.__alawBangorPoll || 2000;
+
+export async function transcribeBangor(blob, { title = '', language = 'cy', name = '' } = {}, onWait = () => {}) {
+  let h = await checkBangor();
+  while (!h.ready) {
+    if (h.stage === 'error') throw new SttError(t('Program Bangor nemohl připravit model: {e}', { e: h.error || '' }));
+    onWait(h.stage === 'download' ? t('Program Bangor stahuje model (poprvé asi 1,6 GB)…') : t('Program Bangor načítá model…'));
+    await sleep(POLL() * 2);
+    h = await checkBangor();
+  }
+  onWait(t('Posílám nahrávku programu Bangor…'));
+  const q = new URLSearchParams({ prompt: title.slice(0, 200), name });
+  if (BANGOR_LANGS.has(language)) q.set('language', language);
+  const { id } = await bangorFetch(`/transcribe?${q}`, { method: 'POST', body: blob, headers: { 'Content-Type': 'application/octet-stream' } }, 600000);
+  let fails = 0;
+  for (;;) {
+    await sleep(POLL());
+    let j;
+    try { j = await bangorFetch(`/jobs/${id}`); fails = 0; }
+    catch (e) { if (e.status || ++fails >= 5) throw e; continue; }
+    if (j.state === 'done') return whisperLines(j.segments);
+    if (j.state === 'error') throw new SttError(t('Bangor: {e}', { e: j.error || '?' }));
+    onWait(j.state === 'queued' ? t('Čekám, až program Bangor dokončí předchozí přepis…')
+      : t('Přepisuji přes Bangor ({d})… {p} %', { d: h.device === 'gpu' ? t('grafická karta') : t('procesor'), p: Math.round((j.progress || 0) * 100) }));
+  }
+}
+
 // ---------- výběr služby ----------
 export const ENGINES = {
   gemini: { label: 'Gemini', ok: hasAi, run: transcribeAudio },
   groq: { label: 'Whisper (Groq)', short: 'Whisper', ok: hasGroq, run: transcribeGroq },
+  bangor: { get label() { return t('Bangor (na tomto PC)'); }, short: 'Bangor', ok: hasBangor, run: transcribeBangor, local: true },
 };
 export const engineName = k => ENGINES[k]?.short || ENGINES[k]?.label || k;
 export const availableEngines = () => Object.keys(ENGINES).filter(k => ENGINES[k].ok());

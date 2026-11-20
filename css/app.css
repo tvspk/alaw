@@ -85,6 +85,7 @@ a { color: var(--accent); }
 .btn:active { transform: translateY(1px); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .btn.danger { color: var(--mark); border-color: color-mix(in srgb, var(--mark) 40%, var(--line)); }
+a.btn { text-decoration: none; color: inherit; }
 .btn.small { padding: 5px 12px; min-height: 34px; font-size: .88rem; }
 .btn[disabled] { opacity: .5; pointer-events: none; }
 
@@ -137,6 +138,7 @@ a { color: var(--accent); }
 .file-box .name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: .92rem; }
 .section { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; margin: 12px 0; }
 .section h2 { font-size: 1rem; margin: 0 0 6px; }
+.section h3.sub-h { font-size: .95rem; margin: 16px 0 4px; padding-top: 12px; border-top: 1px solid var(--line); }
 .section p { color: var(--muted); font-size: .92rem; line-height: 1.5; margin: 4px 0 10px; }
 
 .check { display: flex; gap: 10px; align-items: flex-start; font-size: .95rem; line-height: 1.4; }

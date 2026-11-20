@@ -34,6 +34,13 @@
 - Přepis z nahrávky (`ai.transcribeAudio`, `bulk.transcribeToSong`): píseň s textem → přepis jako další verze, nikdy nepřepsat
   hlavní text. Claude sám texty písní nepřepisuje ani nevypisuje (dělá to aplikace u zadavatele). Test: `python3 -u testy/test_prepis.py`.
 - Přepis: služby v `js/stt.js` (Gemini, Groq); klíče jen v zařízení (`alaw-ai`, `alaw-groq`), nikdy v repozitáři ani záloze.
+- **Bangor** (0.12, `js/stt.js` `transcribeBangor`, Nastavení `bangorBlock` v `app.js`): program `bangor/alaw_bangor.py` na počítači s Windows
+  (spouštěč `bangor/alaw-bangor.bat` = Python 3.12 přes winget, venv v `%LOCALAPPDATA%\AlawBangor`, `faster-whisper` s pevnými verzemi,
+  u NVIDIA i knihovny CUDA; model `techiaith/whisper-large-ft-cy-en-ct2`). Server jen `127.0.0.1:8765`, CORS jen `tvspk.github.io`
+  a localhost; `/health`, `POST /transcribe` (tělo = nahrávka) → úloha, `/jobs/<id>` s průběhem. Chrome (od 142) se jednou zeptá na
+  přístup k místní síti / aplikacím v zařízení (`targetAddressSpace: 'loopback'`). V APK skryté. Zapnutí `prefs.bangor` (zařízení).
+  Zip `alaw-bangor.zip` přidává workflow do vydání. Změna závislostí ve spouštěči → zvýšit značku `pripraveno-1.txt` (jinak se nepřeinstaluje).
+  Test: `test_prepis.py` (napodobený program). Ruční zkouška skutečného programu: `ALAW_BANGOR_MODEL=Systran/faster-whisper-tiny python3 bangor/alaw_bangor.py`.
 - Nahrávky ukládat před písní je v pořádku jen přes `putAudioBlob` (chrání `db.freshAudio` před úklidem synchronizace).
 - **Jazyk rozhraní CZ / EN (britská angličtina)**: `js/i18n.js` + slovník `js/i18n-en.js`. Každý text pro uživatele piš jako
   `t('český text', { proměnné })`, množné číslo `pl(n, '{n} píseň', '{n} písně', '{n} písní')`, vždy s textem v jednoduchých
