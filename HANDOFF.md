@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 20. 11. 2026, verze **0.7.0** (APK versionCode 10). Odpovídej zadavateli **česky**.
+> Stav k 20. 11. 2026, verze **0.7.1** (APK versionCode 11). Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -93,7 +93,18 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
      a náhledu i neprázdnou). Doplní interpreta, když chybí. V knihovně proužek „N písní nemá text“.
    - Riziko: 1,1 GB zvuku v synchronizaci = schránka na GitHubu přes 1 GB (GitHub doporučuje do 1 GB, tvrdě do 5 GB)
      a telefon stáhne vše. Nahrávání je po souborech zapamatované (`c.files`), po přerušení pokračuje.
-   - Test: `python3 -u testy/test_hromadne.py` (napodobené LRCLIB, ffmpeg vyrobí mp3 s ID3 a wav s INFO).
+   - Test: `python3 -u testy/test_hromadne.py` (napodobené LRCLIB a prostředník, ffmpeg vyrobí mp3 s ID3 a wav s INFO).
+   - **0.7.1 – texty odkudkoli:** Claude ani Gemini texty chráněných písní nevypíšou, umí ale najít **odkaz**; text pak
+     stáhne aplikace sama (`sources.loadFromUrl`, obecný výběr bloku s textem). Placené vyhledávací API zadavatel nechce
+     (Gemini s Google Search jde jen s placením, Google Custom Search končí 1. 1. 2027, Brave chce kartu).
+     - V okně hledání „🌐 Hledat na Googlu“ (`search.googleUrl`, u velštiny „geiriau lyrics“) a „🔗 Vložit odkaz“.
+       S `openSearch(…, { songId })` se uloží `prefs.shareTarget` → sdílení stránky z prohlížeče do 3 h nabídne „K písni …“
+       (`app.js offerShare`), jinak nová píseň jako dřív.
+     - **Soubor s odkazy** (Najít texty → „📄 Načíst odkazy ze souboru“, `bulk.parseLinkFile`/`matchLinks`): pro hromadné
+       dohledání ho připraví Claude (web search, jen odkazy, nikdy texty). Formát: text, na řádku `Interpret - Název<TAB>https://…`
+       (víc adres na řádku = alternativy, `#` = poznámka), nebo JSON `[{ artist, title, url | urls[] }]`. Páruje se interpret+název,
+       jinak jednoznačný název, jen s písněmi bez textu. Text z odkazu = „doporučený“ (převzít všechny), nefunkční → LRCLIB.
+       Na počítači potřebuje prostředníka (většina webů nemá CORS); v APK přímo.
 
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
 Učení (0.4, 0.5), verze (0.6) a písně z nahrávek (0.7) zatím jen testy v prostředí Claude – **ověřit na telefonu**.

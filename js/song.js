@@ -225,9 +225,9 @@ export async function renderSong(root, id, nav) {
     if (!version.lines.length) list.append(el('div', { class: 'empty' },
       el('p', { text: 'Píseň zatím nemá text.' }),
       el('div', { class: 'row', style: { justifyContent: 'center' } },
-        el('button', { type: 'button', class: 'btn primary', text: '🔍 Najít text', onclick: () => openSearch({ title: song.title, artist: song.artist }, async d => {
+        el('button', { type: 'button', class: 'btn primary', text: '🔍 Najít text', onclick: () => openSearch({ title: song.title, artist: song.artist, language: song.language }, async d => {
           try { await applyLyrics(song.id, d); toast('Text uložen'); nav.replace(`#/song/${encodeURIComponent(song.id)}`); } catch (e) { toast(e.message); }
-        }) }),
+        }, { songId: song.id }) }),
         el('button', { type: 'button', class: 'btn', text: 'Vložit ručně', onclick: () => nav.go(`#/edit/${encodeURIComponent(song.id)}`) }))));
   }
 

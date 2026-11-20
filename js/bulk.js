@@ -2,10 +2,10 @@
 // Z každé nahrávky vznikne píseň s nahrávkou, zatím bez textu. Název a interpret: z názvu souboru
 // „Interpret - Název“, jinak z údajů uložených v souboru (ID3 v mp3, INFO ve wav), jinak název souboru.
 // Texty pak hledá v LRCLIB podle názvu, interpreta a délky nahrávky; uloží se jen po potvrzení.
-import { el, fill, iconBtn, toast, fileSize, pickFiles } from './ui.js';
+import { el, fill, iconBtn, toast, fileSize, pickFiles, pickFile } from './ui.js';
 import { listSongs, getSong, saveSong, putAudioBlob, getAudioBlob } from './store.js';
 import { LANGUAGES, newSong, primaryVersion, parseLyrics, parseTags, fold, uid, attachAlt } from './model.js';
-import { SOURCES, similarity } from './sources.js';
+import { SOURCES, similarity, loadFromUrl, cleanText } from './sources.js';
 import { openSearch, showPreview } from './search.js';
 import { isAndroid } from './net.js';
 import { isOn as syncOn } from './sync.js';
@@ -287,8 +287,56 @@ export async function applyLyrics(songId, d, force = false) {
   return song;
 }
 
+// ---------- soubor s odkazy ----------
+// Odkazy na stránky s texty (připraví je třeba Claude): JSON [{ artist, title, url | urls[] }] (i { links: […] }),
+// nebo text: na řádku „Interpret - Název“ a adresa (oddělovač libovolný: tab, |, :, mezera). # = poznámka.
+export function parseLinkFile(text) {
+  const out = [];
+  const add = (artist, title, urls) => {
+    urls = [...new Set(urls.map(u => String(u || '').trim()).filter(u => /^https?:\/\/\S+$/i.test(u)))];
+    if (title && urls.length) out.push({ artist: String(artist || '').trim(), title: String(title).trim(), urls });
+  };
+  const t = String(text || '').trim();
+  if (t.startsWith('[') || t.startsWith('{')) {
+    let d;
+    try { d = JSON.parse(t); } catch { throw new Error('Soubor nejde přečíst jako JSON.'); }
+    const list = Array.isArray(d) ? d : Array.isArray(d && d.links) ? d.links : [];
+    for (const x of list) if (x && typeof x === 'object') add(x.artist, x.title, Array.isArray(x.urls) ? x.urls : [x.url]);
+    return out;
+  }
+  for (const line of t.split(/\r?\n/)) {
+    if (/^\s*#/.test(line)) continue;
+    const urls = line.match(/https?:\/\/[^\s|<>"]+/gi);
+    if (!urls) continue;
+    const label = line.slice(0, line.search(/https?:\/\//i)).replace(/[\s|:;,\t]+$/, '').trim();
+    const n = nameFromFile(label + '.x');
+    add(n.artist, n.title, urls);
+  }
+  return out;
+}
+
+// Spáruje odkazy s písněmi: interpret + název, jinak jen název (když je jednoznačný). → { map: id → urls[], unmatched: [] }
+export function matchLinks(links, songs) {
+  const byFull = new Map(), byTitle = new Map();
+  for (const s of songs) {
+    byFull.set(fold(`${s.artist}|${s.title}`).trim(), s);
+    const k = fold(s.title).trim();
+    byTitle.set(k, byTitle.has(k) ? null : s);
+  }
+  const map = new Map(), unmatched = [];
+  for (const l of links) {
+    const s = (l.artist && byFull.get(fold(`${l.artist}|${l.title}`).trim())) || byTitle.get(fold(l.title).trim());
+    if (!s) { unmatched.push(l); continue; }
+    map.set(s.id, [...new Set([...(map.get(s.id) || []), ...l.urls])]);
+  }
+  return { map, unmatched };
+}
+
+const host = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
+
 // Text k převzetí z výsledku LRCLIB: časy jen když sedí délka nahrávky (jinak by verše utíkaly).
 async function lyricsFrom(c) {
+  if (c.link) return { text: c.data.text, altText: c.data.altText || '', youtubeId: c.data.youtubeId || null, source: c.data.source || host(c.url), sourceUrl: c.data.url || c.url };
   const l = await c.load();
   const timed = l.synced && c.durOk;
   return { text: timed ? l.text : (l.plain || l.text.replace(/^\[[^\]]*\]\s*/gm, '')), source: 'lrclib', sourceUrl: l.url, title: c.title, artist: c.artist, timed };
@@ -305,32 +353,35 @@ export async function renderFindLyrics(root, nav) {
   const info = el('div', { class: 'hint', role: 'status' });
   const startBtn = el('button', { type: 'button', class: 'btn primary', text: '🔍 Hledat texty', onclick: run });
   const takeAllBtn = el('button', { type: 'button', class: 'btn', hidden: true, onclick: takeAllSure });
+  const linksBtn = el('button', { type: 'button', class: 'btn', text: '📄 Načíst odkazy ze souboru', onclick: () => { if (!running) loadLinks(); } });
+  const linkInfo = el('div', { class: 'hint' });
+  const good = c => !!c && (c.link || isSure(c)); // doporučené: jistá shoda z LRCLIB nebo text z odkazu
 
   function row(s) {
     const r = st.get(s.id);
     const head = el('div', { class: 'bulk-title' }, el('strong', { text: s.title }), s.artist ? el('span', { text: ` – ${s.artist}` }) : el('span', { class: 'hint', text: ' – bez interpreta' }));
-    const other = el('button', { type: 'button', class: 'btn small', text: '🔍 Hledat jinde', onclick: () => openSearch({ title: s.title, artist: s.artist }, async d => {
-      try { await applyLyrics(s.id, d, true); r.state = 'taken'; toast('Text uložen'); draw(); } catch (e) { toast(e.message); }
-    }) });
+    const other = el('button', { type: 'button', class: 'btn small', text: '🔍 Hledat jinde', onclick: () => openSearch({ title: s.title, artist: s.artist, language: s.language }, async d => {
+      try { await applyLyrics(s.id, d, true); r.state = 'taken'; toast('Text uložen'); draw(); sumUp(); } catch (e) { toast(e.message); }
+    }, { songId: s.id }) });
     let body;
-    if (r.state === 'wait') body = el('div', { class: 'hint', text: 'Čeká na hledání' });
+    if (r.state === 'wait') body = el('div', { class: 'hint', text: r.links ? `Čeká: ${r.links.length === 1 ? 'odkaz' : `${r.links.length} odkazy`} (${r.links.map(host).join(', ')})` : 'Čeká na hledání' });
     else if (r.state === 'busy') body = el('div', { class: 'hint', text: 'Hledám…' });
     else if (r.state === 'taken') body = el('div', { class: 'ok', text: '✓ Text uložen' });
     else if (r.state === 'error') body = el('div', { class: 'row' }, el('span', { class: 'hint', text: `Chyba: ${r.error}` }), other);
-    else if (!r.cands.length) body = el('div', { class: 'row' }, el('span', { class: 'hint', text: 'V LRCLIB nenalezeno' }), other);
+    else if (!r.cands.length) body = el('div', { class: 'row' }, el('span', { class: 'hint', text: r.linkErr ? `Z odkazu nic (${r.linkErr.replace(/\.$/, "")}), v LRCLIB nenalezeno` : 'V LRCLIB nenalezeno' }), other);
     else {
       const c = r.cands[r.i];
-      const bits = [c.artist, c.dur && (c.dd == null || c.durOk) ? mmss(c.dur) : '', c.synced ? (c.durOk ? '⏱ s časy' : 's časy (délka nesedí, převezmu bez nich)') : 'bez časů',
+      const bits = c.link ? [host(c.url), `${c.n} veršů`, c.data.altText ? 's překladem' : ''].filter(Boolean) : [c.artist, c.dur && (c.dd == null || c.durOk) ? mmss(c.dur) : '', c.synced ? (c.durOk ? '⏱ s časy' : 's časy (délka nesedí, převezmu bez nich)') : 'bez časů',
         c.dd == null ? '' : c.durOk ? '✓ délka sedí' : `délka ${mmss(c.dur)} × nahrávka ${mmss(r.dur)}`].filter(Boolean);
       body = el('div', {},
-        el('div', { class: 'bulk-cand' + (isSure(c) ? ' sure' : '') }, el('div', { text: `${isSure(c) ? '✓ ' : '? '}${c.title}` }), el('div', { class: 'hint', text: bits.join(' · ') }),
+        el('div', { class: 'bulk-cand' + (good(c) ? ' sure' : '') }, el('div', { text: `${c.link ? '🔗 ' : isSure(c) ? '✓ ' : '? '}${c.title}` }), el('div', { class: 'hint', text: bits.join(' · ') }),
           c.preview ? el('div', { class: 'r-preview', text: c.preview }) : null),
         el('div', { class: 'row' },
           el('button', { type: 'button', class: 'btn small primary', text: 'Převzít', onclick: () => takeOne(s, c) }),
           el('button', { type: 'button', class: 'btn small', text: 'Náhled', onclick: async () => {
             try {
               const d = await lyricsFrom(c);
-              showPreview({ ...d, title: c.title, artist: c.artist }, [], async dd => { try { await applyLyrics(s.id, dd, true); r.state = 'taken'; draw(); sumUp(); } catch (e) { toast(e.message); } });
+              showPreview({ ...d, title: c.link ? s.title : c.title, artist: c.link ? s.artist : c.artist }, [], async dd => { try { await applyLyrics(s.id, dd, true); r.state = 'taken'; draw(); sumUp(); } catch (e) { toast(e.message); } });
             } catch (e) { toast(`Nepodařilo se načíst: ${e.message}`); }
           } }),
           r.cands.length > 1 ? el('button', { type: 'button', class: 'btn small', text: `Jiný (${r.i + 1}/${r.cands.length})`, onclick: () => { r.i = (r.i + 1) % r.cands.length; draw(); } }) : null,
@@ -344,11 +395,11 @@ export async function renderFindLyrics(root, nav) {
   function sumUp() {
     const vals = [...st.values()];
     const found = vals.filter(r => r.state === 'done' && r.cands.length).length;
-    const sure = todo.filter(s => { const r = st.get(s.id); return r.state === 'done' && isSure(r.cands[0]); });
+    const sure = todo.filter(s => { const r = st.get(s.id); return r.state === 'done' && good(r.cands[0]); });
     const taken = vals.filter(r => r.state === 'taken').length;
-    if (!running && vals.some(r => r.state !== 'wait')) info.textContent = `Nalezeno ${found}, jistých ${sure.length}, uloženo ${taken} z ${todo.length}.`;
+    if (!running && vals.some(r => r.state !== 'wait')) info.textContent = `Nalezeno ${found}, doporučených ${sure.length}, uloženo ${taken} z ${todo.length}.`;
     takeAllBtn.hidden = running || !sure.length;
-    takeAllBtn.textContent = `✓ Převzít všechny jisté (${sure.length})`;
+    takeAllBtn.textContent = `✓ Převzít všechny doporučené (${sure.length})`;
   }
 
   async function takeOne(s, c) {
@@ -360,12 +411,44 @@ export async function renderFindLyrics(root, nav) {
   }
 
   async function takeAllSure() {
-    const sure = todo.filter(s => { const r = st.get(s.id); return r.state === 'done' && isSure(r.cands[0]); });
-    if (!confirm(`Převzít ${plural(sure.length, 'text', 'texty', 'textů')} s jistou shodou? Každý pak můžeš v písni upravit.`)) return;
+    const sure = todo.filter(s => { const r = st.get(s.id); return r.state === 'done' && good(r.cands[0]); });
+    if (!confirm(`Převzít ${plural(sure.length, 'text', 'texty', 'textů')} (jisté shody z LRCLIB a texty z odkazů)? Každý pak můžeš v písni upravit.`)) return;
     takeAllBtn.disabled = true;
     for (const s of sure) { info.textContent = `Ukládám ${s.title}…`; await takeOne(s, st.get(s.id).cands[0]); }
     takeAllBtn.disabled = false;
     sumUp();
+  }
+
+  // Načte texty ze stránek v souboru odkazů (stahování přes net.js: APK přímo, na počítači přes prostředníka).
+  async function fromLinks(r) {
+    const out = [], errs = [];
+    for (const url of r.links) {
+      try {
+        const d = await loadFromUrl(url);
+        const text = cleanText(d.text || '');
+        const n = parseLyrics(text).length;
+        if (n < 2) throw new Error('na stránce není text písně');
+        out.push({ link: true, url, title: d.title || host(url), data: { ...d, text }, n, preview: text.split('\n').filter(Boolean).slice(0, 2).join(' / ') });
+      } catch (e) { errs.push(e.kind === 'proxy' ? 'na počítači je potřeba prostředník (Nastavení → Hledání textů)' : e.message || String(e)); }
+    }
+    r.linkErr = out.length ? null : errs[0] || null;
+    return out;
+  }
+
+  async function loadLinks() {
+    const file = await pickFile('.json,.txt,.csv,.tsv,text/plain,application/json');
+    if (!file) return;
+    let links;
+    try { links = parseLinkFile(await file.text()); } catch (e) { toast(e.message); return; }
+    if (!links.length) { toast('V souboru jsem nenašel žádné odkazy.'); return; }
+    const { map, unmatched } = matchLinks(links, todo);
+    for (const [id, urls] of map) { const r = st.get(id); if (r.state !== 'taken') Object.assign(r, { links: urls, state: 'wait', cands: [], i: 0, linkErr: null }); }
+    fill(linkInfo, el('div', { text: `Odkazy: ${map.size} ${map.size === 1 ? 'píseň' : map.size < 5 ? 'písně' : 'písní'} spárováno${unmatched.length ? `, ${unmatched.length} bez shody` : ''}. Spusť hledání.` }),
+      unmatched.length ? el('div', { class: 'hint', text: `Bez shody (název nesedí nebo píseň už text má): ${unmatched.slice(0, 12).map(l => [l.artist, l.title].filter(Boolean).join(' - ')).join('; ')}${unmatched.length > 12 ? '…' : ''}` }) : null);
+    // písně s odkazy nahoru
+    todo.sort((a, b) => (st.get(b.id).links ? 1 : 0) - (st.get(a.id).links ? 1 : 0));
+    startBtn.textContent = '🔍 Hledat texty';
+    draw();
   }
 
   async function run() {
@@ -373,19 +456,22 @@ export async function renderFindLyrics(root, nav) {
     running = true; stop = false;
     startBtn.textContent = '■ Zastavit';
     takeAllBtn.hidden = true;
-    const queue = todo.filter(s => ['wait', 'error'].includes(st.get(s.id).state));
+    const queue = todo.filter(s => { const r = st.get(s.id); return ['wait', 'error'].includes(r.state) || (r.state === 'done' && !r.cands.length); });
     for (let i = 0; i < queue.length && !stop; i++) {
       const s = queue[i], r = st.get(s.id);
       info.textContent = `Hledám ${i + 1}/${queue.length}: ${s.title}`;
       r.state = 'busy'; draw();
       try {
-        const v = primaryVersion(s);
-        if (r.dur === undefined) {
-          const blob = v.audio ? await getAudioBlob(v.audio.key) : null;
-          r.dur = blob ? await audioDuration(blob) : null;
+        r.cands = r.links ? await fromLinks(r) : [];
+        if (!r.cands.length) { // bez odkazů, nebo z žádného nešel načíst text → LRCLIB
+          const v = primaryVersion(s);
+          if (r.dur === undefined) {
+            const blob = v.audio ? await getAudioBlob(v.audio.key) : null;
+            r.dur = blob ? await audioDuration(blob) : null;
+          }
+          const res = await lrclib.search({ title: s.title, artist: s.artist });
+          r.cands = rankLyrics(res, s, r.dur).slice(0, 5);
         }
-        const res = await lrclib.search({ title: s.title, artist: s.artist });
-        r.cands = rankLyrics(res, s, r.dur).slice(0, 5);
         r.i = 0;
         r.state = 'done';
       } catch (e) { r.state = 'error'; r.error = e.message || String(e); }
@@ -404,7 +490,10 @@ export async function renderFindLyrics(root, nav) {
         ? el('p', { text: `${plural(todo.length, 'píseň nemá', 'písně nemají', 'písní nemá')} text. Hledám v LRCLIB podle názvu, interpreta a délky nahrávky; ✓ = jistá shoda. Nic se neuloží, dokud to nepotvrdíš. Co tu nenajdu, zkus „Hledat jinde“ (ostatní zdroje).` })
         : el('p', { text: 'Všechny písně už mají text.' }),
       todo.length ? el('div', { class: 'row' }, startBtn, takeAllBtn) : null,
-      info),
+      info,
+      todo.length ? el('p', { style: { marginTop: '12px' }, text: 'Máš seznam odkazů na stránky s texty (třeba od Clauda)? Načti ho a texty se vezmou z nich; co z odkazu nepůjde, hledá se dál v LRCLIB.' }) : null,
+      todo.length ? el('div', { class: 'row' }, linksBtn) : null,
+      linkInfo),
     list));
   draw();
   return () => { stop = true; };

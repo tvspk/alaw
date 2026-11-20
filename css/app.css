@@ -492,3 +492,5 @@ mark.gap { font-family: var(--sans); font-weight: 700; padding: 0 4px; }
 .bulk-row .ok { color: var(--accent); font-weight: 600; }
 .bulk-foot { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: var(--surface); border-top: 1px solid var(--line); padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); display: grid; gap: 6px; max-width: 760px; margin: 0 auto; }
 .bulk-sum { font-size: .92rem; }
+.search-else { display: grid; gap: 8px; margin: 4px 0 14px; }
+.search-else .btn { text-decoration: none; }

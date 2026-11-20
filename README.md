@@ -34,6 +34,9 @@ Alaw (velšsky „melodie“): texty písní (hlavně velšských) a jejich uče
 - **Najít texty** (proužek v knihovně „N písní nemá text“): hledání v LRCLIB podle názvu, interpreta a délky nahrávky,
   ✓ jistá shoda (název sedí a délka ±3 s), převzetí po jedné nebo všech jistých; časy jen když délka sedí. Co nenajde,
   „Hledat jinde“ ve všech zdrojích. U písně bez textu tlačítko „Najít text“.
+  Načtení **souboru s odkazy** na stránky s texty (třeba od Clauda): texty se stáhnou z odkazů, nefunkční odkaz → LRCLIB.
+- **Hledat na Googlu** (v okně hledání): otevře Google s dotazem; stránku pak sdílíš do Alaw (Android) nebo vložíš odkaz
+  („🔗 Vložit odkaz“). Sdílená stránka se nabídne k písni, ke které se text hledal (3 hodiny).
 - Záloha do JSON (volitelně se zvukem, vždy s pokrokem učení) a import, včetně JSON z projektu „Lyrics Trainer“.
 - **Hledání textů** najednou v LRCLIB (i s časy), Welsh Lyrics wiki (welshlyrics.fandom.com, často s anglickým překladem a videem),
   LyricsTranslate, Wicidestun (velšská Wikisource), Bandcamp, We Learn Welsh, Genius a AZLyrics. Náhled, převzetí do písně,

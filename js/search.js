@@ -3,16 +3,34 @@ import { el, iconBtn, sheet, toast } from './ui.js';
 import { SOURCES, searchAll, loadFromUrl, cleanText } from './sources.js';
 import { parseLyrics, borrowTimes, looksLikeLrc, formatMs } from './model.js';
 import { isAndroid } from './net.js';
+import { setPrefs } from './store.js';
 
 // Výsledek předaný formuláři: { text, title, artist, youtubeId, source, sourceUrl, altText }
 
-export function openSearch(initial, onPick) {
+// Dotaz pro Google: u velštiny i „geiriau“ (velšsky „slova, text písně“).
+export function googleUrl(q) {
+  const words = [q.title ? `"${q.title}"` : '', q.artist || '', q.language === 'cy' || !q.language ? 'geiriau lyrics' : 'lyrics'].filter(Boolean).join(' ');
+  return `https://www.google.com/search?q=${encodeURIComponent(words)}`;
+}
+
+// opts.songId = píseň, ke které text hledáme: když se pak stránka sdílí z prohlížeče do Alaw, nabídne se text k ní.
+export function openSearch(initial, onPick, opts = {}) {
   const state = {};          // id zdroje → { status, results, error, kind }
   const q = { title: initial.title || '', artist: initial.artist || '' };
 
   const titleIn = el('input', { value: q.title, placeholder: 'Název písně', autocomplete: 'off', enterkeyhint: 'search' });
   const artistIn = el('input', { value: q.artist, placeholder: 'Interpret (nepovinné)', autocomplete: 'off', enterkeyhint: 'search' });
   const list = el('div', { class: 'results' });
+  const google = el('a', { class: 'btn', href: googleUrl(initial), target: '_blank', rel: 'noopener', text: '🌐 Hledat na Googlu', onclick: () => {
+    google.href = googleUrl({ ...initial, title: titleIn.value.trim() || initial.title, artist: artistIn.value.trim() });
+    if (opts.songId) setPrefs({ shareTarget: { id: opts.songId, title: initial.title || titleIn.value.trim(), t: Date.now() } });
+  } });
+  const elsewhere = el('div', { class: 'search-else' },
+    el('div', { class: 'hint', text: isAndroid()
+      ? 'Nenašel ses? Hledej na Googlu a stránku s textem pak v prohlížeči sdílej do Alaw (Sdílet → Alaw).'
+      : 'Nenašel ses? Hledej na Googlu, zkopíruj adresu stránky s textem a vlož ji přes „Vložit odkaz“.' }),
+    el('div', { class: 'row' }, google,
+      el('button', { type: 'button', class: 'btn', text: '🔗 Vložit odkaz', onclick: () => askUrl(d => { close(); onPick(d); }) })));
   const overlay = el('div', { class: 'overlay' });
   const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
   const onKey = e => { if (e.key === 'Escape' && !document.querySelector('.sheet')) close(); };
@@ -24,7 +42,7 @@ export function openSearch(initial, onPick) {
 
   overlay.append(el('div', { class: 'view' },
     el('header', { class: 'topbar' }, iconBtn('back', 'Zpět', close), el('h1', { text: 'Najít text' })),
-    form, list));
+    form, elsewhere, list));
   document.body.append(overlay);
 
   function run() {

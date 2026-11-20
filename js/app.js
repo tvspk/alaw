@@ -1,5 +1,5 @@
 // Alaw – texty písní a jejich učení. Vstupní bod: směrování mezi obrazovkami, knihovna, nastavení.
-import { el, iconBtn, ICONS, toast, download, pickFile, fileSize } from './ui.js';
+import { el, iconBtn, ICONS, toast, download, pickFile, fileSize, sheet } from './ui.js';
 import { listSongs, getSong, putAudioBlob, getAudioBlob, getPrefs, setPrefs, getProgress } from './store.js';
 import { db, requestPersistence, storageEstimate } from './db.js';
 import { primaryVersion, isSynced, langLabel, fold, songsFromJson, looksLikeLrc } from './model.js';
@@ -14,9 +14,11 @@ import { isAndroid, request } from './net.js';
 import { aiConfig, setAiConfig, pickModel } from './ai.js';
 import { boot as syncBoot, changed as syncChanged } from './sync.js';
 import { syncSection } from './syncui.js';
-import { renderBulk, renderFindLyrics, songsWithoutText } from './bulk.js';
+import { renderBulk, renderFindLyrics, songsWithoutText, applyLyrics } from './bulk.js';
+import { importFromUrl, showPreview } from './search.js';
+import { cleanText } from './sources.js';
 
-export const APP_VERSION = '0.7.0';
+export const APP_VERSION = '0.7.1';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně
@@ -342,18 +344,44 @@ function aiSection() {
 }
 
 // Sdílení z jiné aplikace (Android: „Sdílet → Alaw“): ?share-url=…&share-text=…&share-title=…
+// Když se text k písni hledal na Googlu (search.js → prefs.shareTarget), nabídne se sdílená stránka k té písni.
+const shareTarget = () => { const t = getPrefs().shareTarget; return t && t.id && Date.now() - t.t < 3 * 3600e3 ? t : null; };
+let startShare = null;
 function takeShare() {
   const p = new URLSearchParams(location.search);
   if (!p.has('share-url') && !p.has('share-text')) return;
   const text = p.get('share-text') || '';
   const url = p.get('share-url') || (text.match(/https?:\/\/\S+/) || [])[0] || '';
+  const share = { url, text, title: p.get('share-title') || '' };
+  if (shareTarget()) { history.replaceState(null, '', location.pathname + '#/'); startShare = share; return; }
   history.replaceState(null, '', location.pathname + '#/new');
-  pendingDraft = url ? { shareUrl: url, title: '' } : { shareText: text, title: p.get('share-title') || '' };
+  pendingDraft = url ? { shareUrl: url, title: '' } : { shareText: text, title: share.title };
+}
+function offerShare(share) {
+  const t = shareTarget();
+  const asNew = () => {
+    pendingDraft = share.url ? { shareUrl: share.url } : { shareText: share.text || '', title: share.title || '' };
+    if (location.hash === '#/new') route(); else nav.go('#/new');
+  };
+  if (!t) { asNew(); return; }
+  const toSong = () => {
+    const done = async d => {
+      try { await applyLyrics(t.id, d, true); setPrefs({ shareTarget: null }); toast('Text uložen'); nav.go(`#/song/${encodeURIComponent(t.id)}`); }
+      catch (e) { toast(e.message || 'Uložení se nepovedlo.'); }
+    };
+    if (share.url) importFromUrl(share.url, done);
+    else showPreview({ text: cleanText(share.text || ''), source: 'sdílení' }, [], done);
+  };
+  sheet(close => el('div', {},
+    el('h3', { text: 'Kam s textem?' }),
+    el('div', { class: 'sub', text: share.url || 'Sdílený text' }),
+    el('div', { class: 'row end' },
+      el('button', { type: 'button', class: 'btn', text: 'Nová píseň', onclick: () => { close(); setPrefs({ shareTarget: null }); asNew(); } }),
+      el('button', { type: 'button', class: 'btn primary', text: `K písni „${t.title}“`, onclick: () => { close(); toSong(); } }))));
 }
 window.alawShare = (url, text) => { // volá APK, když aplikace už běží
   const u = url || (String(text || '').match(/https?:\/\/\S+/) || [])[0] || '';
-  pendingDraft = u ? { shareUrl: u } : { shareText: text || '' };
-  if (location.hash === '#/new') route(); else nav.go('#/new');
+  offerShare({ url: u, text: u ? '' : text || '' });
 };
 
 // ---------- Android: tlačítko Zpět, barvy lišt, uložení souboru, nová verze ----------
@@ -419,4 +447,4 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:' && !isAndroid(
 }
 requestPersistence();
 document.documentElement.style.setProperty('--lyric-size', `${getPrefs().lyricSize}rem`);
-route();
+route().then(() => { if (startShare) { offerShare(startShare); startShare = null; } });

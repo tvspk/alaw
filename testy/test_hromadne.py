@@ -30,6 +30,16 @@ def lrclib(route):
         return route.fulfill(json=[{'id': 3, 'trackName': 'Calon Lân', 'artistName': 'Rozárka', 'albumName': '', 'duration': 200, 'instrumental': False, 'plainLyrics': PLAIN, 'syncedLyrics': LRC}])
     return route.fulfill(json=[])
 
+# Vymyšlený text (ne skutečná píseň) na napodobené stránce.
+PAGE = "<html><head><title>Moliannwn – geiriau</title></head><body><nav>Menu · Hafan · Cysylltu</nav><div class='lyrics'><p>Moliannwn oll yn llon<br>Mae'r gaeaf wedi mynd<br>Mae'r gwanwyn yn dod</p><p>A'r adar yn canu<br>Yn y coed gwyrdd</p></div><footer>(c) Jana</footer></body></html>"
+
+def proxy(route):
+    from urllib.parse import urlparse, parse_qs
+    target = parse_qs(urlparse(route.request.url).query).get('url', [''])[0]
+    if 'moliannwn' in target:
+        return route.fulfill(body=PAGE, headers={'content-type': 'text/html; charset=utf-8', 'x-final-url': target, 'access-control-allow-origin': '*', 'access-control-expose-headers': 'x-final-url'})
+    return route.fulfill(status=404, body='', headers={'access-control-allow-origin': '*'})
+
 def main():
     files = [
         tone(TMP / '01 - Jana - Ar Lan y Môr.mp3', 12, {'title': 'Špatný název', 'artist': 'Špatný'}),
@@ -48,6 +58,8 @@ def main():
         page.on('pageerror', lambda e: errors.append(str(e)))
         page.on('dialog', lambda d: d.accept())
         page.route('https://lrclib.net/**', lrclib)
+        page.route('https://alaw-test.workers.dev/**', proxy)
+        page.add_init_script("if (!localStorage.getItem('alaw-prefs')) localStorage.setItem('alaw-prefs', JSON.stringify({ proxyUrl: 'https://alaw-test.workers.dev' }))")
         page.goto(url)
         page.wait_for_selector('text=Croeso!')
 
@@ -71,6 +83,17 @@ def main():
         check(r['f']['from'] == 'file' and r['f']['artist'] == 'Jana', 'název souboru s interpretem má přednost')
         check(r['g']['from'] == 'name' and r['g']['title'] == 'Suo Gân', 'bez údajů → název souboru')
         check(r['sure'] and not r['unsure'] and r['noaudio'], 'jistá shoda: délka ±3 s, bez nahrávky podle interpreta')
+        r = page.evaluate("""async () => {
+          const b = await import('./js/bulk.js');
+          const txt = b.parseLinkFile('# odkazy od Clauda\\nRozárka - Moliannwn\\thttps://a.example/moliannwn\\nSuo Gân | https://b.example/x https://c.example/y\\nbez odkazu\\n');
+          const js = b.parseLinkFile(JSON.stringify({ links: [{ artist: 'Jana', title: 'Calon Lân', url: 'https://d.example/' }, { title: 'X', url: 'ftp://nic' }] }));
+          const songs = [{ id: 1, artist: 'Rozárka', title: 'Moliannwn' }, { id: 2, artist: 'Sbor Jana', title: 'Suo Gân' }, { id: 3, artist: 'Jiná', title: 'Calon Lân' }];
+          const m = b.matchLinks([...txt, ...js, { artist: '', title: 'Neznámá', urls: ['https://e.example'] }], songs);
+          return { txt, js, map: [...m.map.entries()], un: m.unmatched.map(l => l.title) };
+        }""")
+        check(r['txt'] == [{'artist': 'Rozárka', 'title': 'Moliannwn', 'urls': ['https://a.example/moliannwn']}, {'artist': '', 'title': 'Suo Gân', 'urls': ['https://b.example/x', 'https://c.example/y']}], 'soubor odkazů (text): název, interpret, víc odkazů, poznámky')
+        check(r['js'] == [{'artist': 'Jana', 'title': 'Calon Lân', 'urls': ['https://d.example/']}], 'soubor odkazů (JSON), neplatné adresy pryč')
+        check(r['map'] == [[1, ['https://a.example/moliannwn']], [2, ['https://b.example/x', 'https://c.example/y']], [3, ['https://d.example/']]] and r['un'] == ['Neznámá'], 'párování: interpret+název, jinak jednoznačný název')
 
         print('Přidání z nahrávek')
         page.click('a[href="#/bulk"]')
@@ -102,8 +125,8 @@ def main():
         shot(page, 'h2-texty')
         check(page.locator('.bulk-cand.sure').count() == 1, 'jedna jistá shoda (Ar Lan y Môr, délka sedí)')
         check(page.locator('text=V LRCLIB nenalezeno').count() == 2, 'dvě nenalezené')
-        check(page.locator('text=✓ Převzít všechny jisté (1)').count() == 1, 'nabídka převzít jisté')
-        page.click('text=✓ Převzít všechny jisté (1)')
+        check(page.locator('text=✓ Převzít všechny doporučené (1)').count() == 1, 'nabídka převzít jisté')
+        page.click('text=✓ Převzít všechny doporučené (1)')
         wait(page, "document.body.textContent.includes('✓ Text uložen')")
         # nejistou (Calon Lân, délka nesedí) převzít ručně → bez časů
         page.locator('.bulk-row', has_text='Calon Lân').locator('text=Převzít').click()
@@ -113,9 +136,53 @@ def main():
         check(s['Ar Lan y Môr'] == '4/4', 'jistá shoda převzata i s časy')
         check(s['Calon Lân'] == '0/4', 'nesedí-li délka, text bez časů')
 
+        print('Odkazy ze souboru')
+        (TMP / 'odkazy.txt').write_text('Rozárka - Moliannwn\thttps://geiriau.example/moliannwn\nSuo Gân | https://geiriau.example/chybi\nNeznámá - Píseň | https://geiriau.example/x\n')
+        with page.expect_file_chooser() as fc:
+            page.click('text=📄 Načíst odkazy ze souboru')
+        fc.value.set_files(str(TMP / 'odkazy.txt'))
+        page.wait_for_selector('text=Odkazy: 2 písně spárováno, 1 bez shody')
+        check(True, 'odkazy spárovány se dvěma písněmi bez textu, jeden bez shody')
+        page.click('text=🔍 Hledat texty')
+        wait(page, "document.body.textContent.includes('Hledat znovu nenalezené')", 20000)
+        shot(page, 'h3-odkazy')
+        row = page.locator('.bulk-row', has_text='Moliannwn')
+        check(row.locator('text=🔗').count() == 1 and row.locator('text=5 veršů').count() == 1, 'text načtený z odkazu (5 veršů, bez menu a patičky)')
+        check(page.locator('.bulk-row', has_text='Suo Gân').locator('text=/Z odkazu nic.*v LRCLIB nenalezeno/').count() == 1, 'nefunkční odkaz → hledá se dál v LRCLIB')
+        page.click('text=✓ Převzít všechny doporučené (1)')
+        wait(page, "document.querySelectorAll('.ok').length === 3")
+        s = page.evaluate("async () => { const s = (await (await import('./js/store.js')).listSongs()).find(s => s.title === 'Moliannwn'); return [s.versions[0].lines.map(l => l.text), s.versions[0].sourceUrl]; }")
+        check(s[0][0] == 'Moliannwn oll yn llon' and len(s[0]) == 5 and s[1] == 'https://geiriau.example/moliannwn', 'text z odkazu uložen i se zdrojem')
+
+        print('Hledání: Google a vložení odkazu')
+        page.locator('.bulk-row', has_text='Suo Gân').locator('text=🔍 Hledat jinde').click()
+        page.wait_for_selector('text=🌐 Hledat na Googlu')
+        href = page.get_attribute('a:has-text("Hledat na Googlu")', 'href')
+        check(href.startswith('https://www.google.com/search?q=') and 'geiriau' in href and 'Suo' in href, 'odkaz na Google s názvem a „geiriau“')
+        page.evaluate("document.querySelector('a[href^=\"https://www.google.com\"]').addEventListener('click', e => e.preventDefault())")
+        page.click('text=🌐 Hledat na Googlu')
+        t = page.evaluate("JSON.parse(localStorage.getItem('alaw-prefs')).shareTarget")
+        check(t and t['title'] == 'Suo Gân', 'zapamatováno, ke které písni se text hledá')
+        page.click('text=🔗 Vložit odkaz')
+        page.fill('input[type=url]', 'https://geiriau.example/moliannwn')
+        page.click('.sheet button[type=submit]')
+        page.click('text=Použít tento text')
+        wait(page, "document.querySelectorAll('.ok').length === 4")
+        check(True, 'vložený odkaz uložen k písni')
+
+        print('Sdílení z prohlížeče k hledané písni')
+        page.evaluate("async () => { const st = await import('./js/store.js'); const s = (await st.listSongs()).find(s => s.title === 'Suo Gân'); s.versions[0].lines = []; await st.saveSong(s); st.setPrefs({ shareTarget: { id: s.id, title: s.title, t: Date.now() } }); }")
+        page.goto(url + '?share-url=' + 'https%3A%2F%2Fgeiriau.example%2Fmoliannwn')
+        page.wait_for_selector('text=Kam s textem?')
+        page.click('text=K písni „Suo Gân“')
+        page.click('text=Použít tento text')
+        page.wait_for_selector('text=Moliannwn oll yn llon')
+        check('#/song/' in page.url, 'sdílená stránka uložena k písni, otevřela se píseň')
+        page.evaluate("async () => { const st = await import('./js/store.js'); const s = (await st.listSongs()).find(s => s.title === 'Suo Gân'); s.versions[0].lines = []; await st.saveSong(s); }")
+
         print('Knihovna a prázdná píseň')
         page.goto(url + '#/')
-        page.wait_for_selector('text=2 písně nemají text – najít texty')
+        page.wait_for_selector('text=1 píseň nemá text – najít texty')
         check(True, 'proužek „písně nemají text“')
         page.click('text=Suo Gân')
         page.wait_for_selector('text=Píseň zatím nemá text.')
@@ -129,7 +196,7 @@ def main():
         page.wait_for_selector('text=Nová píseň')
         check(page.locator('text=Přidej písně z nahrávek najednou').count() == 1, 've formuláři nové písně odkaz')
         browser.close()
-    real = [e for e in errors if 'favicon' not in e]
+    real = [e for e in errors if 'favicon' not in e and '404 (Not Found)' not in e]  # 404 = schválně nefunkční odkaz
     check(not real, f'bez chyb v konzoli {real}')
     print('HOTOVO')
 
