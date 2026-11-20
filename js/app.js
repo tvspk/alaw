@@ -17,8 +17,9 @@ import { syncSection } from './syncui.js';
 import { renderBulk, renderFindLyrics, songsWithoutText, applyLyrics } from './bulk.js';
 import { importFromUrl, showPreview } from './search.js';
 import { cleanText } from './sources.js';
+import { groqKey, setGroqKey, checkGroq, availableEngines, defaultEngine, ENGINES } from './stt.js';
 
-export const APP_VERSION = '0.8.0';
+export const APP_VERSION = '0.9.0';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně
@@ -320,6 +321,7 @@ async function renderSettings(root) {
       el('div', { class: 'row' }, el('button', { type: 'button', class: 'btn', text: '♪ Přidat písně z nahrávek', onclick: () => nav.go('#/bulk') }))),
     searchSection(),
     aiSection(),
+    sttSection(),
     syncEl,
     el('section', { class: 'section' },
       el('h2', { text: 'Úložiště' }),
@@ -392,6 +394,38 @@ function aiSection() {
         catch (e) { status.textContent = e.message; }
       } }),
       cfg.key ? el('button', { type: 'button', class: 'btn small danger', text: 'Smazat klíč', onclick: () => { setAiConfig(null); input.value = ''; status.textContent = 'Klíč smazán.'; } }) : null),
+    status);
+}
+
+function sttSection() {
+  const input = el('input', { type: 'password', value: groqKey(), placeholder: 'gsk_…', autocomplete: 'off', spellcheck: false });
+  const status = el('div', { class: 'ai-status' });
+  const choice = el('div', {});
+  function drawChoice() {
+    const av = availableEngines();
+    if (av.length < 2) { fill(choice, el('p', { class: 'hint', text: av.length ? `Přepisuje: ${ENGINES[av[0]].label}.` : 'Zatím není nastavená žádná služba: vlož klíč Groq níže, nebo klíč Gemini výše.' })); return; }
+    const sel = el('select', { onchange: () => setPrefs({ stt: sel.value }) }, av.map(k => el('option', { value: k, text: ENGINES[k].label })));
+    sel.value = defaultEngine();
+    fill(choice, el('label', { class: 'field' }, el('span', { text: 'Předvybraná služba (při přepisu se stejně zeptám)' }), sel));
+  }
+  drawChoice();
+  return el('section', { class: 'section' },
+    el('h2', { text: 'Přepis z nahrávky' }),
+    el('p', {}, 'Text písně přepíše z vlastní nahrávky Gemini (klíč výše) nebo Whisper přes Groq – zdarma, bez platební karty. Klíč Groq získáš na ',
+      el('a', { href: 'https://console.groq.com/keys', target: '_blank', rel: 'noopener', text: 'console.groq.com' }),
+      '. Uloží se jen v tomto zařízení. Přepis zpěvu nebývá přesný – obě služby můžeš porovnat.'),
+    choice,
+    el('label', { class: 'field' }, el('span', { text: 'Klíč Groq' }), input),
+    el('div', { class: 'row', style: { marginTop: '8px' } },
+      el('button', { type: 'button', class: 'btn small', text: 'Uložit a ověřit', onclick: async () => {
+        const key = input.value.replace(/\s+/g, '');
+        if (!key) { setGroqKey(''); status.textContent = 'Klíč smazán.'; drawChoice(); return; }
+        status.textContent = 'Ověřuji…';
+        try { await checkGroq(key); setGroqKey(key); status.textContent = '✓ Funguje.'; }
+        catch (e) { status.textContent = e.message; }
+        drawChoice();
+      } }),
+      groqKey() ? el('button', { type: 'button', class: 'btn small danger', text: 'Smazat klíč', onclick: () => { setGroqKey(''); input.value = ''; status.textContent = 'Klíč smazán.'; drawChoice(); } }) : null),
     status);
 }
 

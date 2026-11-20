@@ -5,7 +5,7 @@
 import { el, fill, iconBtn, toast, fileSize, pickFiles, pickFile, sheet } from './ui.js';
 import { listSongs, getSong, saveSong, putAudioBlob, getAudioBlob } from './store.js';
 import { LANGUAGES, newSong, newLine, newVersion, primaryVersion, parseLyrics, parseTags, fold, uid, attachAlt, isSynced, borrowTimes } from './model.js';
-import { transcribeAudio, hasAi } from './ai.js';
+import { ENGINES, availableEngines, defaultEngine, engineName } from './stt.js';
 import { MAX_VERSIONS, prune } from './versions.js';
 import { SOURCES, similarity, loadFromUrl, cleanText } from './sources.js';
 import { openSearch, showPreview } from './search.js';
@@ -366,7 +366,7 @@ export async function renderFindLyrics(root, nav) {
     const other = el('button', { type: 'button', class: 'btn small', text: '🔍 Hledat jinde', onclick: () => openSearch({ title: s.title, artist: s.artist, language: s.language }, async d => {
       try { await applyLyrics(s.id, d, true); r.state = 'taken'; toast('Text uložen'); draw(); sumUp(); } catch (e) { toast(e.message); }
     }, { songId: s.id }) });
-    const trBtn = hasAi() && transcribable(s) ? el('button', { type: 'button', class: 'btn small', text: '🎧 Přepsat z nahrávky', onclick: () => { if (!running) transcribeOne(s).catch(() => {}); } }) : null;
+    const trBtn = availableEngines().length && transcribable(s) ? el('button', { type: 'button', class: 'btn small', text: '🎧 Přepsat z nahrávky', onclick: async () => { if (running) return; const e = await pickEngine(); if (e) transcribeOne(s, e).catch(() => {}); } }) : null;
     let body;
     if (r.state === 'tr') body = el('div', { class: 'hint tr-msg', text: r.msg || 'Přepisuji z nahrávky…' });
     else if (r.state === 'wait') body = el('div', { class: 'hint', text: r.links ? `Čeká: ${r.links.length === 1 ? 'odkaz' : `${r.links.length} odkazy`} (${r.links.map(host).join(', ')})` : 'Čeká na hledání' });
@@ -399,11 +399,11 @@ export async function renderFindLyrics(root, nav) {
 
   // ---------- přepis z nahrávky (Gemini) ----------
   const notFound = () => todo.filter(s => { const r = st.get(s.id); return transcribable(s) && (r.state === 'error' || (r.state === 'done' && !r.cands.length)); });
-  async function transcribeOne(s) {
+  async function transcribeOne(s, engine) {
     const r = st.get(s.id);
     r.state = 'tr'; r.msg = 'Přepisuji z nahrávky…'; draw();
     try {
-      await transcribeToSong(s.id, m => { r.msg = m; const n = list.querySelector(`[data-id="${CSS.escape(s.id)}"] .tr-msg`); if (n) n.textContent = m; });
+      await transcribeToSong(s.id, m => { r.msg = m; const n = list.querySelector(`[data-id="${CSS.escape(s.id)}"] .tr-msg`); if (n) n.textContent = m; }, engine);
       r.state = 'taken'; r.transcribed = true;
     } catch (e) { r.state = 'error'; r.error = e.message || String(e); draw(); sumUp(); throw e; }
     draw(); sumUp();
@@ -411,13 +411,24 @@ export async function renderFindLyrics(root, nav) {
   async function transcribeAll() {
     const list0 = notFound();
     if (!list0.length) return;
-    if (!confirm(`Přepsat ${plural(list0.length, 'píseň', 'písně', 'písní')} z nahrávek pomocí Gemini? Nahrávky se pošlou do Googlu. Přepis zpěvu nebývá přesný, texty pak zkontroluj poslechem.`)) return;
+    const engine = await pickEngine();
+    if (!engine) return;
+    if (!confirm(`Přepsat ${plural(list0.length, 'píseň', 'písně', 'písní')} z nahrávek (${ENGINES[engine].label})? Nahrávky se pošlou ${engine === 'groq' ? 'do Groq' : 'do Googlu'}. Přepis zpěvu nebývá přesný, texty pak zkontroluj poslechem.`)) return;
     running = true; stop = false;
     startBtn.textContent = '■ Zastavit'; trAllBtn.hidden = true; takeAllBtn.hidden = true;
+    let waits = 0;
     for (let i = 0; i < list0.length && !stop; i++) {
       info.textContent = `Přepisuji ${i + 1}/${list0.length}: ${list0[i].title}`;
-      try { await transcribeOne(list0[i]); }
-      catch (e) { if (/denní limit|nemá přístup|není platný|klíč/i.test(e.message || '')) { toast(`${e.message} Přepis zastaven.`, 6000); break; } }
+      try { await transcribeOne(list0[i], engine); waits = 0; }
+      catch (e) {
+        if (e.limit && engine === 'groq' && waits < 3) { // Groq: limit za minutu/hodinu – chvíli počkat a zkusit znovu
+          waits++;
+          info.textContent = 'Groq hlásí limit, čekám minutu…';
+          await new Promise(res => setTimeout(res, window.__alawLimitWait ?? 60000));
+          if (!stop) { i--; continue; }
+        }
+        if (e.limit || /denní limit|nemá přístup|není platný|klíč/i.test(e.message || '')) { toast(`${e.message} Přepis zastaven.`, 6000); break; }
+      }
     }
     running = false;
     startBtn.textContent = '🔍 Hledat znovu nenalezené';
@@ -432,7 +443,7 @@ export async function renderFindLyrics(root, nav) {
     if (!running && vals.some(r => r.state !== 'wait')) info.textContent = `Nalezeno ${found}, doporučených ${sure.length}, uloženo ${taken} z ${todo.length}.`;
     takeAllBtn.hidden = running || !sure.length;
     const nf = notFound().length;
-    trAllBtn.hidden = running || !nf || !hasAi();
+    trAllBtn.hidden = running || !nf || !availableEngines().length;
     trAllBtn.textContent = `🎧 Přepsat nenalezené z nahrávek (${nf})`;
     takeAllBtn.textContent = `✓ Převzít všechny doporučené (${sure.length})`;
   }
@@ -540,7 +551,8 @@ export const transcribable = song => song.versions.some(v => v.audio);
 
 // Přepíše text z nahrávky písně. Bez textu → hlavní verze; s textem → další verze k porovnání (rozhodnutí zadavatele),
 // a když hlavní verze nemá časy, převezme je z přepisu u shodných veršů. Vrací { song, as: 'main'|'version', version }.
-export async function transcribeToSong(songId, onWait = () => {}) {
+export async function transcribeToSong(songId, onWait = () => {}, engine = defaultEngine()) {
+  if (!engine || !ENGINES[engine]) throw new Error('Nejdřív vlož klíč pro Gemini nebo Groq v Nastavení.');
   let song = await getSong(songId);
   if (!song) throw new Error('Píseň nenalezena.');
   const src = [primaryVersion(song), ...song.versions].find(v => v.audio);
@@ -549,8 +561,9 @@ export async function transcribeToSong(songId, onWait = () => {}) {
   if (main.lines.length && song.versions.length >= MAX_VERSIONS) throw new Error(`Píseň už má ${MAX_VERSIONS} verze textu. Nejdřív některou smaž.`);
   const blob = await getAudioBlob(src.audio.key);
   if (!blob) throw new Error('Nahrávka v tomto zařízení není (ještě se nestáhla synchronizací?).');
-  const res = await transcribeAudio(blob, { title: song.title, artist: song.artist, language: song.language, name: src.audio.name }, onWait);
-  if (!res.length) throw new Error('Gemini v nahrávce žádný zpěv nerozpoznal.');
+  const res = await ENGINES[engine].run(blob, { title: song.title, artist: song.artist, language: song.language, name: src.audio.name }, onWait);
+  if (!res.length) throw new Error(`${engineName(engine)} v nahrávce žádný zpěv nerozpoznal.`);
+  const base = `Přepis (${engineName(engine)})`;
   // časy platí pro nahrávku, ze které se přepisovalo: u druhé verze bez vlastní nahrávky jen když je to nahrávka hlavní verze
   const timed = src === main || !main.lines.length;
   const lines = res.map(l => newLine(l.text, timed ? l.start : null, l.stanza));
@@ -560,13 +573,13 @@ export async function transcribeToSong(songId, onWait = () => {}) {
   if (!m.lines.length) {
     m.lines = lines;
     m.source = 'přepis';
-    m.label = 'Přepis z nahrávky';
+    m.label = base;
     as = 'main'; version = m;
   } else {
     if (song.versions.length >= MAX_VERSIONS) throw new Error(`Píseň už má ${MAX_VERSIONS} verze textu.`);
     const labels = new Set(song.versions.map(v => v.label));
-    let label = 'Přepis z nahrávky';
-    for (let n = 2; labels.has(label); n++) label = `Přepis z nahrávky (${n})`;
+    let label = base;
+    for (let n = 2; labels.has(label); n++) label = `${base} ${n}`;
     version = newVersion(lines, { label, source: 'přepis' });
     song.versions.push(version);
     if (!isSynced(m) && timed) { const b = borrowTimes(m.lines, lines); if (b.matched) m.lines = b.lines; }
@@ -578,13 +591,31 @@ export async function transcribeToSong(songId, onWait = () => {}) {
 }
 
 // Přepis jedné písně s okénkem průběhu; pak otevře píseň (hlavní verze) nebo porovnání (další verze).
-export async function runTranscribe(songId, nav) {
-  if (!hasAi()) { toast('Přepis dělá Gemini: nejdřív vlož klíč v Nastavení → Překlady pomocí AI.', 4500); return null; }
+// Kterou službou přepisovat: jediná dostupná rovnou, dvě → zeptat se (null = zrušeno / žádná).
+export function pickEngine() {
+  const av = availableEngines();
+  if (!av.length) { toast('Přepis dělá Gemini nebo Whisper (Groq): nejdřív vlož klíč v Nastavení → Přepis z nahrávky.', 5000); return Promise.resolve(null); }
+  if (av.length === 1) return Promise.resolve(av[0]);
+  return new Promise(resolve => {
+    let picked = null;
+    sheet(c => el('div', {},
+      el('h3', { text: 'Čím přepsat?' }),
+      el('div', { class: 'sub', text: 'Pro porovnání můžeš píseň přepsat oběma – rozdíly ukážou nejistá místa.' }),
+      el('div', { class: 'row end' }, av.map(k => el('button', { type: 'button', class: 'btn' + (k === defaultEngine() ? ' primary' : ''), text: ENGINES[k].label,
+        onclick: () => { picked = k; c(); resolve(k); } })))));
+    const obs = new MutationObserver(() => { if (!document.body.contains(document.querySelector('.sheet'))) { obs.disconnect(); if (!picked) resolve(null); } });
+    obs.observe(document.body, { childList: true });
+  });
+}
+
+export async function runTranscribe(songId, nav, engine) {
+  engine = engine || await pickEngine();
+  if (!engine) return null;
   const status = el('div', { class: 'sub', text: 'Připravuji nahrávku…' });
-  const close = sheet(() => el('div', {}, el('h3', { text: '🎧 Přepis z nahrávky' }), status,
+  const close = sheet(() => el('div', {}, el('h3', { text: `🎧 Přepis z nahrávky – ${ENGINES[engine].label}` }), status,
     el('div', { class: 'hint', text: 'Může to trvat i pár minut, nech aplikaci otevřenou. Přepis zpěvu nebývá přesný – zkontroluj ho poslechem.' })));
   try {
-    const r = await transcribeToSong(songId, m => { status.textContent = m; });
+    const r = await transcribeToSong(songId, m => { status.textContent = m; }, engine);
     close();
     const id = encodeURIComponent(songId);
     if (r.as === 'main') { toast('Text přepsán. Zkontroluj ho poslechem.', 4000); nav.replace(`#/song/${id}`); }

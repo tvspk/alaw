@@ -2,7 +2,7 @@
 
 Alaw (velšsky „melodie“): texty písní (hlavně velšských) a jejich učení nazpaměť. Webová aplikace (PWA) pro Android i počítač, funguje offline.
 
-## Co umí (verze 0.8)
+## Co umí (verze 0.9)
 
 - Knihovna písní s hledáním (i v textu, bez ohledu na stříšky), štítky a filtrem jazyka.
 - Přidání písně: prostý text nebo LRC s časy, sloky oddělené prázdným řádkem, načtení ze souboru.
@@ -37,9 +37,10 @@ Alaw (velšsky „melodie“): texty písní (hlavně velšských) a jejich uče
   Načtení **souboru s odkazy** na stránky s texty (třeba od Clauda): texty se stáhnou z odkazů, nefunkční odkaz → LRCLIB.
 - **Hledat na Googlu** (v okně hledání): otevře Google s dotazem; stránku pak sdílíš do Alaw (Android) nebo vložíš odkaz
   („🔗 Vložit odkaz“). Sdílená stránka se nabídne k písni, ke které se text hledal (3 hodiny).
-- **Přepis textu z nahrávky** (Gemini, vlastní klíč): u písně bez textu, v nabídce písně a hromadně v Najít texty
+- **Přepis textu z nahrávky** (Gemini nebo Whisper přes Groq – zdarma bez karty; klíče v Nastavení → Přepis z nahrávky): u písně bez textu, v nabídce písně a hromadně v Najít texty
   („Přepsat nenalezené z nahrávek“). Verše i s časy začátků; bez textu = hlavní verze, s textem = další verze k porovnání
-  (a nenačasovaný text si z přepisu převezme časy u shodných veršů). Soubory nad 14 MB jdou přes Files API a po přepisu se smažou.
+  (a nenačasovaný text si z přepisu převezme časy u shodných veršů). Velké nahrávky se pro přepis posílají jako zmenšená kopie
+  (mono 16 kHz; uložená nahrávka se nemění). Přepis oběma službami = dvě verze, rozdíly ukážou nejistá místa.
 - **Výměna hlavní verze** (Porovnat verze → nabídka → Udělat hlavní verzí): pokrok veršů se převede na nové znění,
   nahrávka přejde na novou hlavní verzi, když vlastní nemá.
 - **Hromadné mazání** v knihovně (☑ → označit písně → Smazat), i s nahrávkami a pokrokem; přenese se do ostatních zařízení.

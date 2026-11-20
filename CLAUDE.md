@@ -33,5 +33,6 @@
   časy z LRCLIB jen při shodné délce nahrávky. Test: `python3 -u testy/test_hromadne.py`.
 - Přepis z nahrávky (`ai.transcribeAudio`, `bulk.transcribeToSong`): píseň s textem → přepis jako další verze, nikdy nepřepsat
   hlavní text. Claude sám texty písní nepřepisuje ani nevypisuje (dělá to aplikace u zadavatele). Test: `python3 -u testy/test_prepis.py`.
+- Přepis: služby v `js/stt.js` (Gemini, Groq); klíče jen v zařízení (`alaw-ai`, `alaw-groq`), nikdy v repozitáři ani záloze.
 - Nahrávky ukládat před písní je v pořádku jen přes `putAudioBlob` (chrání `db.freshAudio` před úklidem synchronizace).
 - **Stav projektu, rozhodnutí a další kroky: `HANDOFF.md`** (přečti jako první).

@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 20. 11. 2026, verze **0.8.0** (APK versionCode 12). Odpovídej zadavateli **česky**.
+> Stav k 20. 11. 2026, verze **0.9.0** (APK versionCode 13). Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -122,7 +122,14 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
      průběžně po 200 MB (`COMMIT_EVERY`), kousky jsou hned ukotvené a druhé zařízení může stahovat; (3) záloha se zvukem nad
      300 MB nabídne zálohu bez zvuku (jinak by prohlížeč spadl); (4) sdílení do písně, která už text má, se zeptá;
      (5) test synchronizace se občas zasekl (zámek v napodobeném GitHubu) → `RLock`.
-   - Test: `python3 -u testy/test_prepis.py` (napodobené Gemini vč. Files API).
+   - Test: `python3 -u testy/test_prepis.py` (napodobené Gemini vč. Files API a Groq).
+8. **Whisper přes Groq (0.9):** zadavatel chtěl další službu k Gemini. `js/stt.js` (služby `ENGINES` gemini/groq, `pickEngine` se
+   zeptá, když jsou dvě; předvybraná `prefs.stt`), klíč `localStorage['alaw-groq']` (`gsk_…`, ve workflow kontrola klíčů).
+   `POST api.groq.com/openai/v1/audio/transcriptions` (multipart, `whisper-large-v3`, záloha `-turbo`, `verbose_json`, `language`
+   jen cy/en/br/cs, `prompt` = název). Úseky → verše (`whisperLines`: pryč ♪, `no_speech_prob`, opakování; pauza > 3,5 s = sloka).
+   Limit 25 MB → `audioprep.toSpeechWav` (mono 16 kHz WAV, jen dočasná kopie); totéž u Gemini, když je kopie menší
+   (většina WAV tak obejde Files API). Hromadně: při 429 počká minutu (max. 3×), pak stop. Popisky verzí „Přepis (Gemini)“,
+   „Přepis (Whisper)“. **CORS Groq ani Gemini Files API nešlo z prostředí Claude ověřit – ověřit u zadavatele.**
 
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
 Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna verze/mazání (0.8) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
@@ -169,4 +176,4 @@ verze `{ id, label, source, sourceUrl, youtubeId, audio:{key,name,type,size}|nul
 verš `{ id, start(ms|null), text, literal, translation, alt, contractions[{short,full,note}], note, stanza, vars?[{w,a,b,st}] }`.
 IndexedDB `alaw` (verze 2): `songs`, `audio` (Blob podle `audio.key`), `meta` (`tombs` = náhrobky pro synchronizaci),
 `progress` (pokrok `{ id:'idPísně|klíč', s, k, st, step, due, ivl, ease, reps, lapses, intro, last, t }`, viz `js/learn.js`).
-localStorage: `alaw-prefs` (zařízení, i `newPerDay`, `alwaysType`, `autoPlayLine`, `remindHidden`), `alaw-ai` (klíč Gemini), `alaw-sync` (token + 8 slov, jen zařízení).
+localStorage: `alaw-prefs` (zařízení, i `newPerDay`, `alwaysType`, `autoPlayLine`, `remindHidden`), `alaw-ai` (klíč Gemini), `alaw-groq` (klíč Groq), `alaw-sync` (token + 8 slov, jen zařízení).

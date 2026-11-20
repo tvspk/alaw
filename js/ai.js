@@ -1,3 +1,5 @@
+import { toSpeechWav } from './audioprep.js';
+
 // Gemini: český překlad veršů, doslovný překlad, hovorové zkratky, vysvětlení verše a přepis textu z nahrávky.
 // Klíč je uložený jen v tomto zařízení (localStorage 'alaw-ai'), nezálohuje se a nesynchronizuje.
 const KEY = 'alaw-ai';
@@ -192,7 +194,7 @@ export async function explainLine(song, version, line) {
 
 // ---------- přepis textu z nahrávky ----------
 
-const INLINE_MAX = 14 * 1048576; // base64 zvětší o třetinu, celý požadavek smí mít 20 MB
+const INLINE_MAX = () => window.__alawInlineMax || 14 * 1048576; // base64 zvětší o třetinu, celý požadavek smí mít 20 MB
 const AUDIO_MIME = { 'audio/mpeg': 'audio/mp3', 'audio/x-wav': 'audio/wav', 'audio/wave': 'audio/wav', 'audio/vnd.wave': 'audio/wav', 'audio/x-flac': 'audio/flac', 'audio/x-m4a': 'audio/aac', 'audio/mp4': 'audio/aac' };
 const EXT_MIME = { mp3: 'audio/mp3', wav: 'audio/wav', flac: 'audio/flac', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', m4a: 'audio/aac', aac: 'audio/aac', aiff: 'audio/aiff' };
 export function audioMime(type, name = '') {
@@ -245,9 +247,13 @@ Přepiš PŘESNĚ to, co se zpívá, v jazyce zpěvu (nejčastěji velština), s
 export async function transcribeAudio(blob, { title = '', artist = '', language = 'cy', name = '' } = {}, onWait = () => {}) {
   const { key } = aiConfig();
   if (!key) throw new AiError('Nejdřív vlož klíč pro Gemini v Nastavení.');
-  const mime = audioMime(blob.type, name);
+  let mime = audioMime(blob.type, name);
+  if (blob.size > INLINE_MAX()) { // velká nahrávka (WAV): nejdřív zkusit menší kopii (mono 16 kHz), jinak Files API
+    onWait('Připravuji menší kopii nahrávky pro přepis…');
+    try { const small = await toSpeechWav(blob); if (small.size < blob.size) { blob = small; mime = 'audio/wav'; } } catch { /* zkusí se původní soubor */ }
+  }
   let file = null, audioPart;
-  if (blob.size <= INLINE_MAX) audioPart = { inline_data: { mime_type: mime, data: await blobToB64(blob) } };
+  if (blob.size <= INLINE_MAX()) audioPart = { inline_data: { mime_type: mime, data: await blobToB64(blob) } };
   else { file = await uploadFile(key, blob, mime, name || title, onWait); audioPart = { file_data: { mime_type: file.mimeType || mime, file_uri: file.uri } }; }
   try {
     const res = await generate(TRANSCRIBE_PROMPT, [audioPart, { text: JSON.stringify({ title, artist, language }) }], S('OBJECT', {
