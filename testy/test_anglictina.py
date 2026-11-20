@@ -141,6 +141,15 @@ def screens(page, url):
                             (f'#/sync/{sid}', '.tap-btn', 'časování'), ('#/bulk', '.view', 'písně z nahrávek'), ('#/lyrics', '.view', 'najít texty'),
                             ('#/settings', '.section', 'nastavení')]:
         page.goto(url + path); page.wait_for_selector(sel); no_czech(page, name)
+    # nápověda „?“ u klíčů a přístupů (na počítači všech pět)
+    page.goto(url + '#/settings'); page.wait_for_selector('.help-btn')
+    topics = page.evaluate("() => [...document.querySelectorAll('.help-btn')].map(b => b.dataset.help)")
+    check(sorted(topics) == ['bangor', 'gemini', 'groq', 'proxy', 'sync'], f'otazníky v Nastavení: {topics}')
+    for tp in topics:
+        page.click(f'.help-btn[data-help="{tp}"]'); page.wait_for_selector(f'.sheet .help[data-topic="{tp}"]')
+        n = page.locator('.sheet .help-steps li').count()
+        check(3 <= n <= 6, f'nápověda {tp}: {n} kroků')
+        no_czech(page, f'nápověda {tp}'); page.click('.sheet button:has-text("Close")'); page.wait_for_selector('.sheet', state='detached')
     page.goto(f'{url}#/compare/{sid}'); page.wait_for_selector('.topbar .icon-btn >> nth=-1')
     page.click('.topbar .icon-btn >> nth=-1'); page.wait_for_selector('.sheet'); no_czech(page, 'nabídka verze'); page.keyboard.press('Escape')
 

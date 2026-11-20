@@ -15,12 +15,13 @@ import { isAndroid, request } from './net.js';
 import { aiConfig, setAiConfig, pickModel } from './ai.js';
 import { boot as syncBoot, changed as syncChanged } from './sync.js';
 import { syncSection } from './syncui.js';
+import { helpTitle } from './help.js';
 import { renderBulk, renderFindLyrics, songsWithoutText, applyLyrics } from './bulk.js';
 import { importFromUrl, showPreview } from './search.js';
 import { cleanText } from './sources.js';
 import { groqKey, setGroqKey, checkGroq, availableEngines, defaultEngine, ENGINES, bangorPossible, checkBangor, bangorZip } from './stt.js';
 
-export const APP_VERSION = '0.12.0';
+export const APP_VERSION = '0.13.0';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně
@@ -370,7 +371,7 @@ function searchSection() {
   const input = el('input', { type: 'url', value: getPrefs().proxyUrl || '', placeholder: 'https://alaw-proxy.….workers.dev', autocomplete: 'off' });
   const status = el('div', { class: 'ai-status' });
   return el('section', { class: 'section' },
-    el('h2', { text: t('Hledání textů (prostředník)') }),
+    helpTitle('h2', t('Hledání textů (prostředník)'), 'proxy'),
     el('p', { text: t('LRCLIB, Welsh Lyrics wiki, Wicidestun a We Learn Welsh fungují i bez něj. Pro ostatní weby (LyricsTranslate, Bandcamp, Genius, AZLyrics) potřebuje prohlížeč na počítači prostředníka na Cloudflare Workers. V telefonu (APK) potřeba není.') }),
     el('label', { class: 'field' }, el('span', { text: t('Adresa prostředníka') }), input),
     el('div', { class: 'row', style: { marginTop: '8px' } },
@@ -391,7 +392,7 @@ function aiSection() {
   const input = el('input', { type: 'password', value: cfg.key || '', placeholder: t('AQ.… nebo AIza…'), autocomplete: 'off', spellcheck: false });
   const status = el('div', { class: 'ai-status', text: cfg.key ? t('Model: {m}', { m: cfg.model }) : '' });
   return el('section', { class: 'section' },
-    el('h2', { text: t('Překlady pomocí AI (Gemini)') }),
+    helpTitle('h2', t('Překlady pomocí AI (Gemini)'), 'gemini'),
     el('p', {}, t('Klíč získáš zdarma v '), el('a', { href: 'https://aistudio.google.com/apikey', target: '_blank', rel: 'noopener', text: t('Google AI Studiu') }),
       t('. Uloží se jen v tomto zařízení – nezálohuje se a nesynchronizuje.')),
     el('label', { class: 'field' }, el('span', { text: t('Klíč API') }), input),
@@ -426,7 +427,7 @@ function sttSection() {
     el('h2', { text: t('Přepis z nahrávky') }),
     el('p', { text: t('Text písně přepíše z vlastní nahrávky Gemini (klíč výše), Whisper přes Groq, nebo na počítači velšský model z Bangoru. Přepis zpěvu nebývá přesný – služby můžeš porovnat.') }),
     choice,
-    el('h3', { class: 'sub-h', text: t('Whisper přes Groq') }),
+    helpTitle('h3', t('Whisper přes Groq'), 'groq', { class: 'sub-h' }),
     el('p', {}, t('Zdarma, bez platební karty. Klíč získáš na '),
       el('a', { href: 'https://console.groq.com/keys', target: '_blank', rel: 'noopener', text: 'console.groq.com' }),
       t('. Uloží se jen v tomto zařízení.')),
@@ -447,8 +448,8 @@ function sttSection() {
 
 // Bangor: velšský Whisper z Bangorské univerzity – malý program na počítači s Windows (složka bangor/, zip ve vydání).
 function bangorBlock(drawChoice) {
-  const head = el('h3', { class: 'sub-h', text: t('Bangor – velšský model na tomto počítači') });
   if (!bangorPossible()) {
+    const head = el('h3', { class: 'sub-h', text: t('Bangor – velšský model na tomto počítači') });
     return el('div', {}, head, el('p', { text: t('Bangor běží jen na počítači s Windows. Písně, které přepíšeš na počítači, se sem dostanou synchronizací.') }));
   }
   const box = el('div', { id: 'bangor' });
@@ -484,7 +485,7 @@ function bangorBlock(drawChoice) {
   }
   draw('');
   if (getPrefs().bangor) check(false);
-  return el('div', {}, head, box);
+  return el('div', {}, helpTitle('h3', t('Bangor – velšský model na tomto počítači'), 'bangor', { class: 'sub-h' }), box);
 }
 
 // Sdílení z jiné aplikace (Android: „Sdílet → Alaw“): ?share-url=…&share-text=…&share-title=…

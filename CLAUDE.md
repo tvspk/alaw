@@ -41,6 +41,8 @@
   přístup k místní síti / aplikacím v zařízení (`targetAddressSpace: 'loopback'`). V APK skryté. Zapnutí `prefs.bangor` (zařízení).
   Zip `alaw-bangor.zip` přidává workflow do vydání. Změna závislostí ve spouštěči → zvýšit značku `pripraveno-1.txt` (jinak se nepřeinstaluje).
   Test: `test_prepis.py` (napodobený program). Ruční zkouška skutečného programu: `ALAW_BANGOR_MODEL=Systran/faster-whisper-tiny python3 bangor/alaw_bangor.py`.
+- **Nápověda „?“** (0.13, `js/help.js`): nová služba/přístup v Nastavení → téma v `TOPICS` + `helpTitle(...)`; kroky přes `t()`
+  + angličtina; postupy cizích webů ověřit webovým hledáním. Test v `test_anglictina.py` (seznam témat na počítači).
 - Nahrávky ukládat před písní je v pořádku jen přes `putAudioBlob` (chrání `db.freshAudio` před úklidem synchronizace).
 - **Jazyk rozhraní CZ / EN (britská angličtina)**: `js/i18n.js` + slovník `js/i18n-en.js`. Každý text pro uživatele piš jako
   `t('český text', { proměnné })`, množné číslo `pl(n, '{n} píseň', '{n} písně', '{n} písní')`, vždy s textem v jednoduchých

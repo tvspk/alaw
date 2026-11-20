@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 20. 11. 2026, verze **0.12.0** (APK versionCode 16). Odpovídej zadavateli **česky**.
+> Stav k 20. 11. 2026, verze **0.13.0** (APK versionCode 17). Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -154,6 +154,50 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
      `testy/i18n_klice.py`. Ostatní testy mají `locale='cs-CZ'` (Playwright jinak hlásí en-US → anglicky).
 
 10. **Dva překlady a stažení textu (0.11)** – rozhodnutí zadavatele (po brainstormingu):
+   - U verše **český i anglický** překlad, doslovný překlad a zkratky (poznámky). Český = dosavadní pole verše (dosavadní
+     překlady se berou jako české), anglický = `line.en`. Poznámka u verše jen jedna. Formát zůstal `v:1` (nepovinné pole);
+     **starší verze aplikace `en` při synchronizaci zahodí** – zadavatel to řešit nechce (aktualizovat všechna zařízení).
+   - AI překládá do jazyka rozhraní; **Nastavení → Překlady pomocí AI → „Nabízet v nabídce písně i překlad do angličtiny/češtiny“**
+     (`prefs.trBoth`) přidá do nabídky písně „Přeložit i do …“ (doplní chybějící) / „Přeložit znovu do …“ (když je celý).
+     „Přeložit celou píseň znovu“ přepíše jen jazyk rozhraní.
+   - V písni **přepínač CZ / EN** vedle tlačítka Překlad (jen když má píseň oba), volba `prefs.trLang` (zařízení). Překlad ze zdroje
+     (`alt`, z webu) se v EN ukáže místo chybějícího vlastního anglického (🌐); tlačítko „Ze zdroje“ jen v CZ pohledu.
+   - Učení: překlad v jazyce rozhraní, jinak druhý. Úprava verše: pole pro oba jazyky (jazyk rozhraní první).
+   - **Nabídka písně → Stáhnout text…**: text bez časů (.txt), s časy (.lrc, jen načasovaná), jen překlad (.txt, chybějící = „…“),
+     text s překladem pod každým veršem (.txt; dvojice oddělené prázdným řádkem, sloky dvěma) – překlad pro každý jazyk, který
+     píseň má. Hlavička „Název – Interpret“. Soubory `interpret-nazev.txt`, `…-cs.txt`, `…-cy-cs.txt`.
+
+11. **Bangor – velšský Whisper na počítači (0.12):** zadavatel (Windows) chtěl Bangor dřív než nápovědu „?“, aby nápověda
+   pokryla i ho; „nejde o rychlost, jde o rozhraní“. Bangor nemá veřejnou službu s klíčem; modely jsou volně na Hugging Face.
+   - Program `bangor/` (zip `alaw-bangor.zip` ve vydání, ve workflow): `alaw-bangor.bat` (první spuštění: Python 3.12 přes winget,
+     venv v `%LOCALAPPDATA%\AlawBangor`, `faster-whisper==1.2.1`, `av==16.1.0` (novější av s faster-whisper 1.2.1 padá), `ctranslate2==4.9.0`;
+     s `nvidia-smi` i `nvidia-cublas-cu12`, `nvidia-cudnn-cu12==9.*`), `alaw_bangor.py` (server `127.0.0.1:8765`, model
+     `techiaith/whisper-large-ft-cy-en-ct2` int8 ~1,6 GB; GPU `int8_float16`, jinak CPU), `CTI-ME.txt` (návod CZ/EN).
+     Starší názvy modelů `whisper-large-v3-ft-…` na HF už nejsou veřejné.
+   - Aplikace: služba `bangor` v `stt.js` (jen mimo APK, zapnutá `prefs.bangor`), úloha s průběhem v %, čekání na stažení/načtení
+     modelu; nepřístupný program = hláška a zastavení hromadného přepisu (`e.stop`). Popisek verze „Přepis (Bangor)“. Nastavení →
+     Přepis z nahrávky má podsekce **Whisper přes Groq** a **Bangor** (stáhnout program, Zapnout a ověřit / Ověřit spojení / Vypnout,
+     stav GPU/CPU). Na telefonu jen věta, že přepisy přijdou synchronizací. CSP `http://127.0.0.1:8765`.
+   - Ověřeno v prostředí Claude: skutečný program s malým modelem (`Systran/faster-whisper-tiny`) + aplikace v Chromiu z localhostu.
+     **Neověřeno: Windows (bat, winget, CUDA) a výzva Chrome k přístupu z `tvspk.github.io` – ověří zadavatel.**
+
+Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
+Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna verze/mazání (0.8) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
+
+## Rozpracováno a další kroky (stav 20. 11. 2026 večer)
+
+Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „hotovo“.
+
+**Bangor (0.12) – HOTOVO, čeká na zkoušku zadavatele na Windows** (bod 11 výše).
+
+**Nápověda „?“ u klíčů a přístupů (0.13) – HOTOVO.** `js/help.js`: `helpTitle(tag, text, topic)` = nadpis s kulatým
+tlačítkem ?, `openHelp(topic)` = spodní panel (3–6 kroků, tlačítka-odkazy, poznámka, Zavřít). Témata `gemini`, `groq`, `bangor`
+(podsekce v Přepisu z nahrávky), `sync` (syncui.js), `proxy` (jen počítač). Bangor a prostředník se na telefonu nezobrazují.
+Postupy ověřené webovým hledáním 20. 11. 2026 (AI Studio „Create API key“, Groq „Create API Key“ – klíč jen jednou,
+GitHub fine-grained token „Only select repositories“ + Contents „Read and write“, Cloudflare Workers & Pages → Create Worker).
+Test: `test_anglictina.py` otevře každou nápovědu v en-GB. Možné další otazníky (nezadané): soubor s odkazy v Najít texty.
+
+0. **Dva překlady a stažení textu (0.11)** – rozhodnutí zadavatele (po brainstormingu):
    - U verše **český i anglický** překlad, doslovný překlad a zkratky (poznámky). Český = dosavadní pole verše (dosavadní
      překlady se berou jako české), anglický = `line.en`. Poznámka u verše jen jedna. Formát zůstal `v:1` (nepovinné pole);
      **starší verze aplikace `en` při synchronizaci zahodí** – zadavatel to řešit nechce (aktualizovat všechna zařízení).

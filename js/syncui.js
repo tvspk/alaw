@@ -1,4 +1,5 @@
 // Sekce Synchronizace v Nastavení: průvodce nastavením, párovací kód (8 slov + QR), skenování QR, stav.
+import { helpTitle } from './help.js';
 import { el, sheet, toast } from './ui.js';
 import { t, locale } from './i18n.js';
 import * as sync from './sync.js';
@@ -179,7 +180,7 @@ export function syncSection() {
   const box = el('section', { class: 'section', id: 'sync' });
   const draw = () => {
     const s = sync.status();
-    box.replaceChildren(el('h2', { text: t('Synchronizace') }));
+    box.replaceChildren(helpTitle('h2', t('Synchronizace'), 'sync'));
     if (!s.on) {
       box.append(
         el('p', { text: t('Písně, překlady, časy i nahrávky se přenášejí mezi telefonem a počítačem, šifrovaně přes tvůj soukromý repozitář na GitHubu. Každé zařízení se nastaví jednou.') }),
