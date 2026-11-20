@@ -181,108 +181,38 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
    - Ověřeno v prostředí Claude: skutečný program s malým modelem (`Systran/faster-whisper-tiny`) + aplikace v Chromiu z localhostu.
      **Neověřeno: Windows (bat, winget, CUDA) a výzva Chrome k přístupu z `tvspk.github.io` – ověří zadavatel.**
 
+12. **Nápověda „?“ u klíčů a přístupů (0.13):** `js/help.js`: `helpTitle(tag, text, topic)` = nadpis s kulatým tlačítkem ?,
+   `openHelp(topic)` = spodní panel (3–6 kroků, tlačítka-odkazy, poznámka, Zavřít). Témata `gemini`, `groq`, `bangor` (podsekce
+   v Přepisu z nahrávky), `sync` (syncui.js), `proxy` (jen počítač). Bangor a prostředník se na telefonu nezobrazují. Postupy
+   ověřené webovým hledáním 20. 11. 2026 (AI Studio „Create API key“, Groq „Create API Key“ – klíč ukáže jen jednou, GitHub
+   fine-grained token „Only select repositories“ + Contents „Read and write“, Cloudflare Workers & Pages → Create Worker).
+   Test: `test_anglictina.py` otevře každou nápovědu v en-GB. **Rozhodnutí zadavatele: u „Načíst odkazy ze souboru“ otazník NE**
+   (vzácná funkce; postup Claude vysvětlí, až na ni dojde).
+
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
+Zadavatel po vydání 0.12 napsal „ok všechno v pohodě“ (Bangor na Windows zřejmě v pořádku – při další práci krátce ověřit,
+zda přepis přes Bangor opravdu proběhl). CZ/EN (0.10) a dva překlady + stažení textu (0.11) viděl („perfektní“), zkouší.
 Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna verze/mazání (0.8) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
 
-## Rozpracováno a další kroky (stav 20. 11. 2026 večer)
+## Rozpracováno a další kroky (stav 20. 11. 2026 večer, verze 0.13.0)
 
 Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „hotovo“.
 
-**Bangor (0.12) – HOTOVO, čeká na zkoušku zadavatele na Windows** (bod 11 výše).
-
-**Nápověda „?“ u klíčů a přístupů (0.13) – HOTOVO.** `js/help.js`: `helpTitle(tag, text, topic)` = nadpis s kulatým
-tlačítkem ?, `openHelp(topic)` = spodní panel (3–6 kroků, tlačítka-odkazy, poznámka, Zavřít). Témata `gemini`, `groq`, `bangor`
-(podsekce v Přepisu z nahrávky), `sync` (syncui.js), `proxy` (jen počítač). Bangor a prostředník se na telefonu nezobrazují.
-Postupy ověřené webovým hledáním 20. 11. 2026 (AI Studio „Create API key“, Groq „Create API Key“ – klíč jen jednou,
-GitHub fine-grained token „Only select repositories“ + Contents „Read and write“, Cloudflare Workers & Pages → Create Worker).
-Test: `test_anglictina.py` otevře každou nápovědu v en-GB. Možné další otazníky (nezadané): soubor s odkazy v Najít texty.
-
-0. **Dva překlady a stažení textu (0.11)** – rozhodnutí zadavatele (po brainstormingu):
-   - U verše **český i anglický** překlad, doslovný překlad a zkratky (poznámky). Český = dosavadní pole verše (dosavadní
-     překlady se berou jako české), anglický = `line.en`. Poznámka u verše jen jedna. Formát zůstal `v:1` (nepovinné pole);
-     **starší verze aplikace `en` při synchronizaci zahodí** – zadavatel to řešit nechce (aktualizovat všechna zařízení).
-   - AI překládá do jazyka rozhraní; **Nastavení → Překlady pomocí AI → „Nabízet v nabídce písně i překlad do angličtiny/češtiny“**
-     (`prefs.trBoth`) přidá do nabídky písně „Přeložit i do …“ (doplní chybějící) / „Přeložit znovu do …“ (když je celý).
-     „Přeložit celou píseň znovu“ přepíše jen jazyk rozhraní.
-   - V písni **přepínač CZ / EN** vedle tlačítka Překlad (jen když má píseň oba), volba `prefs.trLang` (zařízení). Překlad ze zdroje
-     (`alt`, z webu) se v EN ukáže místo chybějícího vlastního anglického (🌐); tlačítko „Ze zdroje“ jen v CZ pohledu.
-   - Učení: překlad v jazyce rozhraní, jinak druhý. Úprava verše: pole pro oba jazyky (jazyk rozhraní první).
-   - **Nabídka písně → Stáhnout text…**: text bez časů (.txt), s časy (.lrc, jen načasovaná), jen překlad (.txt, chybějící = „…“),
-     text s překladem pod každým veršem (.txt; dvojice oddělené prázdným řádkem, sloky dvěma) – překlad pro každý jazyk, který
-     píseň má. Hlavička „Název – Interpret“. Soubory `interpret-nazev.txt`, `…-cs.txt`, `…-cy-cs.txt`.
-
-11. **Bangor – velšský Whisper na počítači (0.12):** zadavatel (Windows) chtěl Bangor dřív než nápovědu „?“, aby nápověda
-   pokryla i ho; „nejde o rychlost, jde o rozhraní“. Bangor nemá veřejnou službu s klíčem; modely jsou volně na Hugging Face.
-   - Program `bangor/` (zip `alaw-bangor.zip` ve vydání, ve workflow): `alaw-bangor.bat` (první spuštění: Python 3.12 přes winget,
-     venv v `%LOCALAPPDATA%\AlawBangor`, `faster-whisper==1.2.1`, `av==16.1.0` (novější av s faster-whisper 1.2.1 padá), `ctranslate2==4.9.0`;
-     s `nvidia-smi` i `nvidia-cublas-cu12`, `nvidia-cudnn-cu12==9.*`), `alaw_bangor.py` (server `127.0.0.1:8765`, model
-     `techiaith/whisper-large-ft-cy-en-ct2` int8 ~1,6 GB; GPU `int8_float16`, jinak CPU), `CTI-ME.txt` (návod CZ/EN).
-     Starší názvy modelů `whisper-large-v3-ft-…` na HF už nejsou veřejné.
-   - Aplikace: služba `bangor` v `stt.js` (jen mimo APK, zapnutá `prefs.bangor`), úloha s průběhem v %, čekání na stažení/načtení
-     modelu; nepřístupný program = hláška a zastavení hromadného přepisu (`e.stop`). Popisek verze „Přepis (Bangor)“. Nastavení →
-     Přepis z nahrávky má podsekce **Whisper přes Groq** a **Bangor** (stáhnout program, Zapnout a ověřit / Ověřit spojení / Vypnout,
-     stav GPU/CPU). Na telefonu jen věta, že přepisy přijdou synchronizací. CSP `http://127.0.0.1:8765`.
-   - Ověřeno v prostředí Claude: skutečný program s malým modelem (`Systran/faster-whisper-tiny`) + aplikace v Chromiu z localhostu.
-     **Neověřeno: Windows (bat, winget, CUDA) a výzva Chrome k přístupu z `tvspk.github.io` – ověří zadavatel.**
-
-Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
-Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna verze/mazání (0.8) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
-
-## Rozpracováno a další kroky (stav 20. 11. 2026 večer)
-
-Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „hotovo“.
-
-**Bangor (0.12) – HOTOVO, čeká na zkoušku zadavatele na Windows** (bod 11 výše).
-
-**DALŠÍ ÚKOL (zadaný, nezačatý): nápověda „?“ u klíčů a přístupů v Nastavení – včetně Bangoru.** Zadavatel: „u API rozhraní by byl malinký
-otazník, na který když klikneš, zobrazí se stručný návod v pár bodech, jak se to dělá.“ Navržený postup (zadavatel souhlasil
-s myšlenkou, detaily jsou rozumné výchozí volby):
-   - Malé kulaté tlačítko **?** vedle nadpisu sekce v Nastavení (`app.js` `aiSection`, `sttSection`, `searchSection` jen na
-     počítači; `syncui.js` sekce Synchronizace). Ťuknutí → spodní panel (`ui.sheet`) s nadpisem, **3–6 číslovanými kroky**,
-     odkazem na web služby (nový panel, `target=_blank`) a krátkou poznámkou (zdarma? platební karta? klíč zůstává jen v zařízení,
-     nikomu ho neposílat). Tlačítko Zavřít. Společná funkce např. `ui.helpBtn(title, steps, link)`.
-   - Obsah: **Gemini** (aistudio.google.com/apikey → přihlásit Googlem → Create API key → zkopírovat celý, začíná `AQ.`/`AIza`
-     → vložit → Uložit a ověřit; zdarma s denním limitem), **Groq** (console.groq.com/keys → účet → Create API Key → zkopírovat
-     hned, později už nejde zobrazit, začíná `gsk_`; zdarma bez karty), **Synchronizace** (soukromý repozitář na GitHubu
-     s README, fine-grained token jen na ten repozitář s Contents: Read and write, začíná `github_pat_`; 8 slov si zapsat),
-     **Bangor** (bez klíče: stáhnout zip, rozbalit, spustit `alaw-bangor.bat`, SmartScreen „Další informace → Přesto spustit“,
-     počkat na „Program běží“, Zapnout a ověřit, v Chrome povolit přístup k aplikacím v zařízení; podsekce `bangorBlock`),
-     **Prostředník** (Cloudflare Workers, odkaz na `worker/README.md` v repozitáři). **Před psaním ověřit aktuální podobu
-     stránek webovým hledáním** (názvy tlačítek se mění) a kroky psát obecně, bez snímků.
-   - Vše přes `t()` + anglický překlad v `js/i18n-en.js` (britská angličtina). Test: otevřít každou nápovědu v CZ i EN
-     (doplnit do `test_anglictina.py`, případně do `test_zaklad.py`). Vydání 0.13.0 (versionCode 17).
-   - Otázky k zadavateli až u hotového návrhu (není potřeba se ptát předem): stačí tyto čtyři sekce? Má být „?“ i jinde
-     (např. u soboru s odkazy v Najít texty, u přepisu z nahrávky)?
-
-0. **Dva překlady a stažení textu – HOTOVO v 0.11.0** (bod 10 výše); zadavatel vyzkouší.
-1. **CZ/EN verze aplikace – HOTOVO v 0.10.0** (popis výše v bodě 9). Zbývá: zadavatel vyzkouší přepínač na telefonu i počítači
-   a projde anglické texty; připomínky k angličtině doplnit do `js/i18n-en.js`.
-   Původní zadání: aplikace (web i APK) česky i anglicky,
-   **britská angličtina**, přepínač **CZ / EN jednoduše na hlavní stránce** (knihovna). Na závěr **2× kontrola angličtiny
-   „jako rodilý mluvčí britské angličtiny“**. Rozsah: ~760 českých řetězců ve 23 souborech `js/` (nejvíc app 108, song 103,
-   bulk 94, lesson 73, compare 66, syncui 58, edit 50, drill 41, search 30, ai 26) + `index.html`.
-   Navržený postup (ještě neschválený do detailu, rozumné výchozí volby):
-   - `js/i18n.js`: `t('český text', { n })` – **český text je klíč** (kód zůstane čitelný), slovník `en` = { 'český': 'English' };
-     chybějící překlad → česky (a v testu hlásit). Množná čísla `pl(n, 'píseň', 'písně', 'písní')` → en [one, other].
-     Volba jazyka v `alaw-prefs.lang` (jen zařízení), výchozí podle `navigator.language` (cs → cs, jinak en),
-     `document.documentElement.lang`, přepínač v hlavičce knihovny (CZ | EN), po přepnutí `route()`.
-   - Data se nepřekládají (písně, popisky verzí uložené v datech). Výchozí popisky (`Hlavní`, `Přepis (Gemini)`,
-     `Původní hlavní`) jen při zobrazení přes `t()`. `LANGUAGES`, `EXERCISES`, `STATE`, `STATE_LABEL`, `DRILLS` přes `t()` při zobrazení.
-   - **AI výstup v jazyce rozhraní**: překlad a vysvětlení verše (ai.js prompty) do angličtiny, když je rozhraní EN
-     (pole `translation` = překlad do jazyka rozhraní v době překladu). Přepisové prompty jazyk neřeší.
-   - Hlášky chyb (ai.js, stt.js, net.js, sync.js `ERR`, sources.js) přes `t()`. `localeCompare`/formáty čísel podle jazyka.
-   - Test: oba jazyky (projít obrazovky v EN, nesmí zůstat česká diakritika mimo data písní), stávající testy běží v CZ.
-   - Pak 2× kontrola angličtiny (britský pravopis: colour, favourite, -ise; terminologie sjednotit: song, verse, version,
-     lyrics, recording, sync).
-2. **Zkouška přepisu u zadavatele (čeká se na výsledek):** Groq na 1 písni (hodnocení přesnosti), pak Gemini na téže,
-   pak velká WAV. Podle výsledku případně:
-3. **Velšský Whisper z Bangoru na PC – hotovo v 0.12.0** (bod 11). Zadavatel vyzkouší na Windows; připomínky k rozhraní.
-4. **Přejmenování souborů na PC na „Interpret - Název“** (zadavatel chce; Claude přes aplikaci Claude pro počítač
-   s připojenou složkou: tabulka starý → nový ke schválení, nejisté neprejmenovávat, seznam pro vrácení). Zadavatel zatím
-   chat v aplikaci pro počítač neotevřel.
-5. **Hromadné přidání ~100+ písní (mp3 + wav, ~1,1 GB)** a hledání textů; k nenalezeným Claude připraví **soubor
-   s odkazy** (jen odkazy, nikdy texty).
-6. Ověřit na telefonu: učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7), přepis/mazání/výměna verze (0.8, 0.9).
+1. **DALŠÍ ÚKOL: přejmenování nahrávek na PC na „Interpret - Název“** (zadavatel chce; rozhodnuto v 0.7). Zadavatel má na PC
+   složku s ~100+ nahrávkami (mp3 + wav, ~1,1 GB). Dělá se v **aplikaci Claude pro počítač** se složkou připojenou přes „+“ →
+   „Add folder“ (bez toho Claude na soubory nedosáhne – pak zadavateli říct, jak složku připojit). Postup:
+   - Projít názvy souborů a údaje uvnitř (ID3v2/v1 u mp3, RIFF INFO / id3 u wav – stejná logika jako `bulk.js`), navrhnout nový
+     název `Interpret - Název.přípona` (číslo stopy pryč, zachovat diakritiku a velštinu, zakázané znaky Windows `\ / : * ? " < > |` nahradit).
+   - Ukázat **tabulku starý → nový ke schválení**; nejisté (neznámý interpret/název) **nepřejmenovávat** – zadavatel doplní ručně.
+     Duplicitní cílové názvy řešit (` (2)`). Nic nemazat.
+   - Před přejmenováním uložit do složky **seznam pro vrácení** (`alaw-prejmenovani.csv`: starý;nový) a nabídnout vrácení.
+   - Přejmenovat až po „ano“. Obsah souborů se nemění (zvuk se nezmenšuje, wav nepřevádět).
+2. **Hromadné přidání nahrávek** (Knihovna → Písně z nahrávek, na počítači i celá složka) a **Najít texty**; k nenalezeným Claude
+   připraví **soubor s odkazy** (jen odkazy, nikdy texty; formát v bodě 6 výše) a vysvětlí „📄 Načíst odkazy ze souboru“. Ke zbytku
+   přepis z nahrávky (Gemini / Groq / Bangor). Riziko: 1,1 GB zvuku v synchronizaci (bod 6).
+3. **Hodnocení přepisu u zadavatele:** Groq vs. Gemini vs. Bangor na téže písni; velká WAV přes Gemini (Files API neověřeno).
+4. Zadavatel vyzkouší CZ/EN a dva překlady; připomínky k angličtině do `js/i18n-en.js`.
+5. Ověřit na telefonu: učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7), přepis/mazání/výměna verze (0.8, 0.9).
 
 Možná rozšíření (nezadaná): sdílení z Androidu rovnou do nové verze.
 - Drobnosti: pruh nové verze se objeví až po 20 h od poslední kontroly (záměr). Genius z prostředí Claude netestovatelný
