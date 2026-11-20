@@ -111,7 +111,7 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
      čekání na `ACTIVE`, po přepisu `DELETE`). Odpověď JSON `{ lines: [{ start (s), text, new_stanza }] }`, `cleanTranscript`
      (prázdné a „…“ pryč; časy jen když jsou všechny a rostou). Odmítnutí kvůli autorským právům (`RECITATION`) = hláška u písně.
      **Nahrávání přes Files API nešlo z prostředí Claude ověřit proti skutečnému Googlu (síť) – ověřit u zadavatele na WAV.**
-   - `bulk.transcribeToSong`: **rozhodnutí zadavatele: píseň s textem → přepis jako další verze** („Přepis z nahrávky“, (2)…),
+   - `bulk.transcribeToSong`: **rozhodnutí zadavatele: píseň s textem → přepis jako další verze** (popisek „Přepis (Gemini)“ / „Přepis (Whisper)“, další „… 2“),
      bez textu → hlavní verze. Časy jen pro nahrávku, ze které se přepisovalo; nenačasovaná hlavní verze převezme časy
      (`borrowTimes`). Hromadně v Najít texty (stop při vyčerpaném limitu / neplatném klíči).
    - `versions.makePrimary` + `compare.js` „⭐ Udělat hlavní verzí“: pokrok převeden (`moveProgress` pro sporná místa),
@@ -129,14 +129,48 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
    jen cy/en/br/cs, `prompt` = název). Úseky → verše (`whisperLines`: pryč ♪, `no_speech_prob`, opakování; pauza > 3,5 s = sloka).
    Limit 25 MB → `audioprep.toSpeechWav` (mono 16 kHz WAV, jen dočasná kopie); totéž u Gemini, když je kopie menší
    (většina WAV tak obejde Files API). Hromadně: při 429 počká minutu (max. 3×), pak stop. Popisky verzí „Přepis (Gemini)“,
-   „Přepis (Whisper)“. **CORS Groq ani Gemini Files API nešlo z prostředí Claude ověřit – ověřit u zadavatele.**
+   „Přepis (Whisper)“. Zadavatel klíč Groq na počítači vložil a ověření prošlo (**CORS Groq z prohlížeče funguje**).
+   Gemini Files API (jen když ani zmenšená kopie nepřekročí 14 MB, tj. nahrávky nad ~7 min) zatím neověřeno.
 
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
 Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna verze/mazání (0.8) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
 
-## Zbývá (původní plán)
+## Rozpracováno a další kroky (stav 20. 11. 2026 večer)
 
-- Původní plán je hotový. Možná rozšíření (zatím nezadaná): sdílení z Androidu rovnou do nové verze.
+Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „hotovo“.
+
+1. **CZ/EN verze aplikace – ZADÁNO, NEZAČATO (v kódu zatím nic).** Zadání: aplikace (web i APK) česky i anglicky,
+   **britská angličtina**, přepínač **CZ / EN jednoduše na hlavní stránce** (knihovna). Na závěr **2× kontrola angličtiny
+   „jako rodilý mluvčí britské angličtiny“**. Rozsah: ~760 českých řetězců ve 23 souborech `js/` (nejvíc app 108, song 103,
+   bulk 94, lesson 73, compare 66, syncui 58, edit 50, drill 41, search 30, ai 26) + `index.html`.
+   Navržený postup (ještě neschválený do detailu, rozumné výchozí volby):
+   - `js/i18n.js`: `t('český text', { n })` – **český text je klíč** (kód zůstane čitelný), slovník `en` = { 'český': 'English' };
+     chybějící překlad → česky (a v testu hlásit). Množná čísla `pl(n, 'píseň', 'písně', 'písní')` → en [one, other].
+     Volba jazyka v `alaw-prefs.lang` (jen zařízení), výchozí podle `navigator.language` (cs → cs, jinak en),
+     `document.documentElement.lang`, přepínač v hlavičce knihovny (CZ | EN), po přepnutí `route()`.
+   - Data se nepřekládají (písně, popisky verzí uložené v datech). Výchozí popisky (`Hlavní`, `Přepis (Gemini)`,
+     `Původní hlavní`) jen při zobrazení přes `t()`. `LANGUAGES`, `EXERCISES`, `STATE`, `STATE_LABEL`, `DRILLS` přes `t()` při zobrazení.
+   - **AI výstup v jazyce rozhraní**: překlad a vysvětlení verše (ai.js prompty) do angličtiny, když je rozhraní EN
+     (pole `translation` = překlad do jazyka rozhraní v době překladu). Přepisové prompty jazyk neřeší.
+   - Hlášky chyb (ai.js, stt.js, net.js, sync.js `ERR`, sources.js) přes `t()`. `localeCompare`/formáty čísel podle jazyka.
+   - Test: oba jazyky (projít obrazovky v EN, nesmí zůstat česká diakritika mimo data písní), stávající testy běží v CZ.
+   - Pak 2× kontrola angličtiny (britský pravopis: colour, favourite, -ise; terminologie sjednotit: song, verse, version,
+     lyrics, recording, sync).
+2. **Zkouška přepisu u zadavatele (čeká se na výsledek):** Groq na 1 písni (hodnocení přesnosti), pak Gemini na téže,
+   pak velká WAV. Podle výsledku případně:
+3. **Velšský Whisper z Bangoru na PC (navrženo, NEZADÁNO – zadavatel zatím jen zjišťoval, jak by to šlo):** lokální
+   program (Python + faster-whisper + model `techiaith/whisper-large-…-ct2`, int8), malý server na `http://127.0.0.1:<port>`
+   s CORS pro `https://tvspk.github.io` (a `Access-Control-Allow-Private-Network`), v aplikaci třetí služba v `stt.js`
+   „Bangor (na tomto PC)“, CSP `connect-src` doplnit localhost. Spouštění `spustit-prepis.bat`. Otázky k zadavateli:
+   Windows/Mac, grafika NVIDIA. Model učený na řeči, ne zpěvu; bez GPU pomalé (100 písní ~ noc).
+4. **Přejmenování souborů na PC na „Interpret - Název“** (zadavatel chce; Claude přes aplikaci Claude pro počítač
+   s připojenou složkou: tabulka starý → nový ke schválení, nejisté neprejmenovávat, seznam pro vrácení). Zadavatel zatím
+   chat v aplikaci pro počítač neotevřel.
+5. **Hromadné přidání ~100+ písní (mp3 + wav, ~1,1 GB)** a hledání textů; k nenalezeným Claude připraví **soubor
+   s odkazy** (jen odkazy, nikdy texty).
+6. Ověřit na telefonu: učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7), přepis/mazání/výměna verze (0.8, 0.9).
+
+Možná rozšíření (nezadaná): sdílení z Androidu rovnou do nové verze.
 - Drobnosti: pruh nové verze se objeví až po 20 h od poslední kontroly (záměr). Genius z prostředí Claude netestovatelný
   (blokuje servery). Na počítači může prostředník narazit na blokaci u Genius a Bandcampu.
 
