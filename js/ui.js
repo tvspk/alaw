@@ -1,3 +1,4 @@
+import { dec } from './i18n.js';
 // Drobné pomocníky pro stavbu rozhraní bez knihoven.
 
 export function el(tag, props = {}, ...children) {
@@ -109,6 +110,6 @@ export function pickFiles(accept, { folder = false } = {}) {
   });
 }
 
-export const fileSize = bytes => bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(bytes / 1024))} kB`;
+export const fileSize = bytes => bytes >= 1048576 ? `${dec(bytes / 1048576)} MB` : `${Math.max(1, Math.round(bytes / 1024))} kB`;
 
 export const safeName = s => String(s || 'pisen').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'pisen';

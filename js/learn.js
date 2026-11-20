@@ -10,10 +10,11 @@
 //   intro = kdy byl verš poprvé ukázán, t = razítko změny (sync.stamp, hodiny GitHubu)
 // Hodnocení 1–4: Znovu / Těžké / Dobře / Snadno (rozhodnutí zadavatele: hodnotí vždy sám).
 import { fold, primaryVersion } from './model.js';
+import { t, pl } from './i18n.js';
 
 const MIN = 60e3, DAY = 86400e3;
 export const STEPS = [1 * MIN, 10 * MIN];   // kroky učení
-export const GRADES = [[1, 'Znovu'], [2, 'Těžké'], [3, 'Dobře'], [4, 'Snadno']];
+export const GRADES = [[1, t('Znovu')], [2, t('Těžké')], [3, t('Dobře')], [4, t('Snadno')]];
 const MAX_IVL = 365, EASE = 2.5;
 
 export const lineKey = text => fold(text).replace(/[^\p{L}\p{N}]+/gu, ' ').trim().slice(0, 300);
@@ -80,7 +81,7 @@ export function previews(rec, now = Date.now()) {
   });
 }
 
-export const fmtIvl = d => d <= 1 ? '1 den' : d < 5 ? `${d} dny` : d < 30 ? `${d} dní` : d < 365 ? `${Math.round(d / 30)} měs.` : '1 rok';
+export const fmtIvl = d => d <= 1 ? t('1 den') : d < 30 ? pl(d, '{n} den', '{n} dny', '{n} dní') : d < 365 ? pl(Math.round(d / 30), '{n} měs.', '{n} měs.', '{n} měs.') : t('1 rok');
 
 // Stav verše pro mapu písně.
 export function unitState(rec, now = Date.now()) {
@@ -88,7 +89,7 @@ export function unitState(rec, now = Date.now()) {
   if (rec.st === 'learn') return 'learn';
   return rec.due <= now ? 'due' : 'known';
 }
-export const STATE_LABEL = { new: 'nový', learn: 'učím se', due: 'k opakování', known: 'umím' };
+export const STATE_LABEL = { new: t('nový'), learn: t('učím se'), due: t('k opakování'), known: t('umím') };
 
 export function songSummary(units, recs, now = Date.now()) {
   const c = { new: 0, learn: 0, due: 0, known: 0, total: units.length };
@@ -121,16 +122,16 @@ export function introducedToday(recs, now = Date.now()) {
 // Aplikace je střídá sama podle síly verše (rozhodnutí zadavatele); v Nastavení jde každé vypnout (prefs.exOff).
 // Cvičení s nahrávkou (diktát) se nabídne jen u načasovaného verše, když nahrávka hraje.
 export const EXERCISES = [
-  ['initials', 'Podle prvních písmen'],
-  ['choiceWord', 'Doplň slovo z nabídky'],
-  ['scramble', 'Skládání slov'],
-  ['flash', 'Bliknutí (verš se ukáže jen na chvilku)'],
-  ['recall', 'Jak verš zní? (vybav si ho po předchozím)'],
-  ['choice3', 'Výběr ze tří (který verš následuje)'],
-  ['fromCz', 'Z češtiny do velštiny (jen u veršů s překladem)'],
-  ['before', 'Napřeskáčku (co je před veršem)'],
-  ['dictation', 'Diktát (jen u načasovaných veršů)'],
-  ['type', 'Psaní zpaměti'],
+  ['initials', t('Podle prvních písmen')],
+  ['choiceWord', t('Doplň slovo z nabídky')],
+  ['scramble', t('Skládání slov')],
+  ['flash', t('Bliknutí (verš se ukáže jen na chvilku)')],
+  ['recall', t('Jak verš zní? (vybav si ho po předchozím)')],
+  ['choice3', t('Výběr ze tří (který verš následuje)')],
+  ['fromCz', t('Z češtiny do velštiny (jen u veršů s překladem)')],
+  ['before', t('Napřeskáčku (co je před veršem)')],
+  ['dictation', t('Diktát (jen u načasovaných veršů)')],
+  ['type', t('Psaní zpaměti')],
 ];
 const LEVELS = [
   ['initials', 'choiceWord', 'scramble'],                 // učím se, první krok

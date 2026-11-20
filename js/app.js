@@ -1,5 +1,6 @@
 // Alaw – texty písní a jejich učení. Vstupní bod: směrování mezi obrazovkami, knihovna, nastavení.
 import { el, fill, iconBtn, ICONS, toast, download, pickFile, fileSize, sheet } from './ui.js';
+import { t, pl, lang, setLang, collate } from './i18n.js';
 import { listSongs, getSong, putAudioBlob, getAudioBlob, getPrefs, setPrefs, getProgress, deleteSong } from './store.js';
 import { db, requestPersistence, storageEstimate } from './db.js';
 import { primaryVersion, isSynced, langLabel, fold, songsFromJson, looksLikeLrc } from './model.js';
@@ -19,7 +20,7 @@ import { importFromUrl, showPreview } from './search.js';
 import { cleanText } from './sources.js';
 import { groqKey, setGroqKey, checkGroq, availableEngines, defaultEngine, ENGINES } from './stt.js';
 
-export const APP_VERSION = '0.9.0';
+export const APP_VERSION = '0.10.0';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně
@@ -54,7 +55,7 @@ async function route() {
     else cleanup = await renderLibrary(root);
   } catch (e) {
     console.error(e);
-    root.replaceChildren(el('div', { class: 'view' }, el('p', { class: 'empty', text: `Něco se pokazilo: ${e.message || e}` })));
+    root.replaceChildren(el('div', { class: 'view' }, el('p', { class: 'empty', text: t('Něco se pokazilo: {e}', { e: e.message || e }) })));
   }
   app.replaceChildren(root);
   scrollTo(0, 0);
@@ -78,14 +79,14 @@ async function renderLibrary(root) {
   const progress = await getProgress();
   const now = Date.now();
   const sums = new Map(songs.map(s => [s.id, songSummary(songUnits(s), progress.get(s.id) || new Map(), now)]));
-  const tags = [...new Set(songs.flatMap(s => s.tags))].sort((a, b) => a.localeCompare(b, 'cs'));
+  const tags = [...new Set(songs.flatMap(s => s.tags))].sort(collate);
   const langs = [...new Set(songs.map(s => s.language))];
   const filters = [...(langs.length > 1 ? langs.map(l => ({ key: `lang:${l}`, label: langLabel(l) })) : []), ...tags.map(t => ({ key: `tag:${t}`, label: `#${t}` }))];
   if (libState.tag && !filters.some(f => f.key === libState.tag)) libState.tag = null;
 
   const listEl = el('ul', { class: 'song-list' });
   const chipsEl = el('div', { class: 'chips' });
-  const search = el('input', { class: 'search', type: 'search', placeholder: 'Hledat píseň nebo interpreta…', value: libState.q,
+  const search = el('input', { class: 'search', type: 'search', placeholder: t('Hledat píseň nebo interpreta…'), value: libState.q,
     oninput: () => { libState.q = search.value; draw(); } });
   if (libState.sel) libState.sel = new Set([...libState.sel].filter(id => songs.some(s => s.id === id)));
   let shown = [];
@@ -97,33 +98,33 @@ async function renderLibrary(root) {
     if (!sel) return;
     const allOn = shown.length && shown.every(s => sel.has(s.id));
     fill(selBar,
-      el('div', { class: 'bulk-sum', text: `Označeno ${sel.size} z ${songs.length}` }),
+      el('div', { class: 'bulk-sum', text: t('Označeno {n} z {m}', { n: sel.size, m: songs.length }) }),
       el('div', { class: 'row end' },
-        el('button', { type: 'button', class: 'btn', text: allOn ? 'Zrušit označení' : `Označit zobrazené (${shown.length})`, onclick: () => {
+        el('button', { type: 'button', class: 'btn', text: allOn ? t('Zrušit označení') : t('Označit zobrazené ({n})', { n: shown.length }), onclick: () => {
           for (const s of shown) allOn ? sel.delete(s.id) : sel.add(s.id);
           draw();
         } }),
-        el('button', { type: 'button', class: 'btn', text: 'Hotovo', onclick: () => selMode(false) }),
-        el('button', { type: 'button', class: 'btn danger', text: `🗑 Smazat (${sel.size})`, disabled: !sel.size, onclick: removeSelected })));
+        el('button', { type: 'button', class: 'btn', text: t('Hotovo'), onclick: () => selMode(false) }),
+        el('button', { type: 'button', class: 'btn danger', text: t('🗑 Smazat ({n})', { n: sel.size }), disabled: !sel.size, onclick: removeSelected })));
   }
   async function removeSelected() {
     const list = songs.filter(s => libState.sel.has(s.id));
     if (!list.length) return;
-    const n = list.length, word = n === 1 ? 'píseň' : n < 5 ? 'písně' : 'písní';
-    if (!confirm(`Smazat ${n} ${word} včetně nahrávek a pokroku učení? Smaže se i na ostatních zařízeních a nejde to vrátit.`)) return;
+    const n = list.length;
+    if (!confirm(pl(n, 'Smazat {n} píseň včetně nahrávek a pokroku učení? Smaže se i na ostatních zařízeních a nejde to vrátit.', 'Smazat {n} písně včetně nahrávek a pokroku učení? Smaže se i na ostatních zařízeních a nejde to vrátit.', 'Smazat {n} písní včetně nahrávek a pokroku učení? Smaže se i na ostatních zařízeních a nejde to vrátit.'))) return;
     let done = 0;
     for (const s of list) {
       try { await deleteSong(s); done++; } catch (e) { console.error(e); }
-      if (done % 10 === 0) toast(`Mažu… ${done}/${n}`);
+      if (done % 10 === 0) toast(t('Mažu… {d}/{n}', { d: done, n }));
     }
-    toast(`Smazáno: ${done} ${done === 1 ? 'píseň' : done < 5 && done > 0 ? 'písně' : 'písní'}`, 3500);
+    toast(pl(done, 'Smazáno: {n} píseň', 'Smazáno: {n} písně', 'Smazáno: {n} písní'), 3500);
     libState.sel = null;
     route();
   }
 
   function draw() {
     chipsEl.replaceChildren(
-      el('button', { type: 'button', class: 'chip' + (!libState.tag ? ' on' : ''), text: 'Vše', onclick: () => { libState.tag = null; draw(); } }),
+      el('button', { type: 'button', class: 'chip' + (!libState.tag ? ' on' : ''), text: t('Vše'), onclick: () => { libState.tag = null; draw(); } }),
       ...filters.map(f => el('button', { type: 'button', class: 'chip' + (libState.tag === f.key ? ' on' : ''), text: f.label,
         onclick: () => { libState.tag = libState.tag === f.key ? null : f.key; draw(); } })));
     chipsEl.hidden = !filters.length;
@@ -143,35 +144,44 @@ async function renderLibrary(root) {
         sel.has(s.id) ? sel.delete(s.id) : sel.add(s.id);
         draw();
       } },
-        sel ? el('input', { type: 'checkbox', class: 'sel-box', checked: sel.has(s.id), tabindex: -1, 'aria-label': 'Označit' }) : null,
+        sel ? el('input', { type: 'checkbox', class: 'sel-box', checked: sel.has(s.id), tabindex: -1, 'aria-label': t('Označit') }) : null,
         el('div', { class: 'meta' }, el('div', { class: 'title', text: s.title }), el('div', { class: 'artist', text: s.artist || '—' })),
         el('div', { class: 'badges' },
-          isSynced(v) ? el('span', { class: 'badge', title: 'Načasováno', text: '⏱' }) : null,
-          v.audio ? el('span', { class: 'badge', title: 'Vlastní nahrávka', text: '♪' }) : null,
+          isSynced(v) ? el('span', { class: 'badge', title: t('Načasováno'), text: '⏱' }) : null,
+          v.audio ? el('span', { class: 'badge', title: t('Vlastní nahrávka'), text: '♪' }) : null,
           v.youtubeId ? el('span', { class: 'badge', title: 'YouTube', text: '▶' }) : null),
         learnBar(sums.get(s.id))));
     }));
     if (!songs.length) {
       listEl.replaceChildren(el('li', { class: 'empty' },
         el('strong', { text: 'Croeso!' }),
-        'Zatím tu žádná píseň není. Přidej první tlačítkem dole, ',
-        el('a', { href: '#/bulk', text: 'přidej víc písní z nahrávek najednou' }),
-        ', nebo načti zálohu či JSON v ', el('a', { href: '#/settings', text: 'Nastavení' }), '.'));
-    } else if (!shown.length) listEl.replaceChildren(el('li', { class: 'empty', text: 'Nic neodpovídá hledání.' }));
+        t('Zatím tu žádná píseň není. Přidej první tlačítkem dole, '),
+        el('a', { href: '#/bulk', text: t('přidej víc písní z nahrávek najednou') }),
+        t(', nebo načti zálohu či JSON v '), el('a', { href: '#/settings', text: t('Nastavení') }), '.'));
+    } else if (!shown.length) listEl.replaceChildren(el('li', { class: 'empty', text: t('Nic neodpovídá hledání.') }));
     drawSel();
   }
 
   root.append(el('div', { class: 'view' },
     el('header', { class: 'topbar' }, el('h1', { class: 'brand', text: 'Alaw' }),
-      songs.length ? el('button', { type: 'button', class: 'icon-btn sel-toggle' + (libState.sel ? ' on' : ''), title: 'Vybrat víc písní (smazat)', 'aria-label': 'Vybrat víc písní', text: '☑', onclick: () => selMode(!libState.sel) }) : null,
-      iconBtn('settings', 'Nastavení', () => nav.go('#/settings'))),
+      langSwitch(),
+      songs.length ? el('button', { type: 'button', class: 'icon-btn sel-toggle' + (libState.sel ? ' on' : ''), title: t('Vybrat víc písní (smazat)'), 'aria-label': t('Vybrat víc písní'), text: '☑', onclick: () => selMode(!libState.sel) }) : null,
+      iconBtn('settings', t('Nastavení'), () => nav.go('#/settings'))),
     reminders(songs, progress, sums),
     noTextBar(songs),
     songs.length > 4 || libState.q ? search : null,
     chipsEl, listEl, selBar),
-    ...(libState.sel ? [] : [el('button', { type: 'button', class: 'fab', html: `${ICONS.plus}<span>Přidat píseň</span>`, onclick: () => nav.go('#/new') })]));
+    ...(libState.sel ? [] : [el('button', { type: 'button', class: 'fab', html: `${ICONS.plus}<span>${t('Přidat píseň')}</span>`, onclick: () => nav.go('#/new') })]));
   root.querySelector('.fab svg')?.setAttribute('width', '22');
   draw();
+}
+
+// Přepínač jazyka rozhraní na hlavní stránce (CZ | EN), volba jen pro toto zařízení.
+function langSwitch() {
+  const b = (code, label, name) => el('button', { type: 'button', class: lang === code ? 'on' : '', text: label, lang: code,
+    'aria-pressed': String(lang === code), title: name, onclick: () => { if (lang !== code) setLang(code); } });
+  return el('div', { class: 'lang-switch', role: 'group', 'aria-label': 'Jazyk / Language' },
+    b('cs', 'CZ', 'Čeština'), b('en', 'EN', 'English'));
 }
 
 // Písně bez textu (typicky po přidání z nahrávek) → hledání textů.
@@ -179,14 +189,14 @@ function noTextBar(songs) {
   const n = songsWithoutText(songs);
   if (!n) return null;
   return el('div', { class: 'reminders' }, el('div', { class: 'reminder' },
-    el('a', { href: '#/lyrics', text: `${n} ${n === 1 ? 'píseň nemá' : n < 5 ? 'písně nemají' : 'písní nemá'} text – najít texty` })));
+    el('a', { href: '#/lyrics', text: pl(n, '{n} píseň nemá text – najít texty', '{n} písně nemají text – najít texty', '{n} písní nemá text – najít texty') })));
 }
 
 // Proužek pokroku na kartě písně (jen u písní, které se učím).
 function learnBar(sum) {
   if (!sum || !sum.total || sum.new === sum.total) return null;
-  const pct = n => `${(100 * n / sum.total).toFixed(1)}%`;
-  return el('div', { class: 'lbar', title: `Umíš ${sum.known + sum.due} z ${sum.total} veršů` },
+  const pct = n => `${(100 * n / sum.total).toFixed(1)}%`; // CSS, ne text
+  return el('div', { class: 'lbar', title: t('Umíš {n} z {m} veršů', { n: sum.known + sum.due, m: sum.total }) },
     el('i', { class: 'known', style: { width: pct(sum.known) } }),
     el('i', { class: 'due', style: { width: pct(sum.due) } }),
     el('i', { class: 'learn', style: { width: pct(sum.learn) } }));
@@ -204,8 +214,8 @@ function reminders(songs, progress, sums) {
   return el('div', { class: 'reminders' }, list.map(s => {
     const n = sums.get(s.id).due;
     const box = el('div', { class: 'reminder' },
-      el('a', { href: `#/learn/${encodeURIComponent(s.id)}`, text: `„${s.title}“ by chtěla zopakovat (${n} ${n === 1 ? 'verš' : n < 5 ? 'verše' : 'veršů'})` }),
-      el('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Skrýt na týden', title: 'Skrýt na týden', text: '✕', onclick: () => {
+      el('a', { href: `#/learn/${encodeURIComponent(s.id)}`, text: pl(n, '„{t}“ by chtěla zopakovat ({n} verš)', '„{t}“ by chtěla zopakovat ({n} verše)', '„{t}“ by chtěla zopakovat ({n} veršů)', { t: s.title }) }),
+      el('button', { type: 'button', class: 'icon-btn', 'aria-label': t('Skrýt na týden'), title: t('Skrýt na týden'), text: '✕', onclick: () => {
         setPrefs({ remindHidden: { ...Object.fromEntries(Object.entries(getPrefs().remindHidden || {}).filter(([, t]) => t > Date.now())), [s.id]: Date.now() + 7 * 86400e3 } });
         box.remove();
       } }));
@@ -235,7 +245,7 @@ async function exportAll(withAudio) {
   if (withAudio) {
     const total = songs.reduce((a, s) => a + s.versions.reduce((b, v) => b + (v.audio ? v.audio.size || 0 : 0), 0), 0);
     if (total > AUDIO_BACKUP_MAX) {
-      if (!confirm(`Nahrávky mají dohromady ${fileSize(total)} – záloha s nimi by byla moc velká a aplikace by ji nezvládla. Stáhnout zálohu bez nahrávek? (Nahrávky máš v původních souborech a synchronizace je přenáší sama.)`)) return;
+      if (!confirm(t('Nahrávky mají dohromady {s} – záloha s nimi by byla moc velká a aplikace by ji nezvládla. Stáhnout zálohu bez nahrávek? (Nahrávky máš v původních souborech a synchronizace je přenáší sama.)', { s: fileSize(total) }))) return;
       withAudio = false;
     }
   }
@@ -248,8 +258,8 @@ async function exportAll(withAudio) {
   const progress = (await db.allProgress()).filter(r => songs.some(s => s.id === r.s));
   const data = { app: 'alaw', v: 1, exportedAt: new Date().toISOString(), songs, progress, audio };
   const date = new Date().toISOString().slice(0, 10);
-  download(`alaw-zaloha-${date}.json`, JSON.stringify(data));
-  toast(`Záloha: ${songs.length} písní${withAudio ? `, ${Object.keys(audio).length} nahrávek` : ''}`);
+  download(`alaw-${t('zaloha')}-${date}.json`, JSON.stringify(data));
+  toast(pl(songs.length, 'Záloha: {n} píseň', 'Záloha: {n} písně', 'Záloha: {n} písní') + (withAudio ? ', ' + pl(Object.keys(audio).length, '{n} nahrávka', '{n} nahrávky', '{n} nahrávek') : ''));
 }
 
 async function importFile() {
@@ -265,8 +275,8 @@ async function importFile() {
     return;
   }
   let parsed;
-  try { parsed = songsFromJson(JSON.parse(text)); } catch { toast('Soubor nejde přečíst jako JSON.'); return; }
-  if (!parsed.songs.length) { toast('V souboru jsem nenašel žádnou píseň.'); return; }
+  try { parsed = songsFromJson(JSON.parse(text)); } catch { toast(t('Soubor nejde přečíst jako JSON.')); return; }
+  if (!parsed.songs.length) { toast(t('V souboru jsem nenašel žádnou píseň.')); return; }
   let added = 0, updated = 0, skipped = 0, audioCount = 0;
   for (const s of parsed.songs) {
     const old = await getSong(s.id);
@@ -286,8 +296,8 @@ async function importFile() {
   for (const [key, dataUrl] of Object.entries(parsed.audio)) {
     try { await putAudioBlob(key, dataUrlToBlob(dataUrl)); audioCount++; } catch { /* poškozená nahrávka */ }
   }
-  const parts = [added && `${added} nových`, updated && `${updated} aktualizovaných`, skipped && `${skipped} beze změny`, audioCount && `${audioCount} nahrávek`, progressCount && `pokrok ${progressCount} veršů`].filter(Boolean);
-  toast(`Načteno: ${parts.join(', ')}`, 4000);
+  const parts = [added && t('{n} nových', { n: added }), updated && t('{n} aktualizovaných', { n: updated }), skipped && t('{n} beze změny', { n: skipped }), audioCount && pl(audioCount, '{n} nahrávka', '{n} nahrávky', '{n} nahrávek'), progressCount && t('pokrok {n} veršů', { n: progressCount })].filter(Boolean);
+  toast(t('Načteno: {p}', { p: parts.join(', ') }), 4000);
   route();
 }
 
@@ -297,35 +307,35 @@ async function renderSettings(root) {
   const withAudio = el('input', { type: 'checkbox', checked: false });
   const est = await storageEstimate();
   const sizeOut = el('span', { text: `${Math.round(prefs.lyricSize * 100)} %` });
-  const sizeIn = el('input', { type: 'range', min: 0.9, max: 1.8, step: 0.05, value: prefs.lyricSize, 'aria-label': 'Velikost textu písní',
+  const sizeIn = el('input', { type: 'range', min: 0.9, max: 1.8, step: 0.05, value: prefs.lyricSize, 'aria-label': t('Velikost textu písní'),
     oninput: () => { setPrefs({ lyricSize: +sizeIn.value }); sizeOut.textContent = `${Math.round(+sizeIn.value * 100)} %`; document.documentElement.style.setProperty('--lyric-size', `${sizeIn.value}rem`); preview.style.fontSize = `${sizeIn.value}rem`; } });
   const preview = el('div', { class: 'lyric' }, el('div', { class: 'body' }, el('div', { class: 'text', style: { fontSize: `${prefs.lyricSize}rem` }, text: 'Ar lan y môr mae rhosys cochion' })));
   const autoScroll = el('input', { type: 'checkbox', checked: prefs.autoScroll, onchange: () => setPrefs({ autoScroll: autoScroll.checked }) });
 
   root.append(el('div', { class: 'view' },
-    el('header', { class: 'topbar' }, iconBtn('back', 'Zpět', () => nav.back()), el('h1', { text: 'Nastavení' })),
+    el('header', { class: 'topbar' }, iconBtn('back', t('Zpět'), () => nav.back()), el('h1', { text: t('Nastavení') })),
     el('section', { class: 'section' },
-      el('h2', { text: 'Zobrazení' }),
-      el('label', { class: 'range' }, 'Velikost textu', sizeIn, sizeOut),
+      el('h2', { text: t('Zobrazení') }),
+      el('label', { class: 'range' }, t('Velikost textu'), sizeIn, sizeOut),
       preview,
-      el('label', { class: 'check', style: { marginTop: '10px' } }, autoScroll, el('span', { text: 'Při přehrávání posouvat text na aktuální verš' }))),
+      el('label', { class: 'check', style: { marginTop: '10px' } }, autoScroll, el('span', { text: t('Při přehrávání posouvat text na aktuální verš') }))),
     learnSection(),
     el('section', { class: 'section' },
-      el('h2', { text: 'Záloha a import' }),
-      el('p', { text: 'Záloha obsahuje všechny písně, překlady, poznámky, časy a pokrok učení. Import přijme zálohu, píseň v JSON (i z projektu Lyrics Trainer), nebo text či .lrc soubor.' }),
-      el('label', { class: 'check', style: { marginBottom: '12px' } }, withAudio, el('span', { text: 'Přiložit i zvukové soubory (záloha bude velká)' })),
+      el('h2', { text: t('Záloha a import') }),
+      el('p', { text: t('Záloha obsahuje všechny písně, překlady, poznámky, časy a pokrok učení. Import přijme zálohu, píseň v JSON (i z projektu Lyrics Trainer), nebo text či .lrc soubor.') }),
+      el('label', { class: 'check', style: { marginBottom: '12px' } }, withAudio, el('span', { text: t('Přiložit i zvukové soubory (záloha bude velká)') })),
       el('div', { class: 'row' },
-        el('button', { type: 'button', class: 'btn', text: '⇩ Stáhnout zálohu', onclick: () => exportAll(withAudio.checked) }),
-        el('button', { type: 'button', class: 'btn', text: '⇧ Načíst soubor', onclick: importFile })),
-      el('p', { style: { marginTop: '14px' }, text: 'Máš nahrávky písní ve složce? Přidej je všechny najednou, texty pak dohledáš.' }),
-      el('div', { class: 'row' }, el('button', { type: 'button', class: 'btn', text: '♪ Přidat písně z nahrávek', onclick: () => nav.go('#/bulk') }))),
+        el('button', { type: 'button', class: 'btn', text: t('⇩ Stáhnout zálohu'), onclick: () => exportAll(withAudio.checked) }),
+        el('button', { type: 'button', class: 'btn', text: t('⇧ Načíst soubor'), onclick: importFile })),
+      el('p', { style: { marginTop: '14px' }, text: t('Máš nahrávky písní ve složce? Přidej je všechny najednou, texty pak dohledáš.') }),
+      el('div', { class: 'row' }, el('button', { type: 'button', class: 'btn', text: t('♪ Přidat písně z nahrávek'), onclick: () => nav.go('#/bulk') }))),
     searchSection(),
     aiSection(),
     sttSection(),
     syncEl,
     el('section', { class: 'section' },
-      el('h2', { text: 'Úložiště' }),
-      el('p', { text: est ? `Využito ${fileSize(est.usage || 0)} z dostupných ${fileSize(est.quota || 0)}.` : 'Prohlížeč velikost úložiště neuvádí.' })),
+      el('h2', { text: t('Úložiště') }),
+      el('p', { text: est ? t('Využito {u} z dostupných {q}.', { u: fileSize(est.usage || 0), q: fileSize(est.quota || 0) }) : t('Prohlížeč velikost úložiště neuvádí.') })),
     el('p', { class: 'empty', style: { padding: '12px' }, text: `Alaw ${APP_VERSION}` })));
   if (location.hash.includes('sync')) setTimeout(() => syncEl.scrollIntoView({ block: 'start' }), 50);
   return syncOff;
@@ -334,18 +344,18 @@ async function renderSettings(root) {
 function learnSection() {
   const p = getPrefs();
   const out = el('span', { text: String(p.newPerDay) });
-  const perDay = el('input', { type: 'range', min: 2, max: 20, step: 1, value: p.newPerDay, 'aria-label': 'Nových veršů denně',
+  const perDay = el('input', { type: 'range', min: 2, max: 20, step: 1, value: p.newPerDay, 'aria-label': t('Nových veršů denně'),
     oninput: () => { setPrefs({ newPerDay: +perDay.value }); out.textContent = perDay.value; } });
   const auto = el('input', { type: 'checkbox', checked: p.autoPlayLine, onchange: () => setPrefs({ autoPlayLine: auto.checked }) });
   const type = el('input', { type: 'checkbox', checked: p.alwaysType, onchange: () => setPrefs({ alwaysType: type.checked }) });
   return el('section', { class: 'section' },
-    el('h2', { text: 'Učení' }),
-    el('p', { text: 'Pokrok se ukládá po verších a synchronizuje se. Tato nastavení platí jen v tomto zařízení.' }),
-    el('label', { class: 'range' }, 'Nových veršů denně', perDay, out),
-    el('label', { class: 'check', style: { marginTop: '10px' } }, auto, el('span', { text: 'Při učení přehrát verš (když je načasovaný)' })),
-    el('label', { class: 'check', style: { marginTop: '8px' } }, type, el('span', { text: 'Vždy psát zpaměti (i u veršů, které se teprve učím)' })),
-    el('h2', { text: 'Cvičení v lekci', style: { marginTop: '16px' } }),
-    el('p', { text: 'Aplikace je střídá sama podle toho, jak verš umíš. Která ti nevyhovují, vypni.' }),
+    el('h2', { text: t('Učení') }),
+    el('p', { text: t('Pokrok se ukládá po verších a synchronizuje se. Tato nastavení platí jen v tomto zařízení.') }),
+    el('label', { class: 'range' }, t('Nových veršů denně'), perDay, out),
+    el('label', { class: 'check', style: { marginTop: '10px' } }, auto, el('span', { text: t('Při učení přehrát verš (když je načasovaný)') })),
+    el('label', { class: 'check', style: { marginTop: '8px' } }, type, el('span', { text: t('Vždy psát zpaměti (i u veršů, které se teprve učím)') })),
+    el('h2', { text: t('Cvičení v lekci'), style: { marginTop: '16px' } }),
+    el('p', { text: t('Aplikace je střídá sama podle toho, jak verš umíš. Která ti nevyhovují, vypni.') }),
     el('div', { class: 'ex-list' }, EXERCISES.map(([k, label]) => {
       const box = el('input', { type: 'checkbox', checked: !(getPrefs().exOff || {})[k], onchange: () => setPrefs({ exOff: { ...(getPrefs().exOff || {}), [k]: !box.checked } }) });
       return el('label', { class: 'check' }, box, el('span', { text: label }));
@@ -354,46 +364,46 @@ function learnSection() {
 
 function searchSection() {
   if (isAndroid()) {
-    return el('section', { class: 'section' }, el('h2', { text: 'Hledání textů' }),
-      el('p', { text: 'V aplikaci pro Android hledá Alaw ve všech zdrojích přímo, prostředník není potřeba.' }));
+    return el('section', { class: 'section' }, el('h2', { text: t('Hledání textů') }),
+      el('p', { text: t('V aplikaci pro Android hledá Alaw ve všech zdrojích přímo, prostředník není potřeba.') }));
   }
   const input = el('input', { type: 'url', value: getPrefs().proxyUrl || '', placeholder: 'https://alaw-proxy.….workers.dev', autocomplete: 'off' });
   const status = el('div', { class: 'ai-status' });
   return el('section', { class: 'section' },
-    el('h2', { text: 'Hledání textů (prostředník)' }),
-    el('p', { text: 'LRCLIB, Welsh Lyrics wiki, Wicidestun a We Learn Welsh fungují i bez něj. Pro ostatní weby (LyricsTranslate, Bandcamp, Genius, AZLyrics) potřebuje prohlížeč na počítači prostředníka na Cloudflare Workers. V telefonu (APK) potřeba není.' }),
-    el('label', { class: 'field' }, el('span', { text: 'Adresa prostředníka' }), input),
+    el('h2', { text: t('Hledání textů (prostředník)') }),
+    el('p', { text: t('LRCLIB, Welsh Lyrics wiki, Wicidestun a We Learn Welsh fungují i bez něj. Pro ostatní weby (LyricsTranslate, Bandcamp, Genius, AZLyrics) potřebuje prohlížeč na počítači prostředníka na Cloudflare Workers. V telefonu (APK) potřeba není.') }),
+    el('label', { class: 'field' }, el('span', { text: t('Adresa prostředníka') }), input),
     el('div', { class: 'row', style: { marginTop: '8px' } },
-      el('button', { type: 'button', class: 'btn small', text: 'Uložit a vyzkoušet', onclick: async () => {
+      el('button', { type: 'button', class: 'btn small', text: t('Uložit a vyzkoušet'), onclick: async () => {
         const url = input.value.trim().replace(/\/+$/, '');
-        if (url && !/^https:\/\/[\w.-]+\.workers\.dev$/.test(url) && !/^https:\/\//.test(url)) { status.textContent = 'Adresa musí začínat https://'; return; }
+        if (url && !/^https:\/\/[\w.-]+\.workers\.dev$/.test(url) && !/^https:\/\//.test(url)) { status.textContent = t('Adresa musí začínat https://'); return; }
         setPrefs({ proxyUrl: url });
-        if (!url) { status.textContent = 'Prostředník vypnutý.'; return; }
-        status.textContent = 'Zkouším…';
-        try { await request('https://lyricstranslate.com/en/language/welsh', { timeout: 15000 }); status.textContent = '✓ Funguje.'; }
-        catch (e) { status.textContent = `Nefunguje: ${e.message}`; }
+        if (!url) { status.textContent = t('Prostředník vypnutý.'); return; }
+        status.textContent = t('Zkouším…');
+        try { await request('https://lyricstranslate.com/en/language/welsh', { timeout: 15000 }); status.textContent = t('✓ Funguje.'); }
+        catch (e) { status.textContent = t('Nefunguje: {e}', { e: e.message }); }
       } })),
     status);
 }
 
 function aiSection() {
   const cfg = aiConfig();
-  const input = el('input', { type: 'password', value: cfg.key || '', placeholder: 'AQ.… nebo AIza…', autocomplete: 'off', spellcheck: false });
-  const status = el('div', { class: 'ai-status', text: cfg.key ? `Model: ${cfg.model}` : '' });
+  const input = el('input', { type: 'password', value: cfg.key || '', placeholder: t('AQ.… nebo AIza…'), autocomplete: 'off', spellcheck: false });
+  const status = el('div', { class: 'ai-status', text: cfg.key ? t('Model: {m}', { m: cfg.model }) : '' });
   return el('section', { class: 'section' },
-    el('h2', { text: 'Překlady pomocí AI (Gemini)' }),
-    el('p', {}, 'Klíč získáš zdarma v ', el('a', { href: 'https://aistudio.google.com/apikey', target: '_blank', rel: 'noopener', text: 'Google AI Studiu' }),
-      '. Uloží se jen v tomto zařízení – nezálohuje se a nesynchronizuje.'),
-    el('label', { class: 'field' }, el('span', { text: 'Klíč API' }), input),
+    el('h2', { text: t('Překlady pomocí AI (Gemini)') }),
+    el('p', {}, t('Klíč získáš zdarma v '), el('a', { href: 'https://aistudio.google.com/apikey', target: '_blank', rel: 'noopener', text: t('Google AI Studiu') }),
+      t('. Uloží se jen v tomto zařízení – nezálohuje se a nesynchronizuje.')),
+    el('label', { class: 'field' }, el('span', { text: t('Klíč API') }), input),
     el('div', { class: 'row', style: { marginTop: '8px' } },
-      el('button', { type: 'button', class: 'btn small', text: 'Uložit a ověřit', onclick: async () => {
+      el('button', { type: 'button', class: 'btn small', text: t('Uložit a ověřit'), onclick: async () => {
         const key = input.value.replace(/\s+/g, '');
-        if (!key) { setAiConfig(null); status.textContent = 'Klíč smazán.'; return; }
-        status.textContent = 'Ověřuji…';
-        try { const picked = await pickModel(key); setAiConfig({ key, ...picked }); status.textContent = `✓ Funguje. Model: ${picked.model}`; }
+        if (!key) { setAiConfig(null); status.textContent = t('Klíč smazán.'); return; }
+        status.textContent = t('Ověřuji…');
+        try { const picked = await pickModel(key); setAiConfig({ key, ...picked }); status.textContent = t('✓ Funguje. Model: {m}', { m: picked.model }); }
         catch (e) { status.textContent = e.message; }
       } }),
-      cfg.key ? el('button', { type: 'button', class: 'btn small danger', text: 'Smazat klíč', onclick: () => { setAiConfig(null); input.value = ''; status.textContent = 'Klíč smazán.'; } }) : null),
+      cfg.key ? el('button', { type: 'button', class: 'btn small danger', text: t('Smazat klíč'), onclick: () => { setAiConfig(null); input.value = ''; status.textContent = t('Klíč smazán.'); } }) : null),
     status);
 }
 
@@ -403,29 +413,29 @@ function sttSection() {
   const choice = el('div', {});
   function drawChoice() {
     const av = availableEngines();
-    if (av.length < 2) { fill(choice, el('p', { class: 'hint', text: av.length ? `Přepisuje: ${ENGINES[av[0]].label}.` : 'Zatím není nastavená žádná služba: vlož klíč Groq níže, nebo klíč Gemini výše.' })); return; }
+    if (av.length < 2) { fill(choice, el('p', { class: 'hint', text: av.length ? t('Přepisuje: {e}.', { e: ENGINES[av[0]].label }) : t('Zatím není nastavená žádná služba: vlož klíč Groq níže, nebo klíč Gemini výše.') })); return; }
     const sel = el('select', { onchange: () => setPrefs({ stt: sel.value }) }, av.map(k => el('option', { value: k, text: ENGINES[k].label })));
     sel.value = defaultEngine();
-    fill(choice, el('label', { class: 'field' }, el('span', { text: 'Předvybraná služba (při přepisu se stejně zeptám)' }), sel));
+    fill(choice, el('label', { class: 'field' }, el('span', { text: t('Předvybraná služba (při přepisu se stejně zeptám)') }), sel));
   }
   drawChoice();
   return el('section', { class: 'section' },
-    el('h2', { text: 'Přepis z nahrávky' }),
-    el('p', {}, 'Text písně přepíše z vlastní nahrávky Gemini (klíč výše) nebo Whisper přes Groq – zdarma, bez platební karty. Klíč Groq získáš na ',
+    el('h2', { text: t('Přepis z nahrávky') }),
+    el('p', {}, t('Text písně přepíše z vlastní nahrávky Gemini (klíč výše) nebo Whisper přes Groq – zdarma, bez platební karty. Klíč Groq získáš na '),
       el('a', { href: 'https://console.groq.com/keys', target: '_blank', rel: 'noopener', text: 'console.groq.com' }),
-      '. Uloží se jen v tomto zařízení. Přepis zpěvu nebývá přesný – obě služby můžeš porovnat.'),
+      t('. Uloží se jen v tomto zařízení. Přepis zpěvu nebývá přesný – obě služby můžeš porovnat.')),
     choice,
-    el('label', { class: 'field' }, el('span', { text: 'Klíč Groq' }), input),
+    el('label', { class: 'field' }, el('span', { text: t('Klíč Groq') }), input),
     el('div', { class: 'row', style: { marginTop: '8px' } },
-      el('button', { type: 'button', class: 'btn small', text: 'Uložit a ověřit', onclick: async () => {
+      el('button', { type: 'button', class: 'btn small', text: t('Uložit a ověřit'), onclick: async () => {
         const key = input.value.replace(/\s+/g, '');
-        if (!key) { setGroqKey(''); status.textContent = 'Klíč smazán.'; drawChoice(); return; }
-        status.textContent = 'Ověřuji…';
-        try { await checkGroq(key); setGroqKey(key); status.textContent = '✓ Funguje.'; }
+        if (!key) { setGroqKey(''); status.textContent = t('Klíč smazán.'); drawChoice(); return; }
+        status.textContent = t('Ověřuji…');
+        try { await checkGroq(key); setGroqKey(key); status.textContent = t('✓ Funguje.'); }
         catch (e) { status.textContent = e.message; }
         drawChoice();
       } }),
-      groqKey() ? el('button', { type: 'button', class: 'btn small danger', text: 'Smazat klíč', onclick: () => { setGroqKey(''); input.value = ''; status.textContent = 'Klíč smazán.'; drawChoice(); } }) : null),
+      groqKey() ? el('button', { type: 'button', class: 'btn small danger', text: t('Smazat klíč'), onclick: () => { setGroqKey(''); input.value = ''; status.textContent = t('Klíč smazán.'); drawChoice(); } }) : null),
     status);
 }
 
@@ -444,29 +454,29 @@ function takeShare() {
   pendingDraft = url ? { shareUrl: url, title: '' } : { shareText: text, title: share.title };
 }
 function offerShare(share) {
-  const t = shareTarget();
+  const tg = shareTarget();
   const asNew = () => {
     pendingDraft = share.url ? { shareUrl: share.url } : { shareText: share.text || '', title: share.title || '' };
     if (location.hash === '#/new') route(); else nav.go('#/new');
   };
-  if (!t) { asNew(); return; }
+  if (!tg) { asNew(); return; }
   const toSong = async () => {
-    const target = await getSong(t.id);
-    if (!target) { toast('Píseň už neexistuje.'); setPrefs({ shareTarget: null }); asNew(); return; }
-    if (primaryVersion(target).lines.length && !confirm(`„${target.title}“ už text má. Nahradit ho (překlady a poznámky u veršů se ztratí)? Pro porovnání radši přidej verzi textu.`)) return;
+    const target = await getSong(tg.id);
+    if (!target) { toast(t('Píseň už neexistuje.')); setPrefs({ shareTarget: null }); asNew(); return; }
+    if (primaryVersion(target).lines.length && !confirm(t('„{t}“ už text má. Nahradit ho (překlady a poznámky u veršů se ztratí)? Pro porovnání radši přidej verzi textu.', { t: target.title }))) return;
     const done = async d => {
-      try { await applyLyrics(t.id, d, true); setPrefs({ shareTarget: null }); toast('Text uložen'); nav.go(`#/song/${encodeURIComponent(t.id)}`); }
-      catch (e) { toast(e.message || 'Uložení se nepovedlo.'); }
+      try { await applyLyrics(tg.id, d, true); setPrefs({ shareTarget: null }); toast(t('Text uložen')); nav.go(`#/song/${encodeURIComponent(tg.id)}`); }
+      catch (e) { toast(e.message || t('Uložení se nepovedlo.')); }
     };
     if (share.url) importFromUrl(share.url, done);
     else showPreview({ text: cleanText(share.text || ''), source: 'sdílení' }, [], done);
   };
   sheet(close => el('div', {},
-    el('h3', { text: 'Kam s textem?' }),
-    el('div', { class: 'sub', text: share.url || 'Sdílený text' }),
+    el('h3', { text: t('Kam s textem?') }),
+    el('div', { class: 'sub', text: share.url || t('Sdílený text') }),
     el('div', { class: 'row end' },
-      el('button', { type: 'button', class: 'btn', text: 'Nová píseň', onclick: () => { close(); setPrefs({ shareTarget: null }); asNew(); } }),
-      el('button', { type: 'button', class: 'btn primary', text: `K písni „${t.title}“`, onclick: () => { close(); toSong(); } }))));
+      el('button', { type: 'button', class: 'btn', text: t('Nová píseň'), onclick: () => { close(); setPrefs({ shareTarget: null }); asNew(); } }),
+      el('button', { type: 'button', class: 'btn primary', text: t('K písni „{t}“', { t: tg.title }), onclick: () => { close(); toSong(); } }))));
 }
 window.alawShare = (url, text) => { // volá APK, když aplikace už běží
   const u = url || (String(text || '').match(/https?:\/\/\S+/) || [])[0] || '';
@@ -484,7 +494,7 @@ window.alawBack = () => {
   nav.back();
   return true;
 };
-window.alawSaved = ok => toast(ok ? 'Soubor uložen' : 'Soubor se nepodařilo uložit');
+window.alawSaved = ok => toast(ok ? t('Soubor uložen') : t('Soubor se nepodařilo uložit'));
 
 function syncBars() {
   if (!isAndroid() || !window.AlawAndroid.setBars) return;
@@ -511,9 +521,9 @@ async function checkUpdate() {
   }
   const mine = window.AlawAndroid.version();
   if (!latest || !mine || !newer(latest, mine) || (st.later && now < st.later)) return;
-  const bar = el('div', { class: 'update-bar' }, el('span', { text: `Nová verze Alaw ${latest}` }),
-    el('button', { type: 'button', class: 'btn small primary', text: 'Stáhnout', onclick: () => window.AlawAndroid.open('https://github.com/tvspk/alaw/releases/latest/download/alaw.apk') }),
-    el('button', { type: 'button', class: 'btn small', text: 'Později', onclick: () => { setPrefs({ update: { ...getPrefs().update, later: Date.now() + 24 * 3600e3 } }); bar.remove(); } }));
+  const bar = el('div', { class: 'update-bar' }, el('span', { text: t('Nová verze Alaw {v}', { v: latest }) }),
+    el('button', { type: 'button', class: 'btn small primary', text: t('Stáhnout'), onclick: () => window.AlawAndroid.open('https://github.com/tvspk/alaw/releases/latest/download/alaw.apk') }),
+    el('button', { type: 'button', class: 'btn small', text: t('Později'), onclick: () => { setPrefs({ update: { ...getPrefs().update, later: Date.now() + 24 * 3600e3 } }); bar.remove(); } }));
   document.body.append(bar);
 }
 

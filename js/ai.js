@@ -1,3 +1,4 @@
+import { t, isEn } from './i18n.js';
 import { toSpeechWav } from './audioprep.js';
 
 // Gemini: český překlad veršů, doslovný překlad, hovorové zkratky, vysvětlení verše a přepis textu z nahrávky.
@@ -38,21 +39,21 @@ async function call(path, body, key, timeout = TIMEOUT()) {
     r = await send(false);
     if (r.status === 401) r = await send(true);
   } catch (e) {
-    if (e.name === 'AbortError') throw Object.assign(new AiError('Gemini neodpověděl včas (přetížení).'), { retry: 'busy' });
-    throw new AiError(navigator.onLine ? 'Gemini neodpovídá.' : 'Jsi offline.');
+    if (e.name === 'AbortError') throw Object.assign(new AiError(t('Gemini neodpověděl včas (přetížení).')), { retry: 'busy' });
+    throw new AiError(navigator.onLine ? t('Gemini neodpovídá.') : t('Jsi offline.'));
   }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
     const msg = data.error?.message || '';
-    if ((r.status === 400 && /API key/i.test(msg)) || r.status === 401) throw new AiError('Klíč pro Gemini není platný. Zkopíruj ho z Google AI Studia znovu celý (začíná „AQ.“ nebo „AIza“).');
-    if (r.status === 403) throw new AiError('Klíč pro Gemini nemá přístup (zkontroluj ho v Google AI Studiu).');
-    if (r.status === 404) throw Object.assign(new AiError('Model Gemini nenalezen. V Nastavení klíč ulož znovu, vybere se aktuální model.'), { retry: 'model' });
+    if ((r.status === 400 && /API key/i.test(msg)) || r.status === 401) throw new AiError(t('Klíč pro Gemini není platný. Zkopíruj ho z Google AI Studia znovu celý (začíná „AQ.“ nebo „AIza“).'));
+    if (r.status === 403) throw new AiError(t('Klíč pro Gemini nemá přístup (zkontroluj ho v Google AI Studiu).'));
+    if (r.status === 404) throw Object.assign(new AiError(t('Model Gemini nenalezen. V Nastavení klíč ulož znovu, vybere se aktuální model.')), { retry: 'model' });
     // přetížení: Google ho hlásí různými kódy (5xx, někdy i 4xx) se zprávou „high demand / overloaded / try again“
     if (r.status >= 500 || /high demand|overload|unavailable|try again|capacity/i.test(msg) || /UNAVAILABLE|RESOURCE_EXHAUSTED/.test(data.error?.status || '') && r.status !== 429) {
-      throw Object.assign(new AiError(`Gemini je teď přetížený (${r.status}). Zkus to za pár minut.`), { retry: 'busy' });
+      throw Object.assign(new AiError(t('Gemini je teď přetížený ({s}). Zkus to za pár minut.', { s: r.status })), { retry: 'busy' });
     }
-    if (r.status === 429) throw Object.assign(new AiError('Gemini hlásí vyčerpaný denní limit bezplatného klíče. Zkus to zítra, nebo si v Google AI Studiu zapni placení.'), { retry: 'model' });
-    throw new AiError(`Chyba Gemini ${r.status}${msg ? `: ${msg.slice(0, 160)}` : ''}`);
+    if (r.status === 429) throw Object.assign(new AiError(t('Gemini hlásí vyčerpaný denní limit bezplatného klíče. Zkus to zítra, nebo si v Google AI Studiu zapni placení.')), { retry: 'model' });
+    throw new AiError(t('Chyba Gemini {s}', { s: r.status }) + (msg ? `: ${msg.slice(0, 160)}` : ''));
   }
   return data;
 }
@@ -77,7 +78,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // user = text, nebo pole částí ({ text } | { inline_data } | { file_data }). opts.timeout, opts.recitation = hláška při odmítnutí.
 async function generate(system, user, schema, onWait = () => {}, opts = {}) {
   let { key, model, models } = aiConfig();
-  if (!key) throw new AiError('Nejdřív vlož klíč pro Gemini v Nastavení.');
+  if (!key) throw new AiError(t('Nejdřív vlož klíč pro Gemini v Nastavení.'));
   if (!models) { // klíč uložený starší verzí: doplnit záložní modely
     try { ({ model, models } = await pickModel(key)); setAiConfig({ key, model, models }); } catch { /* zkusí uložený model */ }
   }
@@ -93,9 +94,9 @@ async function generate(system, user, schema, onWait = () => {}, opts = {}) {
   let data, lastErr;
   outer: for (const m of order) {
     for (const pause of [0, 2000, 5000]) {
-      if (pause) { onWait(`Gemini je přetížený, zkouším znovu (${m})…`); await sleep(pause); }
+      if (pause) { onWait(t('Gemini je přetížený, zkouším znovu ({m})…', { m })); await sleep(pause); }
       const started = Date.now();
-      const tick = setInterval(() => onWait(`Čekám na Gemini (${m})… ${Math.round((Date.now() - started) / 1000)} s`), 1000);
+      const tick = setInterval(() => onWait(t('Čekám na Gemini ({m})… {s} s', { m, s: Math.round((Date.now() - started) / 1000) })), 1000);
       try { data = await call(`models/${m}:generateContent`, body, key, opts.timeout); break outer; }
       catch (e) {
         lastErr = e;
@@ -108,14 +109,14 @@ async function generate(system, user, schema, onWait = () => {}, opts = {}) {
         if (e.retry !== 'busy') throw e;
       } finally { clearInterval(tick); }
     }
-    onWait('Zkouším jiný model Gemini…');
+    onWait(t('Zkouším jiný model Gemini…'));
   }
-  if (!data) throw new AiError(`${lastErr.message} (zkoušené modely: ${order.join(', ')})`);
+  if (!data) throw new AiError(`${lastErr.message} ` + t('(zkoušené modely: {m})', { m: order.join(', ') }));
   const cand = data.candidates?.[0];
-  if (!cand) throw new AiError('Gemini nevrátil odpověď' + (data.promptFeedback?.blockReason ? ` (${data.promptFeedback.blockReason}).` : '.'));
-  if (cand.finishReason === 'RECITATION') throw Object.assign(new AiError(opts.recitation || 'Gemini odmítl odpovědět (ochrana autorských práv). Zkus přeložit méně veršů najednou.'), { kind: 'recitation' });
+  if (!cand) throw new AiError(t('Gemini nevrátil odpověď') + (data.promptFeedback?.blockReason ? ` (${data.promptFeedback.blockReason}).` : '.'));
+  if (cand.finishReason === 'RECITATION') throw Object.assign(new AiError(opts.recitation || t('Gemini odmítl odpovědět (ochrana autorských práv). Zkus přeložit méně veršů najednou.')), { kind: 'recitation' });
   const text = (cand.content?.parts || []).map(p => p.text || '').join('');
-  try { return JSON.parse(text); } catch { throw new AiError('Gemini vrátil nečitelnou odpověď.'); }
+  try { return JSON.parse(text); } catch { throw new AiError(t('Gemini vrátil nečitelnou odpověď.')); }
 }
 
 const S = (type, extra = {}) => ({ type, ...extra });
@@ -133,6 +134,20 @@ Pravidla:
 - Když verš žádné zkráceniny nemá, vrať prázdné pole.
 - Vrať všechny verše se stejným "id", jaké dostaneš. Původní text neopakuj.`;
 
+// Anglické rozhraní: překlad a vysvětlení do britské angličtiny (pole translation = překlad do jazyka rozhraní).
+const TRANSLATE_PROMPT_EN = `You are an expert linguist and translator of song lyrics into British English.
+You will receive song metadata and numbered lines in the original language (most often Welsh).
+For each line provide:
+1. "literal": a word-for-word English translation that follows the structure and word order of the original (so the learner can see how the sentence is built).
+2. "translation": a natural, clear British English translation in the context of the whole song.
+3. "contractions": only colloquial contractions, shortened forms, elisions with an apostrophe, words run together in speech and dialect forms
+   (e.g. in Welsh "'di" → "wedi", "ti'n" → "ti yn", "dwi" → "rydw i", "'da" → "gyda", "moyn" → "eisiau", "'na" → "dyna").
+   For each: "short" exactly as in the text, "full" the full standard form, "note" a short English explanation (10 words at most).
+Rules:
+- Do NOT list simple initial consonant mutations (e.g. "Nghymru" → "Cymru", "gath" → "cath") under "contractions".
+- If a line has no contractions, return an empty array.
+- Return every line with the same "id" you received. Do not repeat the original text.`;
+
 // Přeloží verše (ty bez překladu, nebo všechny při overwrite). onProgress(hotovo, celkem).
 export async function translateVersion(song, version, { overwrite = false, onProgress = () => {}, onWait = () => {} } = {}) {
   const todo = version.lines.filter(l => l.text.trim() && (overwrite || !l.translation));
@@ -147,7 +162,7 @@ export async function translateVersion(song, version, { overwrite = false, onPro
       whole_song: version.lines.map(l => l.text).join('\n'),
       lines: chunk.map(l => ({ id: l.id, original: l.text })),
     };
-    const res = await generate(TRANSLATE_PROMPT, JSON.stringify(payload), S('OBJECT', {
+    const res = await generate(isEn ? TRANSLATE_PROMPT_EN : TRANSLATE_PROMPT, JSON.stringify(payload), S('OBJECT', {
       properties: {
         lines: S('ARRAY', { items: S('OBJECT', {
           properties: {
@@ -179,8 +194,14 @@ Dostaneš jeden verš písně a kontext. Vysvětli ho česky:
   "grammar" krátká poznámka (mutace a co ji způsobila, tvar slovesa, zkrácenina…), prázdný řetězec, když není co dodat.
 - "note": 1–3 věty k verši jako celku (idiom, gramatika, výslovnost, pomůcka k zapamatování).`;
 
+const EXPLAIN_PROMPT_EN = `You are a patient language teacher (mainly Welsh) for an English-speaking learner who is memorising songs.
+You will receive one line of a song and its context. Explain it in British English:
+- "words": every word of the line in order: "word" exactly as in the text, "base" the basic (dictionary) form, "meaning" the English meaning,
+  "grammar" a short note (mutation and what caused it, verb form, contraction…), or an empty string if there is nothing to add.
+- "note": 1–3 sentences about the line as a whole (idiom, grammar, pronunciation, a memory aid).`;
+
 export async function explainLine(song, version, line) {
-  return generate(EXPLAIN_PROMPT, JSON.stringify({
+  return generate(isEn ? EXPLAIN_PROMPT_EN : EXPLAIN_PROMPT, JSON.stringify({
     title: song.title, artist: song.artist, language: song.language, line: line.text,
     context: version.lines.map(l => l.text).join('\n'),
   }), S('OBJECT', {
@@ -209,7 +230,7 @@ const blobToB64 = blob => new Promise((res, rej) => { const r = new FileReader()
 // Velký soubor přes Files API (multipart: jeden požadavek, odpověď = popis souboru). Google by ho za 48 h smazal sám,
 // mažeme ho hned po přepisu.
 async function uploadFile(key, blob, mime, name, onWait) {
-  onWait(`Nahrávám nahrávku do Gemini (${Math.max(1, Math.round(blob.size / 1048576))} MB)…`);
+  onWait(t('Nahrávám nahrávku do Gemini ({mb} MB)…', { mb: Math.max(1, Math.round(blob.size / 1048576)) }));
   const boundary = 'alaw' + Math.random().toString(36).slice(2);
   const meta = JSON.stringify({ file: { display_name: String(name || 'alaw').slice(0, 100) } });
   const body = new Blob([`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: ${mime}\r\n\r\n`, blob, `\r\n--${boundary}--\r\n`]);
@@ -218,16 +239,16 @@ async function uploadFile(key, blob, mime, name, onWait) {
     r = await fetch('https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=multipart', {
       method: 'POST', headers: { 'x-goog-api-key': key, 'X-Goog-Upload-Protocol': 'multipart', 'Content-Type': `multipart/related; boundary=${boundary}` }, body,
     });
-  } catch { throw new AiError(navigator.onLine ? 'Nahrávku se nepodařilo nahrát do Gemini.' : 'Jsi offline.'); }
+  } catch { throw new AiError(navigator.onLine ? t('Nahrávku se nepodařilo nahrát do Gemini.') : t('Jsi offline.')); }
   const data = await r.json().catch(() => ({}));
-  if (!r.ok || !data.file || !data.file.uri) throw new AiError(`Nahrání do Gemini se nepovedlo (${r.status}${data.error?.message ? `: ${data.error.message.slice(0, 120)}` : ''}).`);
+  if (!r.ok || !data.file || !data.file.uri) throw new AiError(t('Nahrání do Gemini se nepovedlo ({s}).', { s: `${r.status}${data.error?.message ? `: ${data.error.message.slice(0, 120)}` : ''}` }));
   let file = data.file;
   for (let i = 0; i < 60 && file.state === 'PROCESSING'; i++) {
-    onWait('Gemini zpracovává nahrávku…');
+    onWait(t('Gemini zpracovává nahrávku…'));
     await sleep(window.__alawAiPoll ?? 2000);
     file = await call(file.name, null, key);
   }
-  if (file.state === 'FAILED') throw new AiError('Gemini nahrávku nepřijal (neumí ji přečíst).');
+  if (file.state === 'FAILED') throw new AiError(t('Gemini nahrávku nepřijal (neumí ji přečíst).'));
   return file;
 }
 function deleteFile(key, name) {
@@ -246,10 +267,10 @@ Přepiš PŘESNĚ to, co se zpívá, v jazyce zpěvu (nejčastěji velština), s
 // Přepíše zpívaný text z nahrávky. Vrací [{ start (ms|null), text, stanza }].
 export async function transcribeAudio(blob, { title = '', artist = '', language = 'cy', name = '' } = {}, onWait = () => {}) {
   const { key } = aiConfig();
-  if (!key) throw new AiError('Nejdřív vlož klíč pro Gemini v Nastavení.');
+  if (!key) throw new AiError(t('Nejdřív vlož klíč pro Gemini v Nastavení.'));
   let mime = audioMime(blob.type, name);
   if (blob.size > INLINE_MAX()) { // velká nahrávka (WAV): nejdřív zkusit menší kopii (mono 16 kHz), jinak Files API
-    onWait('Připravuji menší kopii nahrávky pro přepis…');
+    onWait(t('Připravuji menší kopii nahrávky pro přepis…'));
     try { const small = await toSpeechWav(blob); if (small.size < blob.size) { blob = small; mime = 'audio/wav'; } } catch { /* zkusí se původní soubor */ }
   }
   let file = null, audioPart;
@@ -259,7 +280,7 @@ export async function transcribeAudio(blob, { title = '', artist = '', language 
     const res = await generate(TRANSCRIBE_PROMPT, [audioPart, { text: JSON.stringify({ title, artist, language }) }], S('OBJECT', {
       properties: { lines: S('ARRAY', { items: S('OBJECT', { properties: { start: S('NUMBER'), text: S('STRING'), new_stanza: S('BOOLEAN') }, required: ['start', 'text'] }) }) },
       required: ['lines'],
-    }), onWait, { timeout: 240000, recitation: 'Gemini přepis odmítl (ochrana autorských práv u známé písně). Zkus najít text na internetu.' });
+    }), onWait, { timeout: 240000, recitation: t('Gemini přepis odmítl (ochrana autorských práv u známé písně). Zkus najít text na internetu.') });
     return cleanTranscript(res.lines);
   } finally { if (file) deleteFile(key, file.name); }
 }

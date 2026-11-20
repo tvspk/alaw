@@ -128,7 +128,7 @@ def shot(page, name):
         page.screenshot(path=str(SHOTS / f'{name}.png'))
 
 def device(browser, url, gh, label):
-    ctx = browser.new_context(**PIXEL)
+    ctx = browser.new_context(**PIXEL, locale='cs-CZ')
     page = ctx.new_page()
     page.on('pageerror', lambda e: errors.append(f'{label}: {e}'))
     page.route('https://api.github.com/**', gh.handle)

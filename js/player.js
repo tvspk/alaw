@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 // Jednotný přehrávač: vlastní zvukový soubor (Blob z IndexedDB) nebo video z YouTube.
 // Ovládání: play, pause, toggle, seek(ms), playFrom(ms), setRate(r), setLoop(a, b)
 // Události: onTime(ms), onState(playing), onReady(), onError(text)
@@ -11,7 +12,7 @@ function loadYouTubeApi() {
     window.onYouTubeIframeAPIReady = () => { if (prev) prev(); resolve(window.YT); };
     const s = document.createElement('script');
     s.src = 'https://www.youtube.com/iframe_api';
-    s.onerror = () => { ytApiPromise = null; reject(new Error('YouTube se nepodařilo načíst (jsi offline?)')); };
+    s.onerror = () => { ytApiPromise = null; reject(new Error(t('YouTube se nepodařilo načíst (jsi offline?)'))); };
     document.head.appendChild(s);
   });
   return ytApiPromise;
@@ -54,7 +55,7 @@ export class Player {
     a.addEventListener('play', () => this._setPlaying(true));
     a.addEventListener('pause', () => this._setPlaying(false));
     a.addEventListener('ended', () => this._setPlaying(false));
-    a.addEventListener('error', () => this.onError('Zvukový soubor nejde přehrát. Zkus jiný formát (mp3, m4a, ogg, wav).'));
+    a.addEventListener('error', () => this.onError(t('Zvukový soubor nejde přehrát. Zkus jiný formát (mp3, m4a, ogg, wav).')));
     this.audio = a;
   }
 
@@ -86,8 +87,8 @@ export class Player {
           } else if (e.data === YT.PlayerState.PAUSED || e.data === YT.PlayerState.ENDED) this._setPlaying(false);
         },
         onError: e => {
-          const msg = { 2: 'Neplatné ID videa.', 5: 'Video nejde přehrát v tomto prohlížeči.', 100: 'Video neexistuje nebo je soukromé.', 101: 'Tohle video nejde přehrát mimo YouTube (autor to nepovolil). Zkus jiné video s toutéž písní.', 150: 'Tohle video nejde přehrát mimo YouTube (autor to nepovolil). Zkus jiné video s toutéž písní.' }[e.data];
-          this.onError(msg || `Chyba YouTube (${e.data}).`);
+          const msg = { 2: t('Neplatné ID videa.'), 5: t('Video nejde přehrát v tomto prohlížeči.'), 100: t('Video neexistuje nebo je soukromé.'), 101: t('Tohle video nejde přehrát mimo YouTube (autor to nepovolil). Zkus jiné video s toutéž písní.'), 150: t('Tohle video nejde přehrát mimo YouTube (autor to nepovolil). Zkus jiné video s toutéž písní.') }[e.data];
+          this.onError(msg || t('Chyba YouTube ({c}).', { c: e.data }));
         },
       },
     });

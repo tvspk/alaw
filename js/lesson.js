@@ -2,6 +2,7 @@
 // (learn.pickExercise); s nahrávkou (diktát, poslech) jen u načasovaných veršů.
 // Adresa #/learn/<id písně> (celá lekce) nebo #/learn/<id>/<klíč verše> (procvičit jen jeden verš z mapy písně).
 import { el, fill as fillEl, iconBtn } from './ui.js';
+import { t, pl } from './i18n.js';
 import { getSong, getAudioBlob, getPrefs, setPrefs, getProgress, saveProgress } from './store.js';
 import { primaryVersion } from './model.js';
 import { Player } from './player.js';
@@ -13,9 +14,9 @@ import { analyze, variantTexts, unsureSpots, shakyWords } from './versions.js';
 
 const WORD_RE = /^([^\p{L}\p{N}]*)(.*?)([^\p{L}\p{N}]*)$/u;
 const TITLES = {
-  intro: 'Nový verš', initials: 'Podle prvních písmen', recall: 'Jak verš zní?', type: 'Napiš zpaměti',
-  choiceWord: 'Doplň slovo', scramble: 'Poskládej verš', flash: 'Bliknutí', choice3: 'Který verš následuje?',
-  fromCz: 'Z češtiny do velštiny', before: 'Co je před tímto veršem?', dictation: 'Diktát',
+  intro: t('Nový verš'), initials: t('Podle prvních písmen'), recall: t('Jak verš zní?'), type: t('Napiš zpaměti'),
+  choiceWord: t('Doplň slovo'), scramble: t('Poskládej verš'), flash: t('Bliknutí'), choice3: t('Který verš následuje?'),
+  fromCz: t('Z češtiny do velštiny'), before: t('Co je před tímto veršem?'), dictation: t('Diktát'),
 };
 
 // Nahrávka písně do přehrávače (vlastní soubor, jinak YouTube v malém okně). Používá i drill.js.
@@ -62,7 +63,7 @@ export function wordsOf(text, mode) { // 'initials' = první písmena, jinak skr
 
 export async function renderLesson(root, id, focusKey, nav) {
   const song = await getSong(id);
-  if (!song) { root.append(el('div', { class: 'view' }, el('p', { class: 'empty', text: 'Píseň nenalezena.' }))); return; }
+  if (!song) { root.append(el('div', { class: 'view' }, el('p', { class: 'empty', text: t('Píseň nenalezena.') }))); return; }
   const version = primaryVersion(song);
   const units = songUnits(song);
   const byKey = new Map(units.map(u => [u.k, u]));
@@ -91,9 +92,9 @@ export async function renderLesson(root, id, focusKey, nav) {
   // ---------- rozhraní ----------
   const counter = el('small');
   const top = el('header', { class: 'topbar' },
-    iconBtn('back', 'Zpět', () => nav.back()),
+    iconBtn('back', t('Zpět'), () => nav.back()),
     el('h1', {}, el('span', { text: song.title }), counter));
-  const typeChip = el('button', { type: 'button', class: 'chip', text: '✍ Vždy psát', onclick: () => {
+  const typeChip = el('button', { type: 'button', class: 'chip', text: t('✍ Vždy psát'), onclick: () => {
     setPrefs({ alwaysType: !getPrefs().alwaysType }); typeChip.classList.toggle('on', getPrefs().alwaysType); show();
   } });
   typeChip.classList.toggle('on', getPrefs().alwaysType);
@@ -103,7 +104,7 @@ export async function renderLesson(root, id, focusKey, nav) {
 
   function updateCounter() {
     const s = songSummary(units, recs);
-    counter.textContent = queue.length ? `Zbývá ${queue.length} · umíš ${s.known + s.due} z ${s.total}` : `Umíš ${s.known + s.due} z ${s.total}`;
+    counter.textContent = queue.length ? t('Zbývá {q} · umíš {n} z {m}', { q: queue.length, n: s.known + s.due, m: s.total }) : t('Umíš {n} z {m}', { n: s.known + s.due, m: s.total });
   }
 
   // ---------- zvuk ----------
@@ -176,27 +177,27 @@ export async function renderLesson(root, id, focusKey, nav) {
 
   function head() {
     const { unit, rec, ex } = cur;
-    const stLabel = !rec || rec.st === 'new' ? 'nový' : rec.st === 'learn' ? (rec.lapses ? 'znovu se učím' : 'učím se') : `opakování · interval ${fmtIvl(rec.ivl)}`;
+    const stLabel = !rec || rec.st === 'new' ? t('nový') : rec.st === 'learn' ? (rec.lapses ? t('znovu se učím') : t('učím se')) : t('opakování · interval {i}', { i: fmtIvl(rec.ivl) });
     const nums = unit.lines.map(i => i + 1).join(', ');
     return el('div', { class: 'lhead' },
       el('span', { class: 'lex', text: TITLES[ex] }),
-      el('span', { class: 'lmeta', text: `verš ${nums}${unit.lines.length > 1 ? ' (opakuje se)' : ''} · ${stLabel}` }));
+      el('span', { class: 'lmeta', text: t('verš {n}', { n: nums }) + (unit.lines.length > 1 ? ' ' + t('(opakuje se)') : '') + ` · ${stLabel}` }));
   }
 
   function context() {
     const i = cur.unit.first - 1;
     const prev = i >= 0 ? version.lines[i] : null;
     return el('div', { class: 'lprev' },
-      el('div', { class: 'lprev-label', text: prev ? 'Předchozí verš' : 'Začátek písně' }),
+      el('div', { class: 'lprev-label', text: prev ? t('Předchozí verš') : t('Začátek písně') }),
       prev ? el('div', { class: 'lprev-text', text: prev.text }) : null,
-      prev ? listenBtn(i, 'Předchozí verš') : null);
+      prev ? listenBtn(i, t('Předchozí verš')) : null);
   }
 
   function extras(line) {
     const li = version.lines.indexOf(line);
     const uns = vres.length && li >= 0 && !cur?.variantUsed ? unsureSpots(song, [li], vres) : [];
     return [
-      ...uns.map(sp => el('div', { class: 'lvariant', text: `⚠ Nejisté: jiná verze má ${sp.b ? `„${sp.b}“` : 'tu nic'}${sp.a ? ` místo „${sp.a}“` : ''}` })),
+      ...uns.map(sp => el('div', { class: 'lvariant', text: '⚠ ' + (sp.a ? t('Nejisté: jiná verze má {b} místo „{a}“', { b: sp.b ? `„${sp.b}“` : t('tu nic'), a: sp.a }) : t('Nejisté: jiná verze má {b}', { b: sp.b ? `„${sp.b}“` : t('tu nic') })) })),
       line.translation ? el('div', { class: 'tr', text: line.translation }) : null,
       line.alt ? el('div', { class: 'alt', text: line.alt }) : null,
       line.literal ? el('div', { class: 'lit', text: line.literal }) : null,
@@ -214,34 +215,34 @@ export async function renderLesson(root, id, focusKey, nav) {
 
   const btn = (text, onclick, cls = 'btn') => el('button', { type: 'button', class: cls, text, onclick });
   const hintChip = (text, fn) => el('button', { type: 'button', class: 'chip', text, onclick: e => { fn(); e.target.remove(); } });
-  const revealRow = () => el('div', { class: 'row end' }, btn('Odkrýt', () => reveal(), 'btn primary'));
+  const revealRow = () => el('div', { class: 'row end' }, btn(t('Odkrýt'), () => reveal(), 'btn primary'));
   const hidden3 = () => el('span', { class: 'lq', text: '? ? ?' });
 
   function draw() {
     const { unit, ex, line, data } = cur;
     const body = [];
     const hintBox = el('div', { class: 'lhint' });
-    const trHint = () => (line.translation || line.alt) ? hintChip('Nápověda: překlad', () => hintBox.append(el('div', { class: 'tr', text: line.translation || line.alt }))) : null;
+    const trHint = () => (line.translation || line.alt) ? hintChip(t('Nápověda: překlad'), () => hintBox.append(el('div', { class: 'tr', text: line.translation || line.alt }))) : null;
 
     if (ex === 'intro') {
       body.push(context(),
         el('div', { class: 'ltarget' }, el('div', { class: 'ltext', text: line.text }), ...extras(line)),
-        el('div', { class: 'row' }, listenBtn(unit.first, 'Poslechnout verš')),
-        el('p', { class: 'hint', text: 'Přečti si verš nahlas, poslechni si ho a zkus si ho zapamatovat. Za chvíli se tě na něj zeptám.' }),
-        el('div', { class: 'row end' }, btn('Dál', nextFromIntro, 'btn primary')));
+        el('div', { class: 'row' }, listenBtn(unit.first, t('Poslechnout verš'))),
+        el('p', { class: 'hint', text: t('Přečti si verš nahlas, poslechni si ho a zkus si ho zapamatovat. Za chvíli se tě na něj zeptám.') }),
+        el('div', { class: 'row end' }, btn(t('Dál'), nextFromIntro, 'btn primary')));
       if (getPrefs().autoPlayLine) setTimeout(() => playLine(unit.first), 50);
 
     } else if (ex === 'type' || ex === 'dictation') {
       const input = el('textarea', { class: 'ltype', rows: 2, lang: song.language || 'cy', autocapitalize: 'off', autocomplete: 'off', spellcheck: false,
-        placeholder: ex === 'dictation' ? 'Napiš, co slyšíš…' : 'Napiš verš zpaměti…', 'aria-label': 'Verš' });
+        placeholder: ex === 'dictation' ? t('Napiš, co slyšíš…') : t('Napiš verš zpaměti…'), 'aria-label': t('Verš') });
       input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); check(input.value); } });
       body.push(ex === 'type' ? context() : el('div', { class: 'row' },
-        btn('▶ Přehrát verš', () => playLine(unit.first), 'btn primary small'),
-        btn('🐢 Pomaleji', () => playLine(unit.first, 0.75), 'btn small')),
+        btn(t('▶ Přehrát verš'), () => playLine(unit.first), 'btn primary small'),
+        btn(t('🐢 Pomaleji'), () => playLine(unit.first, 0.75), 'btn small')),
       el('div', { class: 'ltarget' }, input, hintBox),
       el('div', { class: 'row' }, ex === 'type' ? trHint() : null,
-        hintChip('První písmena', () => hintBox.append(el('div', { class: 'ltext small' }, wordsOf(line.text, 'initials'))))),
-      el('div', { class: 'row end' }, btn('Nevím', () => check('')), btn('Zkontrolovat', () => check(input.value), 'btn primary')));
+        hintChip(t('První písmena'), () => hintBox.append(el('div', { class: 'ltext small' }, wordsOf(line.text, 'initials'))))),
+      el('div', { class: 'row end' }, btn(t('Nevím'), () => check('')), btn(t('Zkontrolovat'), () => check(input.value), 'btn primary')));
       if (ex === 'dictation') setTimeout(() => playLine(unit.first), 50);
       setTimeout(() => input.focus(), 30);
 
@@ -249,22 +250,22 @@ export async function renderLesson(root, id, focusKey, nav) {
       const sentence = el('div', { class: 'ltext' }, data.toks.map((t, i) => (i === data.i
         ? [data.lead, el('span', { class: 'blank', text: '____' }), data.trail] : t)));
       body.push(context(), el('div', { class: 'ltarget' }, sentence, hintBox),
-        el('p', { class: 'hint', text: 'Které slovo chybí?' }),
+        el('p', { class: 'hint', text: t('Které slovo chybí?') }),
         el('div', { class: 'choices' }, data.options.map(o => btn(o, () => pick(o === data.core, o), 'choice'))),
         el('div', { class: 'row' }, trHint()));
 
     } else if (ex === 'choice3') {
       body.push(context(),
-        el('p', { class: 'hint', text: unit.first ? 'Který verš následuje?' : 'Kterým veršem píseň začíná?' }),
+        el('p', { class: 'hint', text: unit.first ? t('Který verš následuje?') : t('Kterým veršem píseň začíná?') }),
         el('div', { class: 'choices lines' }, data.options.map(u => btn(u.text, () => pick(u.k === cur.k, u.text), 'choice'))));
 
     } else if (ex === 'scramble') {
-      const placed = el('div', { class: 'sc-placed' }, data.placed.length ? data.placed.map((t, j) =>
-        btn(t.w, () => { data.placed.splice(j, 1); draw(); }, 'sc-word on')) : el('span', { class: 'lq small', text: 'ťukej slova ve správném pořadí' }));
-      const left = data.toks.filter(t => !data.placed.includes(t));
+      const placed = el('div', { class: 'sc-placed' }, data.placed.length ? data.placed.map((tk, j) =>
+        btn(tk.w, () => { data.placed.splice(j, 1); draw(); }, 'sc-word on')) : el('span', { class: 'lq small', text: t('ťukej slova ve správném pořadí') }));
+      const left = data.toks.filter(tk => !data.placed.includes(tk));
       body.push(context(), el('div', { class: 'ltarget' }, placed),
-        el('div', { class: 'sc-pool' }, left.map(t => btn(t.w, () => {
-          data.placed.push(t);
+        el('div', { class: 'sc-pool' }, left.map(tk => btn(tk.w, () => {
+          data.placed.push(tk);
           if (data.placed.length === data.toks.length) checkScramble(); else draw();
         }, 'sc-word'))),
         el('div', { class: 'row' }, trHint()), hintBox);
@@ -274,7 +275,7 @@ export async function renderLesson(root, id, focusKey, nav) {
       const box = el('div', { class: 'ltext', text: line.text });
       const bar = el('div', { class: 'flashbar' }, el('i', { style: { animationDuration: `${ms}ms` } }));
       body.push(context(), el('div', { class: 'ltarget' }, box, bar),
-        el('p', { class: 'hint', text: 'Zapamatuj si verš, za chvilku zmizí. Pak si ho řekni nahlas a odkryj.' }));
+        el('p', { class: 'hint', text: t('Zapamatuj si verš, za chvilku zmizí. Pak si ho řekni nahlas a odkryj.') }));
       const mine = cur;
       setTimeout(() => {
         if (cur !== mine || cur.revealed) return;
@@ -284,50 +285,50 @@ export async function renderLesson(root, id, focusKey, nav) {
       }, ms);
 
     } else if (ex === 'fromCz') {
-      body.push(el('div', { class: 'lprev' }, el('div', { class: 'lprev-label', text: 'Česky' }),
+      body.push(el('div', { class: 'lprev' }, el('div', { class: 'lprev-label', text: t('Česky') }),
         el('div', { class: 'lprev-text cz', text: line.translation || line.alt })),
       el('div', { class: 'ltarget' }, el('div', { class: 'ltext' }, hidden3())),
-      el('p', { class: 'hint', text: 'Jak tenhle verš zní v originále? Řekni ho nahlas, pak odkryj.' }),
+      el('p', { class: 'hint', text: t('Jak tenhle verš zní v originále? Řekni ho nahlas, pak odkryj.') }),
       revealRow());
 
     } else if (ex === 'before') {
       const nxt = unit.first + 1;
-      body.push(el('div', { class: 'lprev' }, el('div', { class: 'lprev-label', text: 'Tento verš' }),
-        el('div', { class: 'lprev-text', text: version.lines[nxt].text }), listenBtn(nxt, 'Poslechnout')),
+      body.push(el('div', { class: 'lprev' }, el('div', { class: 'lprev-label', text: t('Tento verš') }),
+        el('div', { class: 'lprev-text', text: version.lines[nxt].text }), listenBtn(nxt, t('Poslechnout'))),
       el('div', { class: 'ltarget' }, el('div', { class: 'ltext' }, hidden3())),
-      el('p', { class: 'hint', text: 'Který verš je těsně před ním? Řekni ho nahlas, pak odkryj.' }),
+      el('p', { class: 'hint', text: t('Který verš je těsně před ním? Řekni ho nahlas, pak odkryj.') }),
       revealRow());
 
     } else { // initials, recall
       const hidden = el('div', { class: 'ltext' }, ex === 'initials' ? wordsOf(line.text, 'initials') : hidden3());
       body.push(context(),
         el('div', { class: 'ltarget' }, hidden, ex === 'initials' && line.translation ? el('div', { class: 'tr', text: line.translation }) : null, hintBox),
-        el('p', { class: 'hint', text: ex === 'initials' ? 'Řekni si celý verš nahlas, pak ho odkryj a ohodnoť, jak to šlo.' : 'Jak pokračuje píseň? Řekni si verš nahlas, pak ho odkryj a ohodnoť, jak to šlo.' }),
+        el('p', { class: 'hint', text: ex === 'initials' ? t('Řekni si celý verš nahlas, pak ho odkryj a ohodnoť, jak to šlo.') : t('Jak pokračuje píseň? Řekni si verš nahlas, pak ho odkryj a ohodnoť, jak to šlo.') }),
         el('div', { class: 'row' },
           ex === 'recall' ? trHint() : null,
-          ex === 'recall' ? hintChip('První písmena', () => hidden.replaceChildren(...wordsOf(line.text, 'initials'))) : null),
+          ex === 'recall' ? hintChip(t('První písmena'), () => hidden.replaceChildren(...wordsOf(line.text, 'initials'))) : null),
         revealRow());
     }
     fillEl(card, head(), ...body);
   }
 
   // odkrytá karta: celý verš + hodnocení (suggest = zvýrazněný návrh)
-  function reveal(top = null, suggest = null, note = 'Jak to šlo?') {
+  function reveal(top = null, suggest = null, note = t('Jak to šlo?')) {
     const line = cur.line;
     cur.revealed = true;
     const ctx = ['fromCz', 'before', 'dictation'].includes(cur.ex) ? null : context();
     fillEl(card, head(), ...(ctx ? [ctx] : []),
       el('div', { class: 'ltarget shown' }, ...(top || [el('div', { class: 'ltext', text: line.text })]), ...extras(line)),
-      cur.ex === 'before' ? el('div', { class: 'lprev' }, el('div', { class: 'lprev-label', text: 'Pak následuje' }), el('div', { class: 'lprev-text', text: version.lines[cur.unit.first + 1].text })) : null,
-      el('div', { class: 'row' }, listenBtn(cur.unit.first, 'Poslechnout verš')),
+      cur.ex === 'before' ? el('div', { class: 'lprev' }, el('div', { class: 'lprev-label', text: t('Pak následuje') }), el('div', { class: 'lprev-text', text: version.lines[cur.unit.first + 1].text })) : null,
+      el('div', { class: 'row' }, listenBtn(cur.unit.first, t('Poslechnout verš'))),
       el('p', { class: 'hint', text: note }),
       gradeRow(suggest));
     if (getPrefs().autoPlayLine && cur.ex !== 'dictation') playLine(cur.unit.first);
   }
 
   function pick(ok, chosen) {
-    const verdict = el('div', { class: 'lverdict ' + (ok ? 'ok' : 'bad'), text: ok ? 'Správně!' : `Ne – vybral(a) jsi „${chosen}“.` });
-    reveal([el('div', { class: 'ltext', text: cur.line.text }), verdict], ok ? 3 : 1, 'Jak to šlo? Zvýrazněné tlačítko je návrh.');
+    const verdict = el('div', { class: 'lverdict ' + (ok ? 'ok' : 'bad'), text: ok ? t('Správně!') : t('Ne – vybral(a) jsi „{c}“.', { c: chosen }) });
+    reveal([el('div', { class: 'ltext', text: cur.line.text }), verdict], ok ? 3 : 1, t('Jak to šlo? Zvýrazněné tlačítko je návrh.'));
   }
 
   function checkScramble() {
@@ -337,9 +338,9 @@ export async function renderLesson(root, id, focusKey, nav) {
     const mine = el('div', { class: 'ltext diff' }, d.placed.flatMap((t, j) => [j ? ' ' : '',
       el('span', { class: t.k === right[j].k ? 'x-ok' : 'x-bad', text: t.w })]));
     const verdict = el('div', { class: 'lverdict ' + (errors ? 'bad' : 'ok'),
-      text: errors ? `Na špatném místě: ${errors} ${errors === 1 ? 'slovo' : errors < 5 ? 'slova' : 'slov'}.` : 'Správně!' });
+      text: errors ? pl(errors, 'Na špatném místě: {n} slovo.', 'Na špatném místě: {n} slova.', 'Na špatném místě: {n} slov.') : t('Správně!') });
     reveal(errors ? [mine, el('div', { class: 'ltext', text: cur.line.text }), verdict] : [el('div', { class: 'ltext', text: cur.line.text }), verdict],
-      errors === 0 ? 3 : errors <= 2 ? 2 : 1, 'Jak to šlo? Zvýrazněné tlačítko je návrh podle chyb.');
+      errors === 0 ? 3 : errors <= 2 ? 2 : 1, t('Jak to šlo? Zvýrazněné tlačítko je návrh podle chyb.'));
   }
 
   function check(typed) {
@@ -352,14 +353,14 @@ export async function renderLesson(root, id, focusKey, nav) {
       }
     }
     const diff = el('div', { class: 'ltext diff' }, r.parts.flatMap((p, j) => [j ? ' ' : '',
-      p.st === 'extra' ? el('s', { class: 'x-extra', text: p.typed, title: 'navíc' })
-        : el('span', { class: `x-${p.st}`, text: p.text, title: p.st === 'typo' || p.st === 'bad' ? `napsáno: ${p.typed}` : p.st === 'miss' ? 'chybí' : '' })]));
-    const verdict = !typed.trim() ? 'Nevadí, příště to půjde.' : r.errors === 0 ? (r.typos ? 'Správně (s drobným překlepem).' : 'Výborně, přesně!') : `Chyb: ${r.errors}.`;
+      p.st === 'extra' ? el('s', { class: 'x-extra', text: p.typed, title: t('navíc') })
+        : el('span', { class: `x-${p.st}`, text: p.text, title: p.st === 'typo' || p.st === 'bad' ? t('napsáno: {w}', { w: p.typed }) : p.st === 'miss' ? t('chybí') : '' })]));
+    const verdict = !typed.trim() ? t('Nevadí, příště to půjde.') : r.errors === 0 ? (r.typos ? t('Správně (s drobným překlepem).') : t('Výborně, přesně!')) : t('Chyb: {n}.', { n: r.errors });
     cur.variantUsed = !!used;
-    const note = used ? el('div', { class: 'lvariant ok', text: `Uznáno podle jiné verze (nejisté místo): ${used.spots.map(sp => `„${sp.b || '—'}“ místo „${sp.a || '—'}“`).join(', ')}` }) : null;
+    const note = used ? el('div', { class: 'lvariant ok', text: t('Uznáno podle jiné verze (nejisté místo): {s}', { s: used.spots.map(sp => t('„{b}“ místo „{a}“', { b: sp.b || '—', a: sp.a || '—' })).join(', ') }) }) : null;
     reveal([typed.trim() ? el('div', { class: 'ltyped', text: typed.trim() }) : null, diff,
       el('div', { class: 'lverdict' + (r.errors ? ' bad' : ' ok'), text: verdict }), note].filter(Boolean), typed.trim() ? r.suggest : 1,
-    'Jak to šlo? Zvýrazněné tlačítko je návrh podle chyb.');
+    t('Jak to šlo? Zvýrazněné tlačítko je návrh podle chyb.'));
   }
 
   async function nextFromIntro() {
@@ -386,9 +387,9 @@ export async function renderLesson(root, id, focusKey, nav) {
   }
 
   function whenTxt(due, now) {
-    const day = t => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+    const day = ms => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
     const days = Math.round((day(due) - day(now)) / 86400e3);
-    return days <= 0 ? 'dnes později' : days === 1 ? 'zítra' : `za ${fmtIvl(days)}`;
+    return days <= 0 ? t('dnes později') : days === 1 ? t('zítra') : t('za {d}', { d: fmtIvl(days) });
   }
 
   function finish() {
@@ -396,13 +397,13 @@ export async function renderLesson(root, id, focusKey, nav) {
     const s = songSummary(units, recs);
     const now = Date.now();
     const next = [...recs.values()].filter(r => r.st !== 'new' && r.due > now).sort((a, b) => a.due - b.due)[0];
-    const nextTxt = next ? `Další opakování ${whenTxt(next.due, now)}.` : '';
+    const nextTxt = next ? t('Další opakování {w}.', { w: whenTxt(next.due, now) }) : '';
     card.replaceChildren(el('div', { class: 'ldone' },
-      el('div', { class: 'big', text: focusKey ? 'Hotovo' : done || s.known + s.due ? 'Pro dnešek hotovo 🎉' : 'Nic k učení' }),
-      el('p', { text: `Umíš ${s.known + s.due} z ${s.total} veršů${s.learn ? `, ${s.learn} se učíš` : ''}. ${nextTxt}` }),
+      el('div', { class: 'big', text: focusKey ? t('Hotovo') : done || s.known + s.due ? t('Pro dnešek hotovo 🎉') : t('Nic k učení') }),
+      el('p', { text: t('Umíš {n} z {m} veršů', { n: s.known + s.due, m: s.total }) + (s.learn ? ', ' + t('{n} se učíš', { n: s.learn }) : '') + `. ${nextTxt}` }),
       el('div', { class: 'row', style: { justifyContent: 'center' } },
-        !focusKey && s.new ? btn(`Naučit se další nové verše (${Math.min(s.new, 4)})`, () => { extraNew += 4; fill(); show(); }) : null,
-        btn('Zpět k písni', () => nav.back(), 'btn primary'))));
+        !focusKey && s.new ? btn(t('Naučit se další nové verše ({n})', { n: Math.min(s.new, 4) }), () => { extraNew += 4; fill(); show(); }) : null,
+        btn(t('Zpět k písni'), () => nav.back(), 'btn primary'))));
   }
 
   const onKey = e => {

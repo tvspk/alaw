@@ -1,6 +1,7 @@
 // Přepis zpěvu z nahrávky: služby Gemini (ai.js) a Whisper přes Groq (zdarma bez karty, klíč „gsk_…“).
 // Klíč Groq je jen v tomto zařízení (localStorage 'alaw-groq'), nezálohuje se a nesynchronizuje.
 import { hasAi, transcribeAudio, cleanTranscript } from './ai.js';
+import { t } from './i18n.js';
 import { toSpeechWav } from './audioprep.js';
 import { getPrefs } from './store.js';
 
@@ -20,15 +21,15 @@ async function groqFetch(path, opts, key, timeout = 180000) {
   const timer = setTimeout(() => ctrl.abort(), timeout);
   let r;
   try { r = await fetch(`${GROQ}/${path}`, { ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${key}` }, signal: ctrl.signal }); }
-  catch (e) { throw new SttError(e.name === 'AbortError' ? 'Groq neodpověděl včas.' : navigator.onLine ? 'Groq neodpovídá.' : 'Jsi offline.'); }
+  catch (e) { throw new SttError(e.name === 'AbortError' ? t('Groq neodpověděl včas.') : navigator.onLine ? t('Groq neodpovídá.') : t('Jsi offline.')); }
   finally { clearTimeout(timer); }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
     const msg = data.error?.message || '';
-    if (r.status === 401) throw new SttError('Klíč pro Groq není platný. Zkopíruj ho z console.groq.com znovu celý (začíná „gsk_“).');
-    if (r.status === 413) throw new SttError('Nahrávka je pro Groq moc velká (limit 25 MB).');
-    if (r.status === 429) throw Object.assign(new SttError('Groq hlásí vyčerpaný limit bezplatného tarifu. Zkus to za chvíli (nebo zítra).'), { limit: true });
-    throw Object.assign(new SttError(`Chyba Groq ${r.status}${msg ? `: ${msg.slice(0, 160)}` : ''}`), { status: r.status, msg });
+    if (r.status === 401) throw new SttError(t('Klíč pro Groq není platný. Zkopíruj ho z console.groq.com znovu celý (začíná „gsk_“).'));
+    if (r.status === 413) throw new SttError(t('Nahrávka je pro Groq moc velká (limit 25 MB).'));
+    if (r.status === 429) throw Object.assign(new SttError(t('Groq hlásí vyčerpaný limit bezplatného tarifu. Zkus to za chvíli (nebo zítra).')), { limit: true });
+    throw Object.assign(new SttError(t('Chyba Groq {s}', { s: r.status }) + (msg ? `: ${msg.slice(0, 160)}` : '')), { status: r.status, msg });
   }
   return data;
 }
@@ -37,7 +38,7 @@ async function groqFetch(path, opts, key, timeout = 180000) {
 export async function checkGroq(key) {
   const d = await groqFetch('models', { method: 'GET' }, key, 20000);
   const ids = (d.data || []).map(m => m.id);
-  if (!ids.some(id => /^whisper/.test(id))) throw new SttError('Klíč funguje, ale Groq nenabízí model Whisper.');
+  if (!ids.some(id => /^whisper/.test(id))) throw new SttError(t('Klíč funguje, ale Groq nenabízí model Whisper.'));
   return ids;
 }
 
@@ -56,15 +57,15 @@ export function whisperLines(segments) {
 
 export async function transcribeGroq(blob, { title = '', language = 'cy', name = '' } = {}, onWait = () => {}) {
   const key = groqKey();
-  if (!key) throw new SttError('Nejdřív vlož klíč pro Groq v Nastavení → Přepis z nahrávky.');
+  if (!key) throw new SttError(t('Nejdřív vlož klíč pro Groq v Nastavení → Přepis z nahrávky.'));
   let file = blob, fname = /\.\w+$/.test(name) ? name : 'nahravka.mp3';
   if (blob.size > GROQ_MAX()) {
-    onWait('Připravuji menší kopii nahrávky pro přepis…');
+    onWait(t('Připravuji menší kopii nahrávky pro přepis…'));
     file = await toSpeechWav(blob);
     fname = 'nahravka.wav';
-    if (file.size > GROQ_MAX()) throw new SttError('Nahrávka je na přepis přes Groq moc dlouhá (víc než ~12 minut).');
+    if (file.size > GROQ_MAX()) throw new SttError(t('Nahrávka je na přepis přes Groq moc dlouhá (víc než ~12 minut).'));
   }
-  onWait('Přepisuji přes Groq (Whisper)…');
+  onWait(t('Přepisuji přes Groq (Whisper)…'));
   const send = model => {
     const fd = new FormData();
     fd.append('file', file, fname.replace(/[^\w.-]+/g, '_'));

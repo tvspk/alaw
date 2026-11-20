@@ -17,10 +17,11 @@
 //   Změní-li se text verše, uložené rozhodnutí přestane sedět a místo je zase nerozhodnuté (prune ho uklidí).
 // Při psaní zpaměti se u NEJISTÝCH míst uzná i znění druhé verze (rozhodnutí zadavatele, ověřená místa ne).
 import { primaryVersion, newLine } from './model.js';
+import { t } from './i18n.js';
 import { lineKey } from './learn.js';
 
 export const MAX_VERSIONS = 3; // hlavní + nejvýš 2 další (rozhodnutí zadavatele)
-export const STATE = { open: 'nerozhodnuto', ok: 'ověřeno', unsure: 'nejisté' };
+export const STATE = { open: t('nerozhodnuto'), ok: t('ověřeno'), unsure: t('nejisté') };
 
 export const splitWords = text => String(text || '').split(/\s+/).filter(Boolean);
 const wkey = w => lineKey(w).replace(/ /g, '');

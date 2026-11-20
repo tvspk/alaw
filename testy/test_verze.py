@@ -70,7 +70,7 @@ def main():
     url = f'http://127.0.0.1:{srv.server_address[1]}/'
     with sync_playwright() as p:
         browser = p.chromium.launch(args=['--autoplay-policy=no-user-gesture-required'])
-        ctx = browser.new_context(**p.devices['Pixel 7'])
+        ctx = browser.new_context(**p.devices['Pixel 7'], locale='cs-CZ')
         # přehrávač nemá <audio> v dokumentu: zapamatovat si ho při spuštění
         ctx.add_init_script("const _p = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function () { window.__media = this; return _p.call(this); };")
         page = ctx.new_page()

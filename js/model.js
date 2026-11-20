@@ -10,6 +10,8 @@
 //   vars = rozhodnutí sporných míst proti jiným verzím (jen u hlavní verze, nepovinné): [{ w, a, b, st: 'ok'|'unsure' }],
 //          viz js/versions.js
 
+import { t } from './i18n.js';
+
 export const SONG_FORMAT = 1;
 
 export function uid(len = 10) {
@@ -19,16 +21,16 @@ export function uid(len = 10) {
 }
 
 export const LANGUAGES = [
-  ['cy', 'Velština'],
-  ['en', 'Angličtina'],
-  ['ga', 'Irština'],
-  ['gd', 'Skotská gaelština'],
-  ['br', 'Bretonština'],
-  ['kw', 'Kornština'],
-  ['cs', 'Čeština'],
-  ['other', 'Jiný jazyk'],
+  ['cy', t('Velština')],
+  ['en', t('Angličtina')],
+  ['ga', t('Irština')],
+  ['gd', t('Skotská gaelština')],
+  ['br', t('Bretonština')],
+  ['kw', t('Kornština')],
+  ['cs', t('Čeština')],
+  ['other', t('Jiný jazyk')],
 ];
-export const langLabel = code => (LANGUAGES.find(l => l[0] === code) || [null, code || 'Jiný jazyk'])[1];
+export const langLabel = code => (LANGUAGES.find(l => l[0] === code) || [null, code || t('Jiný jazyk')])[1];
 
 export function newLine(text = '', start = null, stanza = false) {
   return { id: uid(8), start, text, literal: '', translation: '', alt: '', contractions: [], note: '', stanza };

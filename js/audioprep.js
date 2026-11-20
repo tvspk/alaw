@@ -1,12 +1,13 @@
+import { t } from './i18n.js';
 // Dočasná kopie nahrávky pro přepis řeči: mono, 16 kHz, 16bit WAV (Whisper i Gemini zvuk stejně takhle zpracují).
 // Uložená nahrávka se nemění – rozhodnutí zadavatele „zvuk se nezmenšuje“ platí dál.
 export async function toSpeechWav(blob, rate = 16000) {
   const AC = window.AudioContext || window.webkitAudioContext;
-  if (!AC || !window.OfflineAudioContext) throw new Error('Prohlížeč neumí zpracovat zvuk.');
+  if (!AC || !window.OfflineAudioContext) throw new Error(t('Prohlížeč neumí zpracovat zvuk.'));
   const ac = new AC();
   let audio;
   try { audio = await ac.decodeAudioData(await blob.arrayBuffer()); }
-  catch { throw new Error('Nahrávku se nepodařilo přečíst.'); }
+  catch { throw new Error(t('Nahrávku se nepodařilo přečíst.')); }
   finally { try { ac.close(); } catch { /* nic */ } }
   const off = new OfflineAudioContext(1, Math.max(1, Math.ceil(audio.duration * rate)), rate);
   const src = off.createBufferSource();

@@ -35,4 +35,10 @@
   hlavní text. Claude sám texty písní nepřepisuje ani nevypisuje (dělá to aplikace u zadavatele). Test: `python3 -u testy/test_prepis.py`.
 - Přepis: služby v `js/stt.js` (Gemini, Groq); klíče jen v zařízení (`alaw-ai`, `alaw-groq`), nikdy v repozitáři ani záloze.
 - Nahrávky ukládat před písní je v pořádku jen přes `putAudioBlob` (chrání `db.freshAudio` před úklidem synchronizace).
+- **Jazyk rozhraní CZ / EN (britská angličtina)**: `js/i18n.js` + slovník `js/i18n-en.js`. Každý text pro uživatele piš jako
+  `t('český text', { proměnné })`, množné číslo `pl(n, '{n} píseň', '{n} písně', '{n} písní')`, vždy s textem v jednoduchých
+  uvozovkách (test z nich sestavuje seznam). Nový text → doplnit anglický překlad do `js/i18n-en.js` (britský pravopis,
+  verš = line, sloka = verse, text písně = lyrics, nahrávka = recording, procvičit = practise). Data písní se nepřekládají;
+  výchozí popisky verzí (`Hlavní`, `Přepis (…)`) se ukládají česky a zobrazují přes `vlabel()`. Proměnnou ani parametr
+  nepojmenovávej `t` (zastínilo by překlad). Test: `python3 -u testy/test_anglictina.py` (ostatní testy běží v `cs-CZ`).
 - **Stav projektu, rozhodnutí a další kroky: `HANDOFF.md`** (přečti jako první).

@@ -79,7 +79,7 @@ def main():
     url = f'http://127.0.0.1:{srv.server_address[1]}/'
     with sync_playwright() as p:
         browser = p.chromium.launch(args=['--autoplay-policy=no-user-gesture-required'])
-        ctx = browser.new_context(**p.devices['Pixel 7'])
+        ctx = browser.new_context(**p.devices['Pixel 7'], locale='cs-CZ')
         page = ctx.new_page()
         page.on('console', lambda m: m.type == 'error' and errors.append(m.text))
         page.on('pageerror', lambda e: errors.append(str(e)))

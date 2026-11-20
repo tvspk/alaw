@@ -16,6 +16,7 @@
 // Nesynchronizuje se: nastavení zařízení (alaw-prefs), klíč Gemini (alaw-ai), adresa prostředníka.
 // Token a 8 slov jsou jen v localStorage 'alaw-sync' tohoto zařízení, nikdy v záloze.
 import { db, freshAudio } from './db.js';
+import { t } from './i18n.js';
 import { normalizeSong } from './model.js';
 import { normalizeRec, recWins } from './learn.js';
 import { WORDS } from './bip39.js';
@@ -30,17 +31,17 @@ const HARD = ['token', 'notfound', 'forbidden', 'public', 'meta'];
 export class SyncError extends Error { constructor(kind, status = 0) { super(kind); this.kind = kind; this.status = status; } }
 
 export const ERR = {
-  offline: 'Bez internetu. Zkusím to později znovu.',
-  token: 'Token je neplatný nebo mu vypršela platnost. Vlož nový.',
-  notfound: 'Repozitář nejde otevřít. Zkontroluj jeho název a oprávnění tokenu.',
-  forbidden: 'Repozitář nejde otevřít. Zkontroluj jeho název a oprávnění tokenu.',
-  public: 'Tenhle repozitář je veřejný. Pro synchronizaci musí být soukromý.',
-  empty: 'Repozitář je prázdný. Přidej do něj na GitHubu soubor README.',
-  meta: 'Ve schránce jsou data jiné aplikace.',
-  damaged: 'Data z jiného zařízení nešla přečíst (jiný párovací kód?). Zbytek se synchronizoval.',
-  other: 'Synchronizace se nepovedla. Zkusím to později.',
+  offline: t('Bez internetu. Zkusím to později znovu.'),
+  token: t('Token je neplatný nebo mu vypršela platnost. Vlož nový.'),
+  notfound: t('Repozitář nejde otevřít. Zkontroluj jeho název a oprávnění tokenu.'),
+  forbidden: t('Repozitář nejde otevřít. Zkontroluj jeho název a oprávnění tokenu.'),
+  public: t('Tenhle repozitář je veřejný. Pro synchronizaci musí být soukromý.'),
+  empty: t('Repozitář je prázdný. Přidej do něj na GitHubu soubor README.'),
+  meta: t('Ve schránce jsou data jiné aplikace.'),
+  damaged: t('Data z jiného zařízení nešla přečíst (jiný párovací kód?). Zbytek se synchronizoval.'),
+  other: t('Synchronizace se nepovedla. Zkusím to později.'),
 };
-export const errText = k => !k ? '' : k.startsWith('http:') ? `GitHub požadavek odmítl (${k.slice(5)}). Zkusím to později.` : ERR[k] || ERR.other;
+export const errText = k => !k ? '' : k.startsWith('http:') ? t('GitHub požadavek odmítl ({s}). Zkusím to později.', { s: k.slice(5) }) : ERR[k] || ERR.other;
 
 // ---------- nastavení synchronizace v zařízení ----------
 let cfg = load(), key = null, busy = false, again = false, soonT = null, progress = '';
@@ -314,7 +315,7 @@ export async function syncNow(manual = false, quick = false) {
         i++;
         const shas = c.remote[k], parts = [];
         for (let j = 0; j < shas.length; j++) {
-          setProgress(`Stahuji nahrávku „${meta.name || k}“${shas.length > 1 ? ` (${j + 1}/${shas.length})` : ''}…`);
+          setProgress(t('Stahuji nahrávku „{f}“', { f: meta.name || k }) + (shas.length > 1 ? ` (${j + 1}/${shas.length})` : '') + '…');
           parts.push(await open(key, `a/${k}/${j}`, await gh(c.token, 'GET', `${P}/git/blobs/${shas[j]}`, null, true)));
         }
         await db.putAudio(k, new Blob(parts, { type: meta.type || 'audio/mpeg' }));
@@ -336,7 +337,7 @@ export async function syncNow(manual = false, quick = false) {
       const body = JSON.stringify({ app: APP, v: 1, songs, tombs: live, files, prog: progOut });
       const hs = hash(body);
       if (hs === c.upHash && own) return;
-      setProgress('Nahrávám změny…');
+      setProgress(t('Nahrávám změny…'));
       const blob = await gh(c.token, 'POST', `${P}/git/blobs`, { content: b64(await seal(key, 'state', await zip(enc(body), true))), encoding: 'base64' });
       const tree = [{ path: 'state', mode: '100644', type: 'blob', sha: blob.sha }];
       for (const [k, shas] of Object.entries(files)) shas.forEach((sha, j) => tree.push({ path: `a/${k}/${j}`, mode: '100644', type: 'blob', sha }));
@@ -363,7 +364,7 @@ export async function syncNow(manual = false, quick = false) {
       if (!blob) continue;
       const n = Math.max(1, Math.ceil(blob.size / PART())), shas = [];
       for (let j = 0; j < n; j++) {
-        setProgress(`Nahrávám nahrávku „${needed.get(k).name || k}“${n > 1 ? ` (${j + 1}/${n})` : ''}…`);
+        setProgress(t('Nahrávám nahrávku „{f}“', { f: needed.get(k).name || k }) + (n > 1 ? ` (${j + 1}/${n})` : '') + '…');
         const part = new Uint8Array(await blob.slice(j * PART(), (j + 1) * PART()).arrayBuffer());
         const r = await gh(c.token, 'POST', `${P}/git/blobs`, { content: b64(await seal(key, `a/${k}/${j}`, part)), encoding: 'base64' });
         shas.push(r.sha);

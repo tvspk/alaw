@@ -1,5 +1,6 @@
 // Hledání textu na internetu: dotaz → výsledky ze všech zdrojů → náhled → převzetí do formuláře písně.
 import { el, iconBtn, sheet, toast } from './ui.js';
+import { t, pl, srcLabel } from './i18n.js';
 import { SOURCES, searchAll, loadFromUrl, cleanText } from './sources.js';
 import { parseLyrics, borrowTimes, looksLikeLrc, formatMs } from './model.js';
 import { isAndroid } from './net.js';
@@ -18,19 +19,19 @@ export function openSearch(initial, onPick, opts = {}) {
   const state = {};          // id zdroje → { status, results, error, kind }
   const q = { title: initial.title || '', artist: initial.artist || '' };
 
-  const titleIn = el('input', { value: q.title, placeholder: 'Název písně', autocomplete: 'off', enterkeyhint: 'search' });
-  const artistIn = el('input', { value: q.artist, placeholder: 'Interpret (nepovinné)', autocomplete: 'off', enterkeyhint: 'search' });
+  const titleIn = el('input', { value: q.title, placeholder: t('Název písně'), autocomplete: 'off', enterkeyhint: 'search' });
+  const artistIn = el('input', { value: q.artist, placeholder: t('Interpret (nepovinné)'), autocomplete: 'off', enterkeyhint: 'search' });
   const list = el('div', { class: 'results' });
-  const google = el('a', { class: 'btn', href: googleUrl(initial), target: '_blank', rel: 'noopener', text: '🌐 Hledat na Googlu', onclick: () => {
+  const google = el('a', { class: 'btn', href: googleUrl(initial), target: '_blank', rel: 'noopener', text: t('🌐 Hledat na Googlu'), onclick: () => {
     google.href = googleUrl({ ...initial, title: titleIn.value.trim() || initial.title, artist: artistIn.value.trim() });
     if (opts.songId) setPrefs({ shareTarget: { id: opts.songId, title: initial.title || titleIn.value.trim(), t: Date.now() } });
   } });
   const elsewhere = el('div', { class: 'search-else' },
     el('div', { class: 'hint', text: isAndroid()
-      ? 'Nenašel ses? Hledej na Googlu a stránku s textem pak v prohlížeči sdílej do Alaw (Sdílet → Alaw).'
-      : 'Nenašel ses? Hledej na Googlu, zkopíruj adresu stránky s textem a vlož ji přes „Vložit odkaz“.' }),
+      ? t('Nenašel ses? Hledej na Googlu a stránku s textem pak v prohlížeči sdílej do Alaw (Sdílet → Alaw).')
+      : t('Nenašel ses? Hledej na Googlu, zkopíruj adresu stránky s textem a vlož ji přes „Vložit odkaz“.') }),
     el('div', { class: 'row' }, google,
-      el('button', { type: 'button', class: 'btn', text: '🔗 Vložit odkaz', onclick: () => askUrl(d => { close(); onPick(d); }) })));
+      el('button', { type: 'button', class: 'btn', text: t('🔗 Vložit odkaz'), onclick: () => askUrl(d => { close(); onPick(d); }) })));
   const overlay = el('div', { class: 'overlay' });
   const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
   const onKey = e => { if (e.key === 'Escape' && !document.querySelector('.sheet')) close(); };
@@ -38,17 +39,17 @@ export function openSearch(initial, onPick, opts = {}) {
 
   const form = el('form', { class: 'search-form', onsubmit: e => { e.preventDefault(); run(); } },
     el('div', { class: 'row' }, el('label', { class: 'field grow' }, titleIn), el('label', { class: 'field grow' }, artistIn)),
-    el('button', { type: 'submit', class: 'btn primary', text: 'Hledat' }));
+    el('button', { type: 'submit', class: 'btn primary', text: t('Hledat') }));
 
   overlay.append(el('div', { class: 'view' },
-    el('header', { class: 'topbar' }, iconBtn('back', 'Zpět', close), el('h1', { text: 'Najít text' })),
+    el('header', { class: 'topbar' }, iconBtn('back', t('Zpět'), close), el('h1', { text: t('Najít text') })),
     form, elsewhere, list));
   document.body.append(overlay);
 
   function run() {
     q.title = titleIn.value.trim();
     q.artist = artistIn.value.trim();
-    if (!q.title) { toast('Napiš aspoň název písně.'); titleIn.focus(); return; }
+    if (!q.title) { toast(t('Napiš aspoň název písně.')); titleIn.focus(); return; }
     document.activeElement?.blur?.();
     for (const k of Object.keys(state)) delete state[k];
     searchAll(q, (id, st) => { state[id] = st; draw(); });
@@ -58,9 +59,9 @@ export function openSearch(initial, onPick, opts = {}) {
     const groups = SOURCES.filter(s => state[s.id]).map(s => {
       const st = state[s.id];
       let body;
-      if (st.status === 'loading') body = el('div', { class: 'src-status', text: 'Hledám…' });
-      else if (st.status === 'error') body = el('div', { class: 'src-status err', text: st.kind === 'proxy' ? 'Na počítači potřebuje prostředníka – viz Nastavení.' : st.error });
-      else if (!st.results.length) body = el('div', { class: 'src-status', text: 'Nic nenalezeno.' });
+      if (st.status === 'loading') body = el('div', { class: 'src-status', text: t('Hledám…') });
+      else if (st.status === 'error') body = el('div', { class: 'src-status err', text: st.kind === 'proxy' ? t('Na počítači potřebuje prostředníka – viz Nastavení.') : st.error });
+      else if (!st.results.length) body = el('div', { class: 'src-status', text: t('Nic nenalezeno.') });
       else body = el('div', {}, st.results.map(r => resultCard(r)));
       return el('section', { class: 'src' + (st.status === 'done' && !st.results.length ? ' empty-src' : '') },
         el('h2', {}, s.name, el('small', { text: s.note })), body);
@@ -77,9 +78,9 @@ export function openSearch(initial, onPick, opts = {}) {
       r.detail ? el('div', { class: 'r-detail', text: r.detail }) : null,
       r.preview ? el('div', { class: 'r-preview', text: r.preview }) : null,
       el('div', { class: 'r-badges' },
-        r.synced ? el('span', { class: 'badge', text: '⏱ s časy' }) : null,
-        r.altText ? el('span', { class: 'badge', text: '🌐 s překladem' }) : null,
-        r.youtubeId ? el('span', { class: 'badge', text: '▶ video' }) : null));
+        r.synced ? el('span', { class: 'badge', text: t('⏱ s časy') }) : null,
+        r.altText ? el('span', { class: 'badge', text: t('🌐 s překladem') }) : null,
+        r.youtubeId ? el('span', { class: 'badge', text: t('▶ video') }) : null));
   }
 
   // Časované texty z LRCLIB pro tutéž píseň – kandidáti na převzetí časů.
@@ -95,10 +96,10 @@ export function openSearch(initial, onPick, opts = {}) {
 
   async function preview(r) {
     let data;
-    const closeLoading = sheet(() => el('div', { class: 'sub', text: 'Načítám text…' }));
-    try { data = await r.load(); } catch (e) { closeLoading(); toast(`Nepodařilo se načíst: ${e.message}`, 4000); return; }
+    const closeLoading = sheet(() => el('div', { class: 'sub', text: t('Načítám text…') }));
+    try { data = await r.load(); } catch (e) { closeLoading(); toast(t('Nepodařilo se načíst: {e}', { e: e.message }), 4000); return; }
     closeLoading();
-    if (!data.text) { toast('Tahle stránka text nemá.'); return; }
+    if (!data.text) { toast(t('Tahle stránka text nemá.')); return; }
     const picked = { ...data, title: data.title || r.title, artist: data.artist || r.artist, source: r.source, sourceUrl: data.url || r.url };
     showPreview(picked, r.source === 'lrclib' ? [] : await timingCandidates().catch(() => []), d => { close(); onPick(d); });
   }
@@ -116,15 +117,15 @@ export function showPreview(picked, timing, onUse) {
   }
   const useTimes = el('input', { type: 'checkbox', checked: !!best });
   sheet(close => el('div', {},
-    el('h3', { text: [picked.title, picked.artist].filter(Boolean).join(' – ') || 'Nalezený text' }),
-    el('div', { class: 'sub' }, `${lines.length} veršů · `, picked.sourceUrl ? el('a', { href: picked.sourceUrl, target: '_blank', rel: 'noopener', text: 'zdroj' }) : picked.source,
-      looksLikeLrc(picked.text) ? ' · ⏱ s časy' : '', picked.altText ? ' · 🌐 s překladem' : '', picked.youtubeId ? ' · ▶ video' : ''),
+    el('h3', { text: [picked.title, picked.artist].filter(Boolean).join(' – ') || t('Nalezený text') }),
+    el('div', { class: 'sub' }, pl(lines.length, '{n} verš', '{n} verše', '{n} veršů') + ' · ', picked.sourceUrl ? el('a', { href: picked.sourceUrl, target: '_blank', rel: 'noopener', text: t('zdroj') }) : srcLabel(picked.source),
+      looksLikeLrc(picked.text) ? ' · ' + t('⏱ s časy') : '', picked.altText ? ' · ' + t('🌐 s překladem') : '', picked.youtubeId ? ' · ' + t('▶ video') : ''),
     el('pre', { class: 'lyrics-preview', text: lines.map(l => (l.stanza ? '\n' : '') + (l.start != null ? `${formatMs(l.start, false)}  ` : '') + l.text).join('\n') }),
     best ? el('label', { class: 'check', style: { margin: '10px 0' } }, useTimes,
-      el('span', { text: `Doplnit časy z LRCLIB (${best.label}): sedí ${best.res.matched} z ${best.res.total} veršů` })) : null,
+      el('span', { text: t('Doplnit časy z LRCLIB ({l}): sedí {n} z {m} veršů', { l: best.label, n: best.res.matched, m: best.res.total }) })) : null,
     el('div', { class: 'row end' },
-      el('button', { type: 'button', class: 'btn', text: 'Zpět', onclick: close }),
-      el('button', { type: 'button', class: 'btn primary', text: 'Použít tento text', onclick: () => {
+      el('button', { type: 'button', class: 'btn', text: t('Zpět'), onclick: close }),
+      el('button', { type: 'button', class: 'btn primary', text: t('Použít tento text'), onclick: () => {
         close();
         onUse({ ...picked, timedLines: best && useTimes.checked ? best.res.lines : null });
       } }))));
@@ -132,11 +133,11 @@ export function showPreview(picked, timing, onUse) {
 
 // Text z odkazu (vložená adresa nebo sdílení z prohlížeče).
 export async function importFromUrl(url, onPick) {
-  const closeLoading = sheet(() => el('div', { class: 'sub', text: 'Načítám stránku…' }));
+  const closeLoading = sheet(() => el('div', { class: 'sub', text: t('Načítám stránku…') }));
   let data;
   try { data = await loadFromUrl(url); } catch (e) {
     closeLoading();
-    toast(e.kind === 'proxy' ? 'Na počítači to potřebuje prostředníka (Nastavení → Hledání textů).' : `Nepodařilo se: ${e.message}`, 4500);
+    toast(e.kind === 'proxy' ? t('Na počítači to potřebuje prostředníka (Nastavení → Hledání textů).') : t('Nepodařilo se: {e}', { e: e.message }), 4500);
     return;
   }
   closeLoading();
@@ -146,9 +147,9 @@ export async function importFromUrl(url, onPick) {
 export function askUrl(onPick) {
   const input = el('input', { type: 'url', inputmode: 'url', placeholder: 'https://…', autocomplete: 'off' });
   sheet(close => el('form', { class: 'form', onsubmit: e => { e.preventDefault(); const v = input.value.trim(); if (!v) return; close(); importFromUrl(v, onPick); } },
-    el('h3', { text: 'Text z odkazu' }),
-    el('div', { class: 'sub', text: isAndroid() ? 'Vlož adresu stránky s textem. Příště můžeš stránku rovnou sdílet z prohlížeče do Alaw.' : 'Vlož adresu stránky s textem písně.' }),
+    el('h3', { text: t('Text z odkazu') }),
+    el('div', { class: 'sub', text: isAndroid() ? t('Vlož adresu stránky s textem. Příště můžeš stránku rovnou sdílet z prohlížeče do Alaw.') : t('Vlož adresu stránky s textem písně.') }),
     el('label', { class: 'field' }, input),
-    el('div', { class: 'row end' }, el('button', { type: 'button', class: 'btn', text: 'Zrušit', onclick: close }), el('button', { type: 'submit', class: 'btn primary', text: 'Načíst' }))));
+    el('div', { class: 'row end' }, el('button', { type: 'button', class: 'btn', text: t('Zrušit'), onclick: close }), el('button', { type: 'submit', class: 'btn primary', text: t('Načíst') }))));
   setTimeout(() => input.focus(), 50);
 }

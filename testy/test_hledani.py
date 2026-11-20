@@ -123,7 +123,7 @@ def main():
     saved = []
     with sync_playwright() as p:
         b = p.chromium.launch()
-        ctx = b.new_context(**p.devices['Pixel 7'])
+        ctx = b.new_context(**p.devices['Pixel 7'], locale='cs-CZ')
         page = ctx.new_page()
         page.on('pageerror', lambda e: (print('!!! PAGEERROR', e), errors.append('P1 ' + str(e))))
         # chyby sítě (neplatný klíč v testu, YouTube bez internetu) nejsou chyby aplikace
@@ -243,7 +243,7 @@ def main():
         check("'nghariad" in page.inner_text('.lyrics-preview') and '′' not in page.inner_text('.lyrics-preview'), 'apostrofy sjednocené')
 
         print('Web na počítači bez prostředníka')
-        ctx2 = b.new_context()
+        ctx2 = b.new_context(locale='cs-CZ')
         p2 = ctx2.new_page()
         p2.on('pageerror', lambda e: errors.append('P2 ' + str(e) + ' ' + str(e.stack)[:300]))
         p2.route('https://lrclib.net/**', lambda r: r.fulfill(json=json.loads(json.loads(respond({'url': r.request.url}))['text']), headers={'access-control-allow-origin': '*'}))

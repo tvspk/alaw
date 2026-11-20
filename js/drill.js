@@ -2,6 +2,7 @@
 // Adresa #/drill/<id písně>/<režim>. Funguje bez časů; s časy navíc přehrání a smyčka sloky.
 // Pokrok mění jen zkouška: verše, které nevíš, se vrátí do opakování (rozhodnutí zadavatele: známé se nemění).
 import { el, fill, iconBtn, ICONS, toast } from './ui.js';
+import { t, pl } from './i18n.js';
 import { getSong, getPrefs, getProgress, saveProgress } from './store.js';
 import { primaryVersion } from './model.js';
 import { Player } from './player.js';
@@ -10,10 +11,10 @@ import { attachMedia, wordsOf } from './lesson.js';
 import { analyze, unsureSpots } from './versions.js';
 
 export const DRILLS = [
-  ['order', '🧩', 'Skládání sloky', 'Přeházené verše sloky poskládej do správného pořadí.'],
-  ['blur', '🌫', 'Rozmazávání', 'Opakuj sloku znovu a znovu, text se s každým kolem víc rozmaže.'],
-  ['cheat', '🎤', 'Tahák pro zpěv', 'Celá píseň jen s prvním slovem verše – zpívej s nahrávkou.'],
-  ['exam', '📝', 'Zkouška celé písně', 'Verš po verši od začátku. Co nevíš, vrátí se do opakování.'],
+  ['order', '🧩', t('Skládání sloky'), t('Přeházené verše sloky poskládej do správného pořadí.')],
+  ['blur', '🌫', t('Rozmazávání'), t('Opakuj sloku znovu a znovu, text se s každým kolem víc rozmaže.')],
+  ['cheat', '🎤', t('Tahák pro zpěv'), t('Celá píseň jen s prvním slovem verše – zpívej s nahrávkou.')],
+  ['exam', '📝', t('Zkouška celé písně'), t('Verš po verši od začátku. Co nevíš, vrátí se do opakování.')],
 ];
 const BLUR = [0, 1.2, 2.4, 3.8, 5.5];   // px; další kolo = text úplně zmizí
 
@@ -27,7 +28,7 @@ export function stanzas(lines) {
 export async function renderDrill(root, id, mode, nav) {
   const song = await getSong(id);
   const meta = DRILLS.find(d => d[0] === mode);
-  if (!song || !meta) { root.append(el('div', { class: 'view' }, el('p', { class: 'empty', text: 'Píseň nenalezena.' }))); return; }
+  if (!song || !meta) { root.append(el('div', { class: 'view' }, el('p', { class: 'empty', text: t('Píseň nenalezena.') }))); return; }
   const version = primaryVersion(song);
   const lines = version.lines;
   const groups = stanzas(lines);
@@ -37,8 +38,8 @@ export async function renderDrill(root, id, mode, nav) {
 
   // ---------- přehrávač (i bez časů: celá nahrávka) ----------
   const media = el('div', { class: 'lesson-media' });
-  const playBtn = el('button', { type: 'button', class: 'play small', 'aria-label': 'Přehrát', html: ICONS.play, onclick: () => player.toggle() });
-  const ctrl = el('div', { class: 'row drill-ctrl', hidden: true }, playBtn, iconBtn('rewind', 'O 5 sekund zpět', () => player.seek(player.time() - 5000)));
+  const playBtn = el('button', { type: 'button', class: 'play small', 'aria-label': t('Přehrát'), html: ICONS.play, onclick: () => player.toggle() });
+  const ctrl = el('div', { class: 'row drill-ctrl', hidden: true }, playBtn, iconBtn('rewind', t('O 5 sekund zpět'), () => player.seek(player.time() - 5000)));
   player.onState = p => { playBtn.innerHTML = p ? ICONS.pause : ICONS.play; };
   player.onTime = t => {
     if (stopAt != null && t >= stopAt - 40) { stopAt = null; player.pause(); }
@@ -53,7 +54,7 @@ export async function renderDrill(root, id, mode, nav) {
 
   const area = el('div', { class: 'drill' });
   const view = el('div', { class: 'view lesson' },
-    el('header', { class: 'topbar' }, iconBtn('back', 'Zpět', () => nav.back()),
+    el('header', { class: 'topbar' }, iconBtn('back', t('Zpět'), () => nav.back()),
       el('h1', {}, el('span', { text: `${meta[1]} ${meta[2]}` }), el('small', { text: song.title }))),
     media, ctrl, area);
   root.append(view);
@@ -62,22 +63,22 @@ export async function renderDrill(root, id, mode, nav) {
   // výběr sloky
   let gi = 0;
   const chooser = (onPick, whole = false) => (groups.length > 1 || whole ? el('div', { class: 'chips' },
-    whole ? el('button', { type: 'button', class: 'chip' + (gi === -1 ? ' on' : ''), text: 'Celá píseň', onclick: () => { gi = -1; onPick(); } }) : null,
-    groups.map((g, j) => el('button', { type: 'button', class: 'chip' + (gi === j ? ' on' : ''), text: `Sloka ${j + 1}`, onclick: () => { gi = j; onPick(); } }))) : null);
+    whole ? el('button', { type: 'button', class: 'chip' + (gi === -1 ? ' on' : ''), text: t('Celá píseň'), onclick: () => { gi = -1; onPick(); } }) : null,
+    groups.map((g, j) => el('button', { type: 'button', class: 'chip' + (gi === j ? ' on' : ''), text: t('Sloka {n}', { n: j + 1 }), onclick: () => { gi = j; onPick(); } }))) : null);
 
   // ---------- skládání sloky ----------
   function order() {
     player.setLoop(null);
     const idx = groups[gi];
-    if (!idx || idx.length < 2) { area.replaceChildren(chooser(order), el('p', { class: 'empty', text: 'Tahle sloka má jen jeden verš.' })); return; }
+    if (!idx || idx.length < 2) { area.replaceChildren(chooser(order), el('p', { class: 'empty', text: t('Tahle sloka má jen jeden verš.') })); return; }
     const items = shuffleNew(idx.map(i => ({ i, k: lineKey(lines[i].text), text: lines[i].text })), x => x.k);
     const placed = [];
     const range = timedRange(idx);
     function draw(result) {
       const right = idx.map(i => lineKey(lines[i].text));
       fill(area, chooser(order),
-        el('p', { class: 'hint', text: 'Ťukej verše ve správném pořadí. Ťuknutím na poskládaný verš ho vrátíš.' }),
-        range && player.ready ? el('div', { class: 'row' }, btn('▶ Poslechnout sloku', () => { stopAt = range[1]; player.playFrom(Math.max(0, range[0] - 150)); }, 'btn small')) : null,
+        el('p', { class: 'hint', text: t('Ťukej verše ve správném pořadí. Ťuknutím na poskládaný verš ho vrátíš.') }),
+        range && player.ready ? el('div', { class: 'row' }, btn(t('▶ Poslechnout sloku'), () => { stopAt = range[1]; player.playFrom(Math.max(0, range[0] - 150)); }, 'btn small')) : null,
         el('ol', { class: 'ord-placed' }, placed.map((x, j) => el('li', {},
           el('button', { type: 'button', class: 'ord-line' + (result ? (x.k === right[j] ? ' ok' : ' bad') : ''), text: x.text,
             onclick: () => { if (result) return; placed.splice(j, 1); draw(); } })))),
@@ -89,10 +90,10 @@ export async function renderDrill(root, id, mode, nav) {
     }
     function resultRow(errors) {
       return el('div', { class: 'ldone' },
-        el('div', { class: 'lverdict ' + (errors ? 'bad' : 'ok'), text: errors ? `Na špatném místě: ${errors}` : 'Správně! 🎉' }),
+        el('div', { class: 'lverdict ' + (errors ? 'bad' : 'ok'), text: errors ? t('Na špatném místě: {n}', { n: errors }) : t('Správně! 🎉') }),
         el('div', { class: 'row', style: { justifyContent: 'center', marginTop: '10px' } },
-          btn('Zkusit znovu', order),
-          groups.length > 1 ? btn('Další sloka', () => { gi = (gi + 1) % groups.length; order(); }, 'btn primary') : null));
+          btn(t('Zkusit znovu'), order),
+          groups.length > 1 ? btn(t('Další sloka'), () => { gi = (gi + 1) % groups.length; order(); }, 'btn primary') : null));
     }
     draw(false);
   }
@@ -110,14 +111,14 @@ export async function renderDrill(root, id, mode, nav) {
       text.style.setProperty('--blur', `${gone ? 0 : BLUR[round]}px`);
       text.replaceChildren(...idx.map(i => el('div', { class: 'blur-line' + (lines[i].stanza && i !== idx[0] ? ' stanza' : '') + (peek.has(i) ? ' peek' : ''), dataset: { i } },
         gone && !peek.has(i) ? el('span', { class: 'lq', text: '· · ·' }) : lines[i].text)));
-      label.textContent = gone ? `Kolo ${round + 1}: bez textu` : `Kolo ${round + 1}`;
+      label.textContent = gone ? t('Kolo {n}: bez textu', { n: round + 1 }) : t('Kolo {n}', { n: round + 1 });
     }
     text.addEventListener('click', e => { // ťuknutí na verš = krátce ho ukázat ostře
       const d = e.target.closest('.blur-line'); if (!d) return;
       const i = +d.dataset.i; peek.add(i); paint(); setTimeout(() => { peek.delete(i); paint(); }, 1800);
     });
     const next = () => { round = Math.min(BLUR.length, round + 1); paint(); };
-    const loopBtn = range && player.ready ? btn('🔁 Smyčka sloky (kolo se přidá samo)', () => {
+    const loopBtn = range && player.ready ? btn(t('🔁 Smyčka sloky (kolo se přidá samo)'), () => {
       looping = !looping;
       loopBtn.classList.toggle('on', looping);
       if (looping) { player.setLoop(range[0], range[1]); player.playFrom(Math.max(0, range[0] - 150)); } else { player.setLoop(null); player.pause(); }
@@ -125,11 +126,11 @@ export async function renderDrill(root, id, mode, nav) {
     onTick = t => { if (looping && lastT - t > 1000) next(); lastT = t; };
     player.setLoop(null);
     fill(area, chooser(blur, true),
-      el('p', { class: 'hint', text: 'Řekni nebo zazpívej text, pak přidej kolo – text se víc rozmaže. Ťuknutím na verš ho krátce ukážeš.' }),
+      el('p', { class: 'hint', text: t('Řekni nebo zazpívej text, pak přidej kolo – text se víc rozmaže. Ťuknutím na verš ho krátce ukážeš.') }),
       loopBtn ? el('div', { class: 'row' }, loopBtn) : null,
       text,
       el('div', { class: 'row', style: { justifyContent: 'space-between', marginTop: '12px' } },
-        btn('◀ Ostřeji', () => { round = Math.max(0, round - 1); paint(); }), label, btn('Další kolo ▶', next, 'btn primary')));
+        btn(t('◀ Ostřeji'), () => { round = Math.max(0, round - 1); paint(); }), label, btn(t('Další kolo ▶'), next, 'btn primary')));
     paint();
   }
 
@@ -161,10 +162,10 @@ export async function renderDrill(root, id, mode, nav) {
       list.querySelector(`[data-i="${a}"]`)?.classList.add('active');
     };
     const chips = el('div', { class: 'chips' },
-      [['word', 'První slovo'], ['initials', 'První písmena']].map(([k, label]) => el('button', { type: 'button', class: 'chip' + (style === k ? ' on' : ''), text: label,
+      [['word', t('První slovo')], ['initials', t('První písmena')]].map(([k, label]) => el('button', { type: 'button', class: 'chip' + (style === k ? ' on' : ''), text: label,
         onclick: e => { style = k; chips.querySelectorAll('.chip').forEach(c => c.classList.remove('on')); e.target.classList.add('on'); paint(); } })));
     player.setLoop(null);
-    area.replaceChildren(chips, el('p', { class: 'hint', text: 'Pusť si nahrávku a zpívej. Ťuknutím na verš ho ukážeš celý.' }), list);
+    area.replaceChildren(chips, el('p', { class: 'hint', text: t('Pusť si nahrávku a zpívej. Ťuknutím na verš ho ukážeš celý.') }), list);
     paint();
   }
 
@@ -181,17 +182,17 @@ export async function renderDrill(root, id, mode, nav) {
       if (pos >= order.length) { finishExam(); return; }
       const i = order[pos];
       cur.replaceChildren(
-        el('div', { class: 'lhead' }, el('span', { class: 'lex', text: `Verš ${pos + 1} z ${order.length}` })),
+        el('div', { class: 'lhead' }, el('span', { class: 'lex', text: t('Verš {n} z {m}', { n: pos + 1, m: order.length }) })),
         el('div', { class: 'ltarget' }, el('div', { class: 'ltext' }, el('span', { class: 'lq', text: '? ? ?' }))),
-        el('p', { class: 'hint', text: 'Řekni si verš nahlas (nebo zazpívej), pak ho odkryj.' }),
-        el('div', { class: 'row end' }, btn('Odkrýt', () => {
+        el('p', { class: 'hint', text: t('Řekni si verš nahlas (nebo zazpívej), pak ho odkryj.') }),
+        el('div', { class: 'row end' }, btn(t('Odkrýt'), () => {
           cur.replaceChildren(
-            el('div', { class: 'lhead' }, el('span', { class: 'lex', text: `Verš ${pos + 1} z ${order.length}` })),
+            el('div', { class: 'lhead' }, el('span', { class: 'lex', text: t('Verš {n} z {m}', { n: pos + 1, m: order.length }) })),
             el('div', { class: 'ltarget shown' }, el('div', { class: 'ltext', text: lines[i].text }),
-              ...(vres.length ? unsureSpots(song, [i], vres) : []).map(sp => el('div', { class: 'lvariant', text: `⚠ Nejisté: jiná verze má ${sp.b ? `„${sp.b}“` : 'tu nic'}${sp.a ? ` místo „${sp.a}“` : ''} – uznej si obojí` }))),
+              ...(vres.length ? unsureSpots(song, [i], vres) : []).map(sp => el('div', { class: 'lvariant', text: '⚠ ' + (sp.a ? t('Nejisté: jiná verze má {b} místo „{a}“ – uznej si obojí', { b: sp.b ? `„${sp.b}“` : t('tu nic'), a: sp.a }) : t('Nejisté: jiná verze má {b} – uznej si obojí', { b: sp.b ? `„${sp.b}“` : t('tu nic') })) }))),
             el('div', { class: 'row', style: { justifyContent: 'center' } },
-              btn('✗ Nevěděl(a) jsem', () => answer(false), 'btn danger'),
-              btn('✓ Věděl(a) jsem', () => answer(true), 'btn primary')));
+              btn(t('✗ Nevěděl(a) jsem'), () => answer(false), 'btn danger'),
+              btn(t('✓ Věděl(a) jsem'), () => answer(true), 'btn primary')));
         }, 'btn primary')));
     }
     function answer(ok) {
@@ -211,14 +212,14 @@ export async function renderDrill(root, id, mode, nav) {
       if (recsOut.length) await saveProgress(...recsOut);
       const n = order.length - [...order].filter(i => failed.has(lineKey(lines[i].text))).length;
       cur.replaceChildren(el('div', { class: 'ldone' },
-        el('div', { class: 'big', text: failed.size ? `Umíš ${n} z ${order.length} veršů` : 'Celá píseň bez chyby! 🎉' }),
-        failed.size ? el('p', { text: `${failed.size} ${failed.size === 1 ? 'verš se vrátí' : failed.size < 5 ? 'verše se vrátí' : 'veršů se vrátí'} do opakování.` }) : null,
+        el('div', { class: 'big', text: failed.size ? t('Umíš {n} z {m} veršů', { n, m: order.length }) : t('Celá píseň bez chyby! 🎉') }),
+        failed.size ? el('p', { text: pl(failed.size, '{n} verš se vrátí do opakování.', '{n} verše se vrátí do opakování.', '{n} veršů se vrátí do opakování.') }) : null,
         el('div', { class: 'row', style: { justifyContent: 'center' } },
-          failed.size ? btn('🎓 Učit se je teď', () => nav.replace(`#/learn/${encodeURIComponent(song.id)}`), 'btn primary') : null,
-          btn('Zpět k písni', () => nav.back()))));
-      if (failed.size) toast('Verše, které jsi nevěděl(a), jsou zpátky v opakování');
+          failed.size ? btn(t('🎓 Učit se je teď'), () => nav.replace(`#/learn/${encodeURIComponent(song.id)}`), 'btn primary') : null,
+          btn(t('Zpět k písni'), () => nav.back()))));
+      if (failed.size) toast(t('Verše, které jsi nevěděl(a), jsou zpátky v opakování'));
     }
-    area.replaceChildren(el('p', { class: 'hint', text: 'Projdi celou píseň od začátku. Známé verše se nemění, ty, které nevíš, se vrátí do opakování.' }), doneBox, cur);
+    area.replaceChildren(el('p', { class: 'hint', text: t('Projdi celou píseň od začátku. Známé verše se nemění, ty, které nevíš, se vrátí do opakování.') }), doneBox, cur);
     step();
   }
 

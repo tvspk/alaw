@@ -2,6 +2,7 @@
 //  text     = text písně (prostý, nebo LRC s časy), sloky oddělené prázdným řádkem
 //  altText  = překlad ze zdroje (obvykle anglický), řádek po řádku k textu – nepovinné
 import { getJson, getHtml, request } from './net.js';
+import { t } from './i18n.js';
 import { fold, extractYoutubeId } from './model.js';
 
 const UA_HEADER = { 'Api-User-Agent': 'AlawLyrics/0.2 (https://github.com/tvspk/alaw)' };
@@ -110,7 +111,7 @@ const firstLines = (text, n = 2) => cleanText(text).replace(/^\[[^\]]*\]/gm, '')
 // ---------- jednotlivé zdroje ----------
 
 const lrclib = {
-  id: 'lrclib', name: 'LRCLIB', note: 'texty s časy',
+  id: 'lrclib', name: 'LRCLIB', note: t('texty s časy'),
   async search(q) {
     const p = new URLSearchParams(q.artist ? { track_name: q.title, artist_name: q.artist } : { q: q.title });
     let list = await getJson(`https://lrclib.net/api/search?${p}`);
@@ -179,7 +180,7 @@ function parseWikisource(wt, pageTitle) {
 }
 
 const wikisource = {
-  id: 'wikisource', name: 'Wicidestun', note: 'velšská Wikisource – hymny a lidovky',
+  id: 'wikisource', name: 'Wicidestun', note: t('velšská Wikisource – hymny a lidovky'),
   search: q => mediawikiSearch('https://cy.wikisource.org/w/api.php', { title: q.title }, parseWikisource,
     t => `https://cy.wikisource.org/wiki/${encodeURIComponent(t.replace(/ /g, '_'))}`),
 };
@@ -188,7 +189,7 @@ const wikisource = {
 async function loadLyricsTranslate(url) {
   const { doc } = await getHtml(url);
   const body = doc.querySelector('#song-body');
-  if (!body) throw new Error('Na stránce jsem text nenašel.');
+  if (!body) throw new Error(t('Na stránce jsem text nenašel.'));
   body.querySelectorAll('[id^="adngin"], script, .emptyline').forEach(n => n.remove());
   const stanzas = [...body.querySelectorAll('.par')].map(p => [...p.children].map(d => cleanText(d.textContent)).filter(Boolean).join('\n'));
   const text = stanzas.length ? stanzas.join('\n\n') : elementText(body);
@@ -199,7 +200,7 @@ async function loadLyricsTranslate(url) {
 }
 
 const lyricsTranslate = {
-  id: 'lyricstranslate', name: 'LyricsTranslate', note: 'velšská scéna, často s překlady',
+  id: 'lyricstranslate', name: 'LyricsTranslate', note: t('velšská scéna, často s překlady'),
   async search(q) {
     const { doc } = await getHtml(`https://lyricstranslate.com/en/site-search?query=${encodeURIComponent([q.artist, q.title].filter(Boolean).join(' '))}`);
     return [...doc.querySelectorAll('.block-search-res__item')].map(it => {
@@ -230,7 +231,7 @@ async function loadBandcamp(url) {
 }
 
 const bandcamp = {
-  id: 'bandcamp', name: 'Bandcamp', note: 'texty přímo od interpretů',
+  id: 'bandcamp', name: 'Bandcamp', note: t('texty přímo od interpretů'),
   async search(q) {
     const r = await request('https://bandcamp.com/api/bcsearch_public_api/1/autocomplete_elastic', {
       method: 'POST', type: 'json', headers: { 'Content-Type': 'application/json' },
@@ -269,12 +270,12 @@ async function loadWelearnwelsh(url) {
   const text = section(/lyrics|geiriau/i);
   if (text) return { text, altText: section(/translation|english|cyfieithiad/i), url, title: cleanText(doc.querySelector('h1')?.textContent || '') };
   const g = genericExtract(doc);
-  if (!g) throw new Error('Na stránce jsem text nenašel.');
+  if (!g) throw new Error(t('Na stránce jsem text nenašel.'));
   return { text: g, url };
 }
 
 const welearnwelsh = {
-  id: 'welearnwelsh', name: 'We Learn Welsh', note: 'známé písně s anglickým překladem',
+  id: 'welearnwelsh', name: 'We Learn Welsh', note: t('známé písně s anglickým překladem'),
   async search(q) {
     const list = await getJson(`https://welearnwelsh.com/wp-json/wp/v2/search?per_page=10&search=${encodeURIComponent(q.title)}`);
     return list.filter(x => /lyrics|geiriau/i.test(`${x.url} ${x.title}`)).map(x => {
@@ -289,7 +290,7 @@ const welearnwelsh = {
 async function loadGenius(url) {
   const { doc } = await getHtml(url);
   const boxes = [...doc.querySelectorAll('[data-lyrics-container="true"]')];
-  if (!boxes.length) throw new Error('Na stránce jsem text nenašel.');
+  if (!boxes.length) throw new Error(t('Na stránce jsem text nenašel.'));
   boxes.forEach(b => b.querySelectorAll('[data-exclude-from-selection="true"]').forEach(n => n.remove()));
   const text = boxes.map(elementText).join('\n')
     .split('\n').map(l => (/^\[.*\]$/.test(l.trim()) ? '' : l)).join('\n');
@@ -297,7 +298,7 @@ async function loadGenius(url) {
 }
 
 const genius = {
-  id: 'genius', name: 'Genius', note: 'hlavně anglické písně',
+  id: 'genius', name: 'Genius', note: t('hlavně anglické písně'),
   async search(q) {
     const d = await getJson(`https://genius.com/api/search/multi?per_page=5&q=${encodeURIComponent([q.artist, q.title].filter(Boolean).join(' '))}`);
     const hits = (d.response?.sections || []).filter(s => s.type === 'song').flatMap(s => s.hits || []);
@@ -312,12 +313,12 @@ const azSlug = s => fold(s).replace(/^the\s+/, '').replace(/[^a-z0-9]/g, '');
 async function loadAz(url) {
   const r = await request(url);
   const m = r.text.match(/<!--\s*Usage of azlyrics\.com content[\s\S]*?-->([\s\S]*?)<\/div>/i);
-  if (!m) throw new Error('Na stránce jsem text nenašel.');
+  if (!m) throw new Error(t('Na stránce jsem text nenašel.'));
   const doc = new DOMParser().parseFromString(`<div>${m[1]}</div>`, 'text/html');
   return { text: elementText(doc.body.firstChild), url };
 }
 const azlyrics = {
-  id: 'azlyrics', name: 'AZLyrics', note: 'jen s interpretem, hlavně anglické písně',
+  id: 'azlyrics', name: 'AZLyrics', note: t('jen s interpretem, hlavně anglické písně'),
   async search(q) {
     if (!q.artist) return [];
     const url = `https://www.azlyrics.com/lyrics/${azSlug(q.artist)}/${azSlug(q.title)}.html`;
@@ -356,14 +357,14 @@ const loaders = [
     const title = decodeURIComponent(new URL(u).pathname.replace(/^\/wiki\//, '')).replace(/_/g, ' ');
     const d = await getJson(`https://welshlyrics.fandom.com/api.php?format=json&formatversion=2&origin=*&action=parse&prop=wikitext&page=${encodeURIComponent(title)}`, { headers: UA_HEADER });
     const p = parseWelshLyricsWiki(d.parse.wikitext, d.parse.title);
-    if (!p) throw new Error('Stránka nemá text písně.');
+    if (!p) throw new Error(t('Stránka nemá text písně.'));
     return { ...p, url: u, source: 'welshlyrics' };
   }],
   [/^cy\.wikisource\.org$/, async u => {
     const title = decodeURIComponent(new URL(u).pathname.replace(/^\/wiki\//, '')).replace(/_/g, ' ');
     const d = await getJson(`https://cy.wikisource.org/w/api.php?format=json&formatversion=2&origin=*&action=parse&prop=wikitext&page=${encodeURIComponent(title)}`, { headers: UA_HEADER });
     const p = parseWikisource(d.parse.wikitext, d.parse.title);
-    if (!p) throw new Error('Stránka nemá text básně.');
+    if (!p) throw new Error(t('Stránka nemá text básně.'));
     return { ...p, url: u, source: 'wikisource' };
   }],
   [/(^|\.)lyricstranslate\.com$/, async u => ({ ...(await loadLyricsTranslate(u)), source: 'lyricstranslate' })],
@@ -376,12 +377,12 @@ const loaders = [
 // Načte text z libovolného odkazu (sdílení z prohlížeče, vložená adresa).
 export async function loadFromUrl(url) {
   const u = new URL(url.trim());
-  if (!/^https?:$/.test(u.protocol)) throw new Error('Odkaz musí začínat http(s)://');
+  if (!/^https?:$/.test(u.protocol)) throw new Error(t('Odkaz musí začínat http(s)://'));
   const known = loaders.find(([re]) => re.test(u.hostname));
   if (known) return known[1](u.href);
   const { doc } = await getHtml(u.href);
   const text = genericExtract(doc);
-  if (!text) throw new Error('Na stránce jsem nenašel nic, co vypadá jako text písně.');
+  if (!text) throw new Error(t('Na stránce jsem nenašel nic, co vypadá jako text písně.'));
   const yt = [...doc.querySelectorAll('iframe[src*="youtube"], a[href*="youtu"]')].map(n => extractYoutubeId(n.getAttribute('src') || n.getAttribute('href'))).find(Boolean);
   return { text, url: u.href, title: cleanText(doc.querySelector('h1')?.textContent || doc.title || ''), youtubeId: yt || null, source: u.hostname.replace(/^www\./, '') };
 }

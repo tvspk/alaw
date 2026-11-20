@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 20. 11. 2026, verze **0.9.0** (APK versionCode 13). Odpovídej zadavateli **česky**.
+> Stav k 20. 11. 2026, verze **0.10.0** (APK versionCode 14). Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -132,6 +132,27 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
    „Přepis (Whisper)“. Zadavatel klíč Groq na počítači vložil a ověření prošlo (**CORS Groq z prohlížeče funguje**).
    Gemini Files API (jen když ani zmenšená kopie nepřekročí 14 MB, tj. nahrávky nad ~7 min) zatím neověřeno.
 
+9. **Čeština a britská angličtina (0.10):** zadavatel chtěl aplikaci (web i APK) česky i anglicky, britská angličtina,
+   přepínač na hlavní stránce, na závěr 2× kontrola angličtiny „jako rodilý mluvčí“ (provedeno).
+   - `js/i18n.js`: `t('český text', { proměnné })` – **český text je klíč**, `pl(n, jedno, 2–4, 5+)` pro množná čísla
+     (angličtina [one, other]), `vlabel()` pro uložené výchozí popisky verzí, `srcLabel()` pro zdroj (sdílení, nahrávka, přepis),
+     `num`/`dec` (desetinná čárka/tečka), `locale` (řazení, datum v synchronizaci). Slovník `js/i18n-en.js` (~690 textů + 27
+     množných čísel). Chybějící překlad → zůstane česky a zapíše se do `window.__alawMissing` (hlásí test).
+   - Volba jazyka v `alaw-prefs.lang` (jen zařízení, nesynchronizuje se), výchozí podle `navigator.language` (cs/sk → česky,
+     jinak anglicky). Přepínač **CZ | EN v záhlaví knihovny**; přepnutí uloží volbu a **načte stránku znovu** (texty v konstantách
+     modulů se tak vždy přeloží). `<html lang>` = `cs` / `en-GB`; CSS popisky („doslovně:“, „Napsal(a) jsi:“) přes `:lang(en)`.
+   - **Data se nepřekládají** (písně, popisky verzí uložené česky – `Hlavní`, `Přepis (Whisper) 2`… se jen zobrazí anglicky).
+     **AI výstup v jazyce rozhraní:** překlad, doslovný překlad, zkratky a vysvětlení verše (anglické prompty v `ai.js`). Uložený
+     překlad zůstane v jazyce, ve kterém vznikl (pole `translation` je jedno); do druhého jazyka „Přeložit celou píseň znovu (AI)“.
+     Přepisové prompty jazyk neřeší. (Zadavateli nabídnuto: oba překlady u verše naráz – vyžadovalo by změnu formátu; zatím ne.)
+   - Hlášky z APK (`MainActivity.java`, česky) překládá `net.js androidErr`. Manifest a `<meta description>` dvojjazyčně.
+   - Terminologie EN: verš = **line**, sloka = **verse**, refrén = chorus, text písně = **lyrics**, verze textu = version,
+     sporné místo = **difference**, nejisté = uncertain, nahrávka = **recording**, přepis = transcription, prostředník = proxy,
+     schránka = sync storage, párovací kód = pairing code, procvičit = **practise** (sloveso). Britský pravopis (memorise, recognise).
+   - Testy: `testy/test_anglictina.py` (slovník úplný a bez navíc, proměnné sedí, bez češtiny a amerického pravopisu; prochází
+     ~60 obrazovek/stavů v en-GB včetně všech cvičení lekce a hodnocení; přepínač a zapamatování volby). Seznam klíčů
+     `testy/i18n_klice.py`. Ostatní testy mají `locale='cs-CZ'` (Playwright jinak hlásí en-US → anglicky).
+
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
 Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna verze/mazání (0.8) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
 
@@ -139,7 +160,9 @@ Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna ve
 
 Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „hotovo“.
 
-1. **CZ/EN verze aplikace – ZADÁNO, NEZAČATO (v kódu zatím nic).** Zadání: aplikace (web i APK) česky i anglicky,
+1. **CZ/EN verze aplikace – HOTOVO v 0.10.0** (popis výše v bodě 9). Zbývá: zadavatel vyzkouší přepínač na telefonu i počítači
+   a projde anglické texty; připomínky k angličtině doplnit do `js/i18n-en.js`.
+   Původní zadání: aplikace (web i APK) česky i anglicky,
    **britská angličtina**, přepínač **CZ / EN jednoduše na hlavní stránce** (knihovna). Na závěr **2× kontrola angličtiny
    „jako rodilý mluvčí britské angličtiny“**. Rozsah: ~760 českých řetězců ve 23 souborech `js/` (nejvíc app 108, song 103,
    bulk 94, lesson 73, compare 66, syncui 58, edit 50, drill 41, search 30, ai 26) + `index.html`.
