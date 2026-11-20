@@ -1,4 +1,4 @@
-// Gemini: český překlad veršů, doslovný překlad, hovorové zkratky a vysvětlení verše.
+// Gemini: český překlad veršů, doslovný překlad, hovorové zkratky, vysvětlení verše a přepis textu z nahrávky.
 // Klíč je uložený jen v tomto zařízení (localStorage 'alaw-ai'), nezálohuje se a nesynchronizuje.
 const KEY = 'alaw-ai';
 const API = 'https://generativelanguage.googleapis.com/v1beta';
@@ -18,11 +18,11 @@ class AiError extends Error {}
 // Jak dlouho čekat na jednu odpověď (Google při přetížení odpověď někdy jen zdržuje, místo aby vrátil chybu).
 const TIMEOUT = () => window.__alawAiTimeout || 45000;
 
-async function call(path, body, key) {
+async function call(path, body, key, timeout = TIMEOUT()) {
   let r;
   const send = async viaQuery => {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), TIMEOUT());
+    const timer = setTimeout(() => ctrl.abort(), timeout);
     try {
       return await fetch(`${API}/${path}${viaQuery ? `${path.includes('?') ? '&' : '?'}key=${encodeURIComponent(key)}` : ''}`, {
         method: body ? 'POST' : 'GET',
@@ -72,7 +72,8 @@ export async function pickModel(key) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // Při přetížení (503) zkusí každý model víckrát s rostoucí pauzou, pak další model v pořadí.
-async function generate(system, user, schema, onWait = () => {}) {
+// user = text, nebo pole částí ({ text } | { inline_data } | { file_data }). opts.timeout, opts.recitation = hláška při odmítnutí.
+async function generate(system, user, schema, onWait = () => {}, opts = {}) {
   let { key, model, models } = aiConfig();
   if (!key) throw new AiError('Nejdřív vlož klíč pro Gemini v Nastavení.');
   if (!models) { // klíč uložený starší verzí: doplnit záložní modely
@@ -82,7 +83,7 @@ async function generate(system, user, schema, onWait = () => {}) {
   if (!order.length) order.push('gemini-flash-latest');
   const body = {
     systemInstruction: { parts: [{ text: system }] },
-    contents: [{ role: 'user', parts: [{ text: user }] }],
+    contents: [{ role: 'user', parts: typeof user === 'string' ? [{ text: user }] : user }],
     generationConfig: { temperature: 0.2, responseMimeType: 'application/json', responseSchema: schema },
   };
   // překlad nepotřebuje dlouhé „přemýšlení“ modelu – zrychlí odpověď; když to model nezná, zkusí se bez toho
@@ -93,13 +94,13 @@ async function generate(system, user, schema, onWait = () => {}) {
       if (pause) { onWait(`Gemini je přetížený, zkouším znovu (${m})…`); await sleep(pause); }
       const started = Date.now();
       const tick = setInterval(() => onWait(`Čekám na Gemini (${m})… ${Math.round((Date.now() - started) / 1000)} s`), 1000);
-      try { data = await call(`models/${m}:generateContent`, body, key); break outer; }
+      try { data = await call(`models/${m}:generateContent`, body, key, opts.timeout); break outer; }
       catch (e) {
         lastErr = e;
         if (body.generationConfig.thinkingConfig && /thinking/i.test(e.message)) { // model volbu nezná
           delete body.generationConfig.thinkingConfig;
           localStorage.setItem('alaw-ai-nothink', '0');
-          try { data = await call(`models/${m}:generateContent`, body, key); break outer; } catch (e2) { lastErr = e2; if (e2.retry !== 'busy') throw e2; continue; }
+          try { data = await call(`models/${m}:generateContent`, body, key, opts.timeout); break outer; } catch (e2) { lastErr = e2; if (e2.retry !== 'busy') throw e2; continue; }
         }
         if (e.retry === 'model') continue outer;
         if (e.retry !== 'busy') throw e;
@@ -110,7 +111,7 @@ async function generate(system, user, schema, onWait = () => {}) {
   if (!data) throw new AiError(`${lastErr.message} (zkoušené modely: ${order.join(', ')})`);
   const cand = data.candidates?.[0];
   if (!cand) throw new AiError('Gemini nevrátil odpověď' + (data.promptFeedback?.blockReason ? ` (${data.promptFeedback.blockReason}).` : '.'));
-  if (cand.finishReason === 'RECITATION') throw new AiError('Gemini odmítl odpovědět (ochrana autorských práv). Zkus přeložit méně veršů najednou.');
+  if (cand.finishReason === 'RECITATION') throw Object.assign(new AiError(opts.recitation || 'Gemini odmítl odpovědět (ochrana autorských práv). Zkus přeložit méně veršů najednou.'), { kind: 'recitation' });
   const text = (cand.content?.parts || []).map(p => p.text || '').join('');
   try { return JSON.parse(text); } catch { throw new AiError('Gemini vrátil nečitelnou odpověď.'); }
 }
@@ -187,4 +188,86 @@ export async function explainLine(song, version, line) {
     },
     required: ['words', 'note'],
   }));
+}
+
+// ---------- přepis textu z nahrávky ----------
+
+const INLINE_MAX = 14 * 1048576; // base64 zvětší o třetinu, celý požadavek smí mít 20 MB
+const AUDIO_MIME = { 'audio/mpeg': 'audio/mp3', 'audio/x-wav': 'audio/wav', 'audio/wave': 'audio/wav', 'audio/vnd.wave': 'audio/wav', 'audio/x-flac': 'audio/flac', 'audio/x-m4a': 'audio/aac', 'audio/mp4': 'audio/aac' };
+const EXT_MIME = { mp3: 'audio/mp3', wav: 'audio/wav', flac: 'audio/flac', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', m4a: 'audio/aac', aac: 'audio/aac', aiff: 'audio/aiff' };
+export function audioMime(type, name = '') {
+  if (AUDIO_MIME[type]) return AUDIO_MIME[type];
+  if (type && type.startsWith('audio/')) return type;
+  const ext = (String(name).match(/\.(\w+)$/) || [])[1];
+  return EXT_MIME[ext && ext.toLowerCase()] || 'audio/mp3';
+}
+
+const blobToB64 = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(blob); });
+
+// Velký soubor přes Files API (multipart: jeden požadavek, odpověď = popis souboru). Google by ho za 48 h smazal sám,
+// mažeme ho hned po přepisu.
+async function uploadFile(key, blob, mime, name, onWait) {
+  onWait(`Nahrávám nahrávku do Gemini (${Math.max(1, Math.round(blob.size / 1048576))} MB)…`);
+  const boundary = 'alaw' + Math.random().toString(36).slice(2);
+  const meta = JSON.stringify({ file: { display_name: String(name || 'alaw').slice(0, 100) } });
+  const body = new Blob([`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: ${mime}\r\n\r\n`, blob, `\r\n--${boundary}--\r\n`]);
+  let r;
+  try {
+    r = await fetch('https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=multipart', {
+      method: 'POST', headers: { 'x-goog-api-key': key, 'X-Goog-Upload-Protocol': 'multipart', 'Content-Type': `multipart/related; boundary=${boundary}` }, body,
+    });
+  } catch { throw new AiError(navigator.onLine ? 'Nahrávku se nepodařilo nahrát do Gemini.' : 'Jsi offline.'); }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || !data.file || !data.file.uri) throw new AiError(`Nahrání do Gemini se nepovedlo (${r.status}${data.error?.message ? `: ${data.error.message.slice(0, 120)}` : ''}).`);
+  let file = data.file;
+  for (let i = 0; i < 60 && file.state === 'PROCESSING'; i++) {
+    onWait('Gemini zpracovává nahrávku…');
+    await sleep(window.__alawAiPoll ?? 2000);
+    file = await call(file.name, null, key);
+  }
+  if (file.state === 'FAILED') throw new AiError('Gemini nahrávku nepřijal (neumí ji přečíst).');
+  return file;
+}
+function deleteFile(key, name) {
+  if (!/^files\/[\w-]+$/.test(name || '')) return;
+  fetch(`${API}/${name}`, { method: 'DELETE', headers: { 'x-goog-api-key': key } }).catch(() => {});
+}
+
+const TRANSCRIBE_PROMPT = `Jsi pečlivý přepisovatel zpívaných textů. Dostaneš nahrávku písně a její název.
+Přepiš PŘESNĚ to, co se zpívá, v jazyce zpěvu (nejčastěji velština), se správným pravopisem a diakritikou (â, ŵ, ŷ…).
+- Každý zpívaný verš (řádek textu) zvlášť, v pořadí, jak zazní. Opakované refrény a verše piš pokaždé znovu.
+- "start": čas začátku verše v sekundách od začátku nahrávky (desetinné číslo).
+- "new_stanza": true u prvního verše nové sloky nebo refrénu, jinak false.
+- Nepřekládej, nic nevysvětluj, nepiš popisy hudby ani mluvčích. Nesrozumitelné slovo nahraď „…“.
+- Když v nahrávce nikdo nezpívá, vrať prázdné pole.`;
+
+// Přepíše zpívaný text z nahrávky. Vrací [{ start (ms|null), text, stanza }].
+export async function transcribeAudio(blob, { title = '', artist = '', language = 'cy', name = '' } = {}, onWait = () => {}) {
+  const { key } = aiConfig();
+  if (!key) throw new AiError('Nejdřív vlož klíč pro Gemini v Nastavení.');
+  const mime = audioMime(blob.type, name);
+  let file = null, audioPart;
+  if (blob.size <= INLINE_MAX) audioPart = { inline_data: { mime_type: mime, data: await blobToB64(blob) } };
+  else { file = await uploadFile(key, blob, mime, name || title, onWait); audioPart = { file_data: { mime_type: file.mimeType || mime, file_uri: file.uri } }; }
+  try {
+    const res = await generate(TRANSCRIBE_PROMPT, [audioPart, { text: JSON.stringify({ title, artist, language }) }], S('OBJECT', {
+      properties: { lines: S('ARRAY', { items: S('OBJECT', { properties: { start: S('NUMBER'), text: S('STRING'), new_stanza: S('BOOLEAN') }, required: ['start', 'text'] }) }) },
+      required: ['lines'],
+    }), onWait, { timeout: 240000, recitation: 'Gemini přepis odmítl (ochrana autorských práv u známé písně). Zkus najít text na internetu.' });
+    return cleanTranscript(res.lines);
+  } finally { if (file) deleteFile(key, file.name); }
+}
+
+// Úklid odpovědi: prázdné verše pryč; časy jen když jsou všechny a rostou (jinak si je model vymyslel → bez časů).
+export function cleanTranscript(lines) {
+  const out = (Array.isArray(lines) ? lines : []).map(l => ({
+    text: String(l?.text || '').replace(/\s+/g, ' ').trim(),
+    start: l && Number.isFinite(+l.start) && +l.start >= 0 && l.start !== null && l.start !== '' ? Math.round(+l.start * 1000) : null,
+    stanza: !!l?.new_stanza,
+  })).filter(l => l.text && !/^[….\s]+$/.test(l.text)).slice(0, 400);
+  const times = out.map(l => l.start);
+  const ok = times.every(t => t != null) && times.every((t, i) => !i || t >= times[i - 1]);
+  if (!ok) for (const l of out) l.start = null;
+  if (out.length) out[0].stanza = false;
+  return out;
 }

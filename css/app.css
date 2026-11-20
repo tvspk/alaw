@@ -494,3 +494,8 @@ mark.gap { font-family: var(--sans); font-weight: 700; padding: 0 4px; }
 .bulk-sum { font-size: .92rem; }
 .search-else { display: grid; gap: 8px; margin: 4px 0 14px; }
 .search-else .btn { text-decoration: none; }
+.song-card.selected { outline: 2px solid var(--accent); }
+.song-card .sel-box { flex: none; width: 20px; height: 20px; margin-right: 4px; accent-color: var(--accent); pointer-events: none; }
+.sel-toggle { font-size: 1.2rem; margin-left: auto; }
+.sel-toggle.on { color: var(--accent); }
+.sel-bar .btn.danger:disabled { opacity: .5; }

@@ -2,7 +2,7 @@
 
 Alaw (velšsky „melodie“): texty písní (hlavně velšských) a jejich učení nazpaměť. Webová aplikace (PWA) pro Android i počítač, funguje offline.
 
-## Co umí (verze 0.7)
+## Co umí (verze 0.8)
 
 - Knihovna písní s hledáním (i v textu, bez ohledu na stříšky), štítky a filtrem jazyka.
 - Přidání písně: prostý text nebo LRC s časy, sloky oddělené prázdným řádkem, načtení ze souboru.
@@ -37,6 +37,12 @@ Alaw (velšsky „melodie“): texty písní (hlavně velšských) a jejich uče
   Načtení **souboru s odkazy** na stránky s texty (třeba od Clauda): texty se stáhnou z odkazů, nefunkční odkaz → LRCLIB.
 - **Hledat na Googlu** (v okně hledání): otevře Google s dotazem; stránku pak sdílíš do Alaw (Android) nebo vložíš odkaz
   („🔗 Vložit odkaz“). Sdílená stránka se nabídne k písni, ke které se text hledal (3 hodiny).
+- **Přepis textu z nahrávky** (Gemini, vlastní klíč): u písně bez textu, v nabídce písně a hromadně v Najít texty
+  („Přepsat nenalezené z nahrávek“). Verše i s časy začátků; bez textu = hlavní verze, s textem = další verze k porovnání
+  (a nenačasovaný text si z přepisu převezme časy u shodných veršů). Soubory nad 14 MB jdou přes Files API a po přepisu se smažou.
+- **Výměna hlavní verze** (Porovnat verze → nabídka → Udělat hlavní verzí): pokrok veršů se převede na nové znění,
+  nahrávka přejde na novou hlavní verzi, když vlastní nemá.
+- **Hromadné mazání** v knihovně (☑ → označit písně → Smazat), i s nahrávkami a pokrokem; přenese se do ostatních zařízení.
 - Záloha do JSON (volitelně se zvukem, vždy s pokrokem učení) a import, včetně JSON z projektu „Lyrics Trainer“.
 - **Hledání textů** najednou v LRCLIB (i s časy), Welsh Lyrics wiki (welshlyrics.fandom.com, často s anglickým překladem a videem),
   LyricsTranslate, Wicidestun (velšská Wikisource), Bandcamp, We Learn Welsh, Genius a AZLyrics. Náhled, převzetí do písně,
@@ -60,6 +66,6 @@ a otevřít http://localhost:8000
 
 - Bez sestavování: čisté HTML, CSS a JavaScript (ES moduly) v `index.html`, `css/`, `js/`.
 - Po každé změně souborů spusť `python3 scripts/build_sw.py` (aktualizuje seznam souborů a verzi v `sw.js`).
-- Testy: `python3 testy/test_zaklad.py`, `python3 testy/test_verze.py`, `python3 testy/test_hledani.py`, `python3 testy/test_hromadne.py` (Playwright, Chromium jako Pixel 7, bez sítě),
+- Testy: `python3 testy/test_zaklad.py`, `python3 testy/test_verze.py`, `python3 testy/test_hledani.py`, `python3 testy/test_hromadne.py`, `python3 testy/test_prepis.py` (Playwright, Chromium jako Pixel 7, bez sítě),
   `python3 testy/test_sync.py` (napodobený GitHub), `node testy/test_worker.mjs`. Kontrola zdrojů proti skutečným webům: `python3 testy/zdroje_naostro.py`.
 - APK: `sh android/build.sh` (nástroje z npm, Java 17). Prostředník pro počítač: `worker/` (návod v `worker/README.md`).

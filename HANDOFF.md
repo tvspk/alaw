@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 20. 11. 2026, verze **0.7.1** (APK versionCode 11). Odpovídej zadavateli **česky**.
+> Stav k 20. 11. 2026, verze **0.8.0** (APK versionCode 12). Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -106,12 +106,30 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
        jinak jednoznačný název, jen s písněmi bez textu. Text z odkazu = „doporučený“ (převzít všechny), nefunkční → LRCLIB.
        Na počítači potřebuje prostředníka (většina webů nemá CORS); v APK přímo.
 
+7. **Přepis z nahrávky, výměna hlavní verze, hromadné mazání (0.8):**
+   - `ai.transcribeAudio` (Gemini, klíč zadavatele): do 14 MB `inline_data`, větší přes Files API (`upload/v1beta/files?uploadType=multipart`,
+     čekání na `ACTIVE`, po přepisu `DELETE`). Odpověď JSON `{ lines: [{ start (s), text, new_stanza }] }`, `cleanTranscript`
+     (prázdné a „…“ pryč; časy jen když jsou všechny a rostou). Odmítnutí kvůli autorským právům (`RECITATION`) = hláška u písně.
+     **Nahrávání přes Files API nešlo z prostředí Claude ověřit proti skutečnému Googlu (síť) – ověřit u zadavatele na WAV.**
+   - `bulk.transcribeToSong`: **rozhodnutí zadavatele: píseň s textem → přepis jako další verze** („Přepis z nahrávky“, (2)…),
+     bez textu → hlavní verze. Časy jen pro nahrávku, ze které se přepisovalo; nenačasovaná hlavní verze převezme časy
+     (`borrowTimes`). Hromadně v Najít texty (stop při vyčerpaném limitu / neplatném klíči).
+   - `versions.makePrimary` + `compare.js` „⭐ Udělat hlavní verzí“: pokrok převeden (`moveProgress` pro sporná místa),
+     rozhodnutí sporných míst se vynulují, nahrávka/YouTube přejde na novou hlavní, nemá-li vlastní.
+   - Knihovna: režim výběru (☑, `libState.sel`), smazání označených přes `store.deleteSong` (náhrobky, nahrávky, pokrok).
+   - **Kontrola projektu (2 kola) a opravy:** (1) synchronizace mohla smazat nahrávku uloženou těsně před písní (hromadné
+     přidání!) → `db.freshAudio` + kontrola aktuálních písní před mazáním; (2) při nahrávání stovek MB zvuku se stav zapisuje
+     průběžně po 200 MB (`COMMIT_EVERY`), kousky jsou hned ukotvené a druhé zařízení může stahovat; (3) záloha se zvukem nad
+     300 MB nabídne zálohu bez zvuku (jinak by prohlížeč spadl); (4) sdílení do písně, která už text má, se zeptá;
+     (5) test synchronizace se občas zasekl (zámek v napodobeném GitHubu) → `RLock`.
+   - Test: `python3 -u testy/test_prepis.py` (napodobené Gemini vč. Files API).
+
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
-Učení (0.4, 0.5), verze (0.6) a písně z nahrávek (0.7) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
+Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna verze/mazání (0.8) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
 
 ## Zbývá (původní plán)
 
-- Původní plán je hotový. Možná rozšíření (zatím nezadaná): sdílení z Androidu rovnou do nové verze, výměna hlavní verze.
+- Původní plán je hotový. Možná rozšíření (zatím nezadaná): sdílení z Androidu rovnou do nové verze.
 - Drobnosti: pruh nové verze se objeví až po 20 h od poslední kontroly (záměr). Genius z prostředí Claude netestovatelný
   (blokuje servery). Na počítači může prostředník narazit na blokaci u Genius a Bandcampu.
 
@@ -129,7 +147,7 @@ Učení (0.4, 0.5), verze (0.6) a písně z nahrávek (0.7) zatím jen testy v p
 
 - Po každé změně v `index.html`, `css/`, `js/` spusť `python3 scripts/build_sw.py` (workflow jinak selže).
 - Testy (Playwright, Chromium jako Pixel 7, bez sítě):
-  `python3 -u testy/test_zaklad.py`, `python3 -u testy/test_verze.py`, `python3 -u testy/test_hledani.py`, `python3 -u testy/test_hromadne.py`, `python3 -u testy/test_sync.py`,
+  `python3 -u testy/test_zaklad.py`, `python3 -u testy/test_verze.py`, `python3 -u testy/test_hledani.py`, `python3 -u testy/test_hromadne.py`, `python3 -u testy/test_prepis.py`, `python3 -u testy/test_sync.py`,
   `node testy/test_worker.mjs`. Kontrola zdrojů proti skutečným webům: `python3 testy/zdroje_naostro.py`.
   Spouštěj s `-u` a výstup do souboru (`> /tmp/x.log`): přes rouru s `grep` se dlouhé testy zasekávaly.
 - Playwright Chromium nemusí být nainstalovaný: `python3 -m playwright install chromium`.

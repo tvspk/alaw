@@ -6,7 +6,7 @@ import { getSong, saveSong, moveProgress, deleteAudioBlob, getPrefs } from './st
 import { primaryVersion, formatMs } from './model.js';
 import { Player } from './player.js';
 import { attachMedia, lineRange } from './lesson.js';
-import { MAX_VERSIONS, STATE, analyze, summary, decide, addOtherLines, prune, splitWords, otherVersions } from './versions.js';
+import { MAX_VERSIONS, STATE, analyze, summary, decide, addOtherLines, prune, splitWords, otherVersions, makePrimary } from './versions.js';
 
 const RATES = [0.75, 0.5, 1];
 
@@ -272,6 +272,19 @@ export async function renderCompare(root, id, versionId, focusLi, nav) {
     pos.max = Math.round(player.duration || 1000);
   }
 
+  // ---------- výměna hlavní verze ----------
+  async function swapMain() {
+    const decided = main().lines.some(l => l.vars && l.vars.length);
+    if (!confirm(`Udělat z „${other.label}“ hlavní verzi? Učit se budeš její text, pokrok veršů se převede na nové znění.${decided ? ' Rozhodnutí sporných míst se vynulují.' : ''}`)) return;
+    const fresh = await getSong(song.id);
+    const pairs = makePrimary(fresh, other.id);
+    await saveSong(fresh);
+    let moved = 0;
+    for (const [a, b] of pairs) if (await moveProgress(fresh.id, a, b)) moved++;
+    toast(`Hlavní verze: ${other.label}${moved ? ` (pokrok převeden u ${moved} ${moved === 1 ? 'verše' : 'veršů'})` : ''}`, 3500);
+    nav.replace(`#/song/${encodeURIComponent(fresh.id)}`);
+  }
+
   // ---------- nabídka verze ----------
   function openMenu() {
     sheet(close => el('div', {},
@@ -279,6 +292,7 @@ export async function renderCompare(root, id, versionId, focusLi, nav) {
       el('div', { class: 'sub', text: `${other.lines.length} veršů${other.sourceUrl ? ' · ' + other.sourceUrl : ''}` }),
       menu([
         { icon: '✎', label: 'Upravit tuto verzi', action: () => nav.go(`#/version/${encodeURIComponent(song.id)}/${encodeURIComponent(other.id)}`) },
+        { icon: '⭐', label: 'Udělat hlavní verzí', action: () => swapMain() },
         song.versions.length < MAX_VERSIONS && { icon: '＋', label: 'Přidat další verzi textu', action: () => nav.go(`#/version/${encodeURIComponent(song.id)}/new`) },
         { icon: '🗑', label: 'Smazat tuto verzi', danger: true, action: async () => {
           if (!confirm(`Smazat verzi „${other.label}“? Rozhodnutí sporných míst proti ní se zapomenou.`)) return;

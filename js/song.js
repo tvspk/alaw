@@ -7,7 +7,7 @@ import { primaryVersion, formatMs, toLrc, langLabel } from './model.js';
 import { Player, RATES } from './player.js';
 import { hasAi, translateVersion, explainLine } from './ai.js';
 import { MAX_VERSIONS, analyze, summary } from './versions.js';
-import { applyLyrics } from './bulk.js';
+import { applyLyrics, runTranscribe, transcribable } from './bulk.js';
 import { openSearch } from './search.js';
 
 const WORD_RE = /^([^\p{L}\p{N}]*)(.*?)([^\p{L}\p{N}]*)$/u;
@@ -228,6 +228,7 @@ export async function renderSong(root, id, nav) {
         el('button', { type: 'button', class: 'btn primary', text: '🔍 Najít text', onclick: () => openSearch({ title: song.title, artist: song.artist, language: song.language }, async d => {
           try { await applyLyrics(song.id, d); toast('Text uložen'); nav.replace(`#/song/${encodeURIComponent(song.id)}`); } catch (e) { toast(e.message); }
         }, { songId: song.id }) }),
+        transcribable(song) ? el('button', { type: 'button', class: 'btn', text: '🎧 Přepsat z nahrávky', onclick: () => runTranscribe(song.id, nav) }) : null,
         el('button', { type: 'button', class: 'btn', text: 'Vložit ručně', onclick: () => nav.go(`#/edit/${encodeURIComponent(song.id)}`) }))));
   }
 
@@ -492,6 +493,7 @@ export async function renderSong(root, id, nav) {
         { icon: '⏱', label: 'Časovat verše ťukáním', action: () => nav.go(`#/sync/${song.id}`) },
         song.versions.length > 1 && { icon: '⚖', label: 'Porovnat verze textu', action: () => nav.go(`#/compare/${encodeURIComponent(song.id)}`) },
         song.versions.length < MAX_VERSIONS && { icon: '＋', label: 'Přidat verzi textu z jiného zdroje…', action: () => nav.go(`#/version/${encodeURIComponent(song.id)}/new`) },
+        transcribable(song) && (!version.lines.length || song.versions.length < MAX_VERSIONS) && { icon: '🎧', label: version.lines.length ? 'Přepsat z nahrávky jako další verzi (AI)' : 'Přepsat text z nahrávky (AI)', action: () => runTranscribe(song.id, nav) },
         { icon: '🎓', label: 'Učit se', action: () => nav.go(`#/learn/${encodeURIComponent(song.id)}`) },
         { icon: '🎯', label: 'Procvičit celou píseň…', action: openDrills },
         [...recs.values()].some(r => r.st !== 'new') && { icon: '↺', label: 'Vynulovat pokrok celé písně', action: async () => {

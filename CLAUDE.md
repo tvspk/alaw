@@ -31,4 +31,7 @@
   text a převede pokrok (`store.moveProgress`). Test: `python3 -u testy/test_verze.py`.
 - Písně z nahrávek a hledání textů (`js/bulk.js`, `#/bulk`, `#/lyrics`): texty se ukládají jen po potvrzení uživatelem,
   časy z LRCLIB jen při shodné délce nahrávky. Test: `python3 -u testy/test_hromadne.py`.
+- Přepis z nahrávky (`ai.transcribeAudio`, `bulk.transcribeToSong`): píseň s textem → přepis jako další verze, nikdy nepřepsat
+  hlavní text. Claude sám texty písní nepřepisuje ani nevypisuje (dělá to aplikace u zadavatele). Test: `python3 -u testy/test_prepis.py`.
+- Nahrávky ukládat před písní je v pořádku jen přes `putAudioBlob` (chrání `db.freshAudio` před úklidem synchronizace).
 - **Stav projektu, rozhodnutí a další kroky: `HANDOFF.md`** (přečti jako první).

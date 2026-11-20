@@ -36,13 +36,17 @@ async function tx(store, mode, fn) {
   });
 }
 
+// Nahrávky uložené v tomto běhu aplikace, ke kterým se ještě neuložila píseň (nahrávka se ukládá dřív než píseň).
+// Synchronizace je nesmí smazat jako nepoužívané. store.saveSong je odsud odebere.
+export const freshAudio = new Set();
+
 export const db = {
   allSongs: () => tx('songs', 'readonly', s => s.getAll()).then(list => list || []),
   getSong: id => tx('songs', 'readonly', s => s.get(id)),
   putSong: song => tx('songs', 'readwrite', s => s.put(song)),
   deleteSong: id => tx('songs', 'readwrite', s => s.delete(id)),
   getAudio: key => tx('audio', 'readonly', s => s.get(key)),
-  putAudio: (key, blob) => tx('audio', 'readwrite', s => s.put(blob, key)),
+  putAudio: (key, blob) => { freshAudio.add(key); return tx('audio', 'readwrite', s => s.put(blob, key)); },
   deleteAudio: key => tx('audio', 'readwrite', s => s.delete(key)),
   audioKeys: () => tx('audio', 'readonly', s => s.getAllKeys()).then(k => k || []),
   getMeta: key => tx('meta', 'readonly', s => s.get(key)),

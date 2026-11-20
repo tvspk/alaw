@@ -15,13 +15,14 @@
 // takže náhrobky nepotřebuje. Pokrok smazané písně se zahodí.
 // Nesynchronizuje se: nastavení zařízení (alaw-prefs), klíč Gemini (alaw-ai), adresa prostředníka.
 // Token a 8 slov jsou jen v localStorage 'alaw-sync' tohoto zařízení, nikdy v záloze.
-import { db } from './db.js';
+import { db, freshAudio } from './db.js';
 import { normalizeSong } from './model.js';
 import { normalizeRec, recWins } from './learn.js';
 import { WORDS } from './bip39.js';
 
 const CFG_KEY = 'alaw-sync', API = 'https://api.github.com', META = 'alaw-sync.json', APP = 'Alaw', DEFREPO = 'alaw-sync';
 const RE_REPO = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/, RE_BR = /^al-[a-f0-9]{12}$/, RE_SHA = /^[a-f0-9]{40}$/, RE_KEY = /^[a-f0-9]{8,40}$/;
+const COMMIT_EVERY = () => window.__alawSyncCommitEvery || 200 * 1024 * 1024; // průběžný zápis stavu při nahrávání zvuku
 const PART = () => window.__alawSyncPart || 8 * 1024 * 1024; // velikost kousku zvuku (GitHub bere bloby do 100 MB)
 const POLL = 60000, SOON = 15000, BACK = 20000, ERRWAIT = 5 * 60000, RETRY = 30 * 60000;
 const HARD = ['token', 'notfound', 'forbidden', 'public', 'meta'];
@@ -320,32 +321,21 @@ export async function syncNow(manual = false, quick = false) {
         have.add(k);
         changed.add(k);
       }
-      for (const k of have) if (!needed.has(k)) await db.deleteAudio(k);
+      // nepoužívané nahrávky smazat – ale podle aktuálního stavu (během synchronizace se mohly přidat písně)
+      // a ne ty, ke kterým se píseň teprve ukládá (freshAudio)
+      const inUse = audioKeys((await db.allSongs()).map(normalizeSong).filter(Boolean));
+      for (const k of have) if (!needed.has(k) && !inUse.has(k) && !freshAudio.has(k)) await db.deleteAudio(k);
     }
 
     // 4) vlastní stav: nahrát jen při změně
     const files = {};
-    for (const [k] of needed) {
-      if (c.files[k]) { files[k] = c.files[k]; continue; }
-      if (c.remote[k]) { files[k] = c.remote[k]; continue; }   // už je ve schránce od jiného zařízení
-      if (!have.has(k) || quick) continue;                     // nahraje se při příští úplné synchronizaci
-      const blob = await db.getAudio(k);
-      if (!blob) continue;
-      const n = Math.max(1, Math.ceil(blob.size / PART())), shas = [];
-      for (let j = 0; j < n; j++) {
-        setProgress(`Nahrávám nahrávku „${needed.get(k).name || k}“${n > 1 ? ` (${j + 1}/${n})` : ''}…`);
-        const part = new Uint8Array(await blob.slice(j * PART(), (j + 1) * PART()).arrayBuffer());
-        const r = await gh(c.token, 'POST', `${P}/git/blobs`, { content: b64(await seal(key, `a/${k}/${j}`, part)), encoding: 'base64' });
-        shas.push(r.sha);
-      }
-      files[k] = shas; c.files[k] = shas; save();   // zapamatovat, ať se po přerušení nenahrává znovu
-    }
-    for (const k of Object.keys(c.files)) if (!needed.has(k)) delete c.files[k];
     const live = Object.fromEntries(Object.entries(tombs).filter(([, t]) => Date.now() - t < 400 * 86400e3));
     const progOut = [...prog.values()].filter(r => r.t > 0 && local.has(r.s)).sort((a, b) => (a.id < b.id ? -1 : 1));
-    const body = JSON.stringify({ app: APP, v: 1, songs: songs.sort((a, b) => (a.id < b.id ? -1 : 1)), tombs: live, files, prog: progOut });
-    const hs = hash(body);
-    if (hs !== c.upHash || !own) {
+    songs.sort((a, b) => (a.id < b.id ? -1 : 1));
+    const commit = async () => {
+      const body = JSON.stringify({ app: APP, v: 1, songs, tombs: live, files, prog: progOut });
+      const hs = hash(body);
+      if (hs === c.upHash && own) return;
       setProgress('Nahrávám změny…');
       const blob = await gh(c.token, 'POST', `${P}/git/blobs`, { content: b64(await seal(key, 'state', await zip(enc(body), true))), encoding: 'base64' });
       const tree = [{ path: 'state', mode: '100644', type: 'blob', sha: blob.sha }];
@@ -360,8 +350,32 @@ export async function syncNow(manual = false, quick = false) {
         try { await gh(c.token, 'PATCH', `${P}/git/refs/heads/${c.branch}`, { sha: cm.sha, force: true }); }
         catch (e) { if (e.kind !== 'notfound' && e.status !== 422) throw e; await gh(c.token, 'POST', `${P}/git/refs`, { ref: 'refs/heads/' + c.branch, sha: cm.sha }); }
       } else await gh(c.token, 'POST', `${P}/git/refs`, { ref: 'refs/heads/' + c.branch, sha: cm.sha });
+      own = cm.sha;
       c.upHash = hs;
+      save();
+    };
+    let sinceCommit = 0;
+    for (const [k] of needed) {
+      if (c.files[k]) { files[k] = c.files[k]; continue; }
+      if (c.remote[k]) { files[k] = c.remote[k]; continue; }   // už je ve schránce od jiného zařízení
+      if (!have.has(k) || quick) continue;                     // nahraje se při příští úplné synchronizaci
+      const blob = await db.getAudio(k);
+      if (!blob) continue;
+      const n = Math.max(1, Math.ceil(blob.size / PART())), shas = [];
+      for (let j = 0; j < n; j++) {
+        setProgress(`Nahrávám nahrávku „${needed.get(k).name || k}“${n > 1 ? ` (${j + 1}/${n})` : ''}…`);
+        const part = new Uint8Array(await blob.slice(j * PART(), (j + 1) * PART()).arrayBuffer());
+        const r = await gh(c.token, 'POST', `${P}/git/blobs`, { content: b64(await seal(key, `a/${k}/${j}`, part)), encoding: 'base64' });
+        shas.push(r.sha);
+      }
+      files[k] = shas; c.files[k] = shas; save();   // zapamatovat, ať se po přerušení nenahrává znovu
+      // u velkého množství zvuku (stovky MB) průběžně zapsat stav: nahrané kousky jsou pak ve schránce „ukotvené“
+      // a ostatní zařízení si je můžou stahovat, i když nahrávání ještě běží nebo se přeruší
+      sinceCommit += blob.size;
+      if (sinceCommit >= COMMIT_EVERY()) { sinceCommit = 0; await commit(); }
     }
+    for (const k of Object.keys(c.files)) if (!needed.has(k)) delete c.files[k];
+    await commit();
     c.lastSync = Date.now();
     c.lastError = damaged ? 'damaged' : null;
     ok = true;

@@ -2,9 +2,11 @@
 // Z každé nahrávky vznikne píseň s nahrávkou, zatím bez textu. Název a interpret: z názvu souboru
 // „Interpret - Název“, jinak z údajů uložených v souboru (ID3 v mp3, INFO ve wav), jinak název souboru.
 // Texty pak hledá v LRCLIB podle názvu, interpreta a délky nahrávky; uloží se jen po potvrzení.
-import { el, fill, iconBtn, toast, fileSize, pickFiles, pickFile } from './ui.js';
+import { el, fill, iconBtn, toast, fileSize, pickFiles, pickFile, sheet } from './ui.js';
 import { listSongs, getSong, saveSong, putAudioBlob, getAudioBlob } from './store.js';
-import { LANGUAGES, newSong, primaryVersion, parseLyrics, parseTags, fold, uid, attachAlt } from './model.js';
+import { LANGUAGES, newSong, newLine, newVersion, primaryVersion, parseLyrics, parseTags, fold, uid, attachAlt, isSynced, borrowTimes } from './model.js';
+import { transcribeAudio, hasAi } from './ai.js';
+import { MAX_VERSIONS, prune } from './versions.js';
 import { SOURCES, similarity, loadFromUrl, cleanText } from './sources.js';
 import { openSearch, showPreview } from './search.js';
 import { isAndroid } from './net.js';
@@ -353,6 +355,7 @@ export async function renderFindLyrics(root, nav) {
   const info = el('div', { class: 'hint', role: 'status' });
   const startBtn = el('button', { type: 'button', class: 'btn primary', text: '🔍 Hledat texty', onclick: run });
   const takeAllBtn = el('button', { type: 'button', class: 'btn', hidden: true, onclick: takeAllSure });
+  const trAllBtn = el('button', { type: 'button', class: 'btn', hidden: true, onclick: () => transcribeAll() });
   const linksBtn = el('button', { type: 'button', class: 'btn', text: '📄 Načíst odkazy ze souboru', onclick: () => { if (!running) loadLinks(); } });
   const linkInfo = el('div', { class: 'hint' });
   const good = c => !!c && (c.link || isSure(c)); // doporučené: jistá shoda z LRCLIB nebo text z odkazu
@@ -363,12 +366,14 @@ export async function renderFindLyrics(root, nav) {
     const other = el('button', { type: 'button', class: 'btn small', text: '🔍 Hledat jinde', onclick: () => openSearch({ title: s.title, artist: s.artist, language: s.language }, async d => {
       try { await applyLyrics(s.id, d, true); r.state = 'taken'; toast('Text uložen'); draw(); sumUp(); } catch (e) { toast(e.message); }
     }, { songId: s.id }) });
+    const trBtn = hasAi() && transcribable(s) ? el('button', { type: 'button', class: 'btn small', text: '🎧 Přepsat z nahrávky', onclick: () => { if (!running) transcribeOne(s).catch(() => {}); } }) : null;
     let body;
-    if (r.state === 'wait') body = el('div', { class: 'hint', text: r.links ? `Čeká: ${r.links.length === 1 ? 'odkaz' : `${r.links.length} odkazy`} (${r.links.map(host).join(', ')})` : 'Čeká na hledání' });
+    if (r.state === 'tr') body = el('div', { class: 'hint tr-msg', text: r.msg || 'Přepisuji z nahrávky…' });
+    else if (r.state === 'wait') body = el('div', { class: 'hint', text: r.links ? `Čeká: ${r.links.length === 1 ? 'odkaz' : `${r.links.length} odkazy`} (${r.links.map(host).join(', ')})` : 'Čeká na hledání' });
     else if (r.state === 'busy') body = el('div', { class: 'hint', text: 'Hledám…' });
-    else if (r.state === 'taken') body = el('div', { class: 'ok', text: '✓ Text uložen' });
-    else if (r.state === 'error') body = el('div', { class: 'row' }, el('span', { class: 'hint', text: `Chyba: ${r.error}` }), other);
-    else if (!r.cands.length) body = el('div', { class: 'row' }, el('span', { class: 'hint', text: r.linkErr ? `Z odkazu nic (${r.linkErr.replace(/\.$/, "")}), v LRCLIB nenalezeno` : 'V LRCLIB nenalezeno' }), other);
+    else if (r.state === 'taken') body = el('div', { class: 'ok', text: r.transcribed ? '✓ Přepsáno z nahrávky (zkontroluj)' : '✓ Text uložen' });
+    else if (r.state === 'error') body = el('div', { class: 'row' }, el('span', { class: 'hint', text: `Chyba: ${r.error}` }), other, trBtn);
+    else if (!r.cands.length) body = el('div', { class: 'row' }, el('span', { class: 'hint', text: r.linkErr ? `Z odkazu nic (${r.linkErr.replace(/\.$/, "")}), v LRCLIB nenalezeno` : 'V LRCLIB nenalezeno' }), other, trBtn);
     else {
       const c = r.cands[r.i];
       const bits = c.link ? [host(c.url), `${c.n} veršů`, c.data.altText ? 's překladem' : ''].filter(Boolean) : [c.artist, c.dur && (c.dd == null || c.durOk) ? mmss(c.dur) : '', c.synced ? (c.durOk ? '⏱ s časy' : 's časy (délka nesedí, převezmu bez nich)') : 'bez časů',
@@ -387,10 +392,37 @@ export async function renderFindLyrics(root, nav) {
           r.cands.length > 1 ? el('button', { type: 'button', class: 'btn small', text: `Jiný (${r.i + 1}/${r.cands.length})`, onclick: () => { r.i = (r.i + 1) % r.cands.length; draw(); } }) : null,
           other));
     }
-    return el('div', { class: 'bulk-row lyr' }, el('div', { class: 'bulk-names' }, head, body));
+    return el('div', { class: 'bulk-row lyr', dataset: { id: s.id } }, el('div', { class: 'bulk-names' }, head, body));
   }
 
   function draw() { list.replaceChildren(...todo.map(row)); }
+
+  // ---------- přepis z nahrávky (Gemini) ----------
+  const notFound = () => todo.filter(s => { const r = st.get(s.id); return transcribable(s) && (r.state === 'error' || (r.state === 'done' && !r.cands.length)); });
+  async function transcribeOne(s) {
+    const r = st.get(s.id);
+    r.state = 'tr'; r.msg = 'Přepisuji z nahrávky…'; draw();
+    try {
+      await transcribeToSong(s.id, m => { r.msg = m; const n = list.querySelector(`[data-id="${CSS.escape(s.id)}"] .tr-msg`); if (n) n.textContent = m; });
+      r.state = 'taken'; r.transcribed = true;
+    } catch (e) { r.state = 'error'; r.error = e.message || String(e); draw(); sumUp(); throw e; }
+    draw(); sumUp();
+  }
+  async function transcribeAll() {
+    const list0 = notFound();
+    if (!list0.length) return;
+    if (!confirm(`Přepsat ${plural(list0.length, 'píseň', 'písně', 'písní')} z nahrávek pomocí Gemini? Nahrávky se pošlou do Googlu. Přepis zpěvu nebývá přesný, texty pak zkontroluj poslechem.`)) return;
+    running = true; stop = false;
+    startBtn.textContent = '■ Zastavit'; trAllBtn.hidden = true; takeAllBtn.hidden = true;
+    for (let i = 0; i < list0.length && !stop; i++) {
+      info.textContent = `Přepisuji ${i + 1}/${list0.length}: ${list0[i].title}`;
+      try { await transcribeOne(list0[i]); }
+      catch (e) { if (/denní limit|nemá přístup|není platný|klíč/i.test(e.message || '')) { toast(`${e.message} Přepis zastaven.`, 6000); break; } }
+    }
+    running = false;
+    startBtn.textContent = '🔍 Hledat znovu nenalezené';
+    sumUp();
+  }
 
   function sumUp() {
     const vals = [...st.values()];
@@ -399,6 +431,9 @@ export async function renderFindLyrics(root, nav) {
     const taken = vals.filter(r => r.state === 'taken').length;
     if (!running && vals.some(r => r.state !== 'wait')) info.textContent = `Nalezeno ${found}, doporučených ${sure.length}, uloženo ${taken} z ${todo.length}.`;
     takeAllBtn.hidden = running || !sure.length;
+    const nf = notFound().length;
+    trAllBtn.hidden = running || !nf || !hasAi();
+    trAllBtn.textContent = `🎧 Přepsat nenalezené z nahrávek (${nf})`;
     takeAllBtn.textContent = `✓ Převzít všechny doporučené (${sure.length})`;
   }
 
@@ -489,7 +524,7 @@ export async function renderFindLyrics(root, nav) {
       todo.length
         ? el('p', { text: `${plural(todo.length, 'píseň nemá', 'písně nemají', 'písní nemá')} text. Hledám v LRCLIB podle názvu, interpreta a délky nahrávky; ✓ = jistá shoda. Nic se neuloží, dokud to nepotvrdíš. Co tu nenajdu, zkus „Hledat jinde“ (ostatní zdroje).` })
         : el('p', { text: 'Všechny písně už mají text.' }),
-      todo.length ? el('div', { class: 'row' }, startBtn, takeAllBtn) : null,
+      todo.length ? el('div', { class: 'row' }, startBtn, takeAllBtn, trAllBtn) : null,
       info,
       todo.length ? el('p', { style: { marginTop: '12px' }, text: 'Máš seznam odkazů na stránky s texty (třeba od Clauda)? Načti ho a texty se vezmou z nich; co z odkazu nepůjde, hledá se dál v LRCLIB.' }) : null,
       todo.length ? el('div', { class: 'row' }, linksBtn) : null,
@@ -497,6 +532,65 @@ export async function renderFindLyrics(root, nav) {
     list));
   draw();
   return () => { stop = true; };
+}
+
+// ---------- přepis z nahrávky (Gemini) ----------
+
+export const transcribable = song => song.versions.some(v => v.audio);
+
+// Přepíše text z nahrávky písně. Bez textu → hlavní verze; s textem → další verze k porovnání (rozhodnutí zadavatele),
+// a když hlavní verze nemá časy, převezme je z přepisu u shodných veršů. Vrací { song, as: 'main'|'version', version }.
+export async function transcribeToSong(songId, onWait = () => {}) {
+  let song = await getSong(songId);
+  if (!song) throw new Error('Píseň nenalezena.');
+  const src = [primaryVersion(song), ...song.versions].find(v => v.audio);
+  if (!src) throw new Error('Píseň nemá vlastní nahrávku (z YouTube přepsat nejde).');
+  const main = primaryVersion(song);
+  if (main.lines.length && song.versions.length >= MAX_VERSIONS) throw new Error(`Píseň už má ${MAX_VERSIONS} verze textu. Nejdřív některou smaž.`);
+  const blob = await getAudioBlob(src.audio.key);
+  if (!blob) throw new Error('Nahrávka v tomto zařízení není (ještě se nestáhla synchronizací?).');
+  const res = await transcribeAudio(blob, { title: song.title, artist: song.artist, language: song.language, name: src.audio.name }, onWait);
+  if (!res.length) throw new Error('Gemini v nahrávce žádný zpěv nerozpoznal.');
+  // časy platí pro nahrávku, ze které se přepisovalo: u druhé verze bez vlastní nahrávky jen když je to nahrávka hlavní verze
+  const timed = src === main || !main.lines.length;
+  const lines = res.map(l => newLine(l.text, timed ? l.start : null, l.stanza));
+  song = await getSong(songId); // mezitím se mohla změnit (synchronizace)
+  const m = primaryVersion(song);
+  let as, version;
+  if (!m.lines.length) {
+    m.lines = lines;
+    m.source = 'přepis';
+    m.label = 'Přepis z nahrávky';
+    as = 'main'; version = m;
+  } else {
+    if (song.versions.length >= MAX_VERSIONS) throw new Error(`Píseň už má ${MAX_VERSIONS} verze textu.`);
+    const labels = new Set(song.versions.map(v => v.label));
+    let label = 'Přepis z nahrávky';
+    for (let n = 2; labels.has(label); n++) label = `Přepis z nahrávky (${n})`;
+    version = newVersion(lines, { label, source: 'přepis' });
+    song.versions.push(version);
+    if (!isSynced(m) && timed) { const b = borrowTimes(m.lines, lines); if (b.matched) m.lines = b.lines; }
+    prune(song);
+    as = 'version';
+  }
+  await saveSong(song);
+  return { song, as, version };
+}
+
+// Přepis jedné písně s okénkem průběhu; pak otevře píseň (hlavní verze) nebo porovnání (další verze).
+export async function runTranscribe(songId, nav) {
+  if (!hasAi()) { toast('Přepis dělá Gemini: nejdřív vlož klíč v Nastavení → Překlady pomocí AI.', 4500); return null; }
+  const status = el('div', { class: 'sub', text: 'Připravuji nahrávku…' });
+  const close = sheet(() => el('div', {}, el('h3', { text: '🎧 Přepis z nahrávky' }), status,
+    el('div', { class: 'hint', text: 'Může to trvat i pár minut, nech aplikaci otevřenou. Přepis zpěvu nebývá přesný – zkontroluj ho poslechem.' })));
+  try {
+    const r = await transcribeToSong(songId, m => { status.textContent = m; });
+    close();
+    const id = encodeURIComponent(songId);
+    if (r.as === 'main') { toast('Text přepsán. Zkontroluj ho poslechem.', 4000); nav.replace(`#/song/${id}`); }
+    else { toast('Přepis přidán jako další verze. Porovnej ji s textem.', 4000); nav.go(`#/compare/${id}/${encodeURIComponent(r.version.id)}`); }
+    return r;
+  } catch (e) { close(); toast(e.message || String(e), 6000); return null; }
 }
 
 export const songsWithoutText = songs => songs.filter(s => !primaryVersion(s).lines.length).length;

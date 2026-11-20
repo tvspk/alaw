@@ -237,3 +237,28 @@ export function shakyWords(song, li, res = analyze(song)) {
   }
   return out;
 }
+
+// Udělá z jiné verze hlavní (rozhodnutí zadavatele 0.8). Vrátí dvojice [starý klíč, nový klíč] veršů, které se liší
+// jen zněním (sporná místa mezi starou a novou hlavní), aby se jim převedl pokrok (store.moveProgress).
+// Rozhodnutí sporných míst se vynulují (vztahovala se ke staré hlavní verzi). Nemá-li nová hlavní nahrávku ani video,
+// převezme je od staré (časy přepisu i textu pak sedí k téže nahrávce).
+export function makePrimary(song, versionId) {
+  const oldMain = primaryVersion(song);
+  const next = song.versions.find(v => v.id === versionId);
+  if (!next || next === oldMain) return [];
+  const pairs = [];
+  const r = compareVersions(oldMain, next);
+  for (const it of r.items) {
+    if (it.kind === 'word' && it.oli != null) pairs.push([lineKey(oldMain.lines[it.li].text), lineKey(next.lines[it.oli].text)]);
+    else if (it.kind === 'mixed') it.lines.forEach((li, i) => { const oli = it.oLines[i]; if (oli != null) pairs.push([lineKey(oldMain.lines[li].text), lineKey(next.lines[oli].text)]); });
+  }
+  if (!next.audio && !next.youtubeId && (oldMain.audio || oldMain.youtubeId)) {
+    next.audio = oldMain.audio; next.youtubeId = oldMain.youtubeId;
+    oldMain.audio = null; oldMain.youtubeId = null;
+  }
+  for (const l of oldMain.lines) delete l.vars;
+  song.versions = [next, ...song.versions.filter(v => v !== next)];
+  song.primary = next.id;
+  if (oldMain.label === 'Hlavní') oldMain.label = 'Původní hlavní';
+  return [...new Map(pairs.filter(([a, b]) => a && b && a !== b).map(p => [p.join('|'), p])).values()];
+}

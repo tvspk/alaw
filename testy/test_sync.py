@@ -22,7 +22,7 @@ class FakeGitHub:
         self.refs = {}         # branch → sha
         self.contents = {}     # path → bytes
         self.log = []
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()  # Playwright volá obsluhy v jednom vlákně (greenlety): obyčejný zámek se občas zablokoval sám
 
     def sha(self, kind, data):
         return hashlib.sha1(kind.encode() + b'\0' + data).hexdigest()
@@ -314,6 +314,29 @@ def main():
         check(True, 'smazaná píseň zmizela i na B')
         check(B.evaluate("async () => (await (await import('./js/db.js')).db.audioKeys()).length") == 0, 'zvuk smazané písně uklizen i na B')
         check(gh.state(brA, code)[0]['prog'] == [], 'pokrok smazané písně se už nesynchronizuje')
+
+        print('Hodně nahrávek: průběžný zápis stavu, čerstvá nahrávka se nemaže')
+        A.goto(url)
+        A.wait_for_selector('text=Croeso!')
+        A.evaluate("""async () => {
+          window.__alawSyncCommitEvery = 1;
+          const st = await import('./js/store.js'), m = await import('./js/model.js');
+          for (const t of ['Un', 'Dau']) {
+            const key = m.uid(16), blob = new Blob([new Uint8Array(400000).fill(t.length)], { type: 'audio/wav' });
+            await st.putAudioBlob(key, blob);
+            await st.saveSong(m.newSong({ title: 'Cân ' + t, versionExtra: { audio: { key, name: t + '.wav', type: 'audio/wav', size: blob.size } } }));
+          }
+          await st.putAudioBlob('cerstvanahravka01', new Blob([new Uint8Array(10)]));   // píseň se k ní teprve ukládá
+        }""")
+        n0 = len(gh.log)
+        sync_now(A)
+        commits = [x for x in gh.log[n0:] if x.startswith('POST') and x.endswith('/git/commits')]
+        check(len(commits) == 2, f'po každé nahrávce zapsán stav ({len(commits)} zápisy), poslední beze změny se neopakuje')
+        st = gh.state(brA, code)[0]
+        check(len(st['files']) == 2 and len(st['songs']) == 2, 've stavu obě písně i jejich nahrávky')
+        check('cerstvanahravka01' in A.evaluate("async () => (await (await import('./js/db.js')).db.audioKeys())"), 'nahrávka bez uložené písně se synchronizací nesmazala')
+        sync_now(B)
+        check(B.evaluate("async () => (await (await import('./js/db.js')).db.audioKeys()).length") == 2, 'B si stáhla obě nahrávky')
 
         print('Vypnutí')
         B.goto(url + '#/settings')

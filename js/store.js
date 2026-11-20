@@ -1,5 +1,5 @@
 // Práce s písněmi nad IndexedDB + nastavení, která platí jen v tomto zařízení (localStorage).
-import { db } from './db.js';
+import { db, freshAudio } from './db.js';
 import { normalizeSong } from './model.js';
 import { stamp, recordDelete, changed } from './sync.js';
 import { freshRec, recId } from './learn.js';
@@ -15,6 +15,7 @@ export async function saveSong(song) {
   const prev = await db.getSong(song.id);
   song.updatedAt = stamp(Math.max(prev?.updatedAt || 0, song.updatedAt || 0)); // čas podle GitHubu, vždy novější
   await db.putSong(song);
+  for (const v of song.versions) if (v.audio) freshAudio.delete(v.audio.key);
   changed();
   return song;
 }
