@@ -56,7 +56,8 @@ Alaw (velšsky „melodie“): texty písní (hlavně velšských) a jejich uče
 - **Hledání textů** najednou v LRCLIB (i s časy), Welsh Lyrics wiki (welshlyrics.fandom.com, často s anglickým překladem a videem),
   LyricsTranslate, Wicidestun (velšská Wikisource), Bandcamp, We Learn Welsh, Genius a AZLyrics. Náhled, převzetí do písně,
   doplnění časů z LRCLIB podle shodných veršů, anglický překlad ze zdroje u veršů.
-- **Text z odkazu** a **sdílení z prohlížeče** (Android: Sdílet → Alaw): z neznámé stránky se vybere blok, který vypadá jako text písně.
+- **Text z odkazu** a **sdílení z prohlížeče** (Android: Sdílet → Alaw): z neznámé stránky se vybere blok, který vypadá jako text písně;
+  známé weby mají vlastní čtení (mj. **Musixmatch** – jen z odkazu, hledání tam chce přihlášení).
 - **Překlady přes Gemini** (vlastní klíč, uložený jen v zařízení): volný a doslovný překlad (česky, nebo anglicky při EN), hovorové zkratky,
   vysvětlení verše slovo po slovu.
 - **Aplikace pro Android (APK)**: stejná aplikace ve WebView, stahuje stránky sama (bez prostředníka), ukládání souborů,

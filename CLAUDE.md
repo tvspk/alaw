@@ -13,6 +13,7 @@
 - Zdroje textů jsou v `js/sources.js` (search → výsledky, load → text). Stahování jen přes `js/net.js`: Android = most
   `AlawAndroid.fetch`, prohlížeč = přímo (jen weby s CORS v `CORS_OK` a v CSP `connect-src`) nebo přes prostředníka `worker/`.
   Změna struktury cizího webu: ověř `python3 testy/zdroje_naostro.py` a uprav i napodobené stránky v `testy/test_hledani.py`.
+  Musixmatch (0.13.1) jen z odkazu (`loaders` v `sources.js`, `parseMusixmatch`): text je v `#__NEXT_DATA__` → `trackInfo.data.lyrics.body`.
 - Gemini (`js/ai.js`): klíč jen v `localStorage['alaw-ai']`, nikdy v repozitáři ani záloze. Model se vybírá automaticky (nejnovější `gemini-X-flash`).
 - APK (`android/`): stránka se servíruje z `https://appassets.androidplatform.net/` (kvůli YouTube a IndexedDB). Nová verze APK:
   zvyš `android/verze.txt` (versionCode +1) a `APP_VERSION` v `js/app.js`. Klíč v Secrets `ALAW_KEYSTORE`, `ALAW_KEYSTORE_PASSWORD` (alias `alaw`).

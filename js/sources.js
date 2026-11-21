@@ -328,6 +328,24 @@ const azlyrics = {
   },
 };
 
+// Musixmatch: hledání chce přihlášení, proto jen odkaz (soubor s odkazy, vložený odkaz, sdílení).
+// Text není ve viditelném HTML, ale v datech pro skript stránky (#__NEXT_DATA__ → trackInfo.data.lyrics.body).
+export function parseMusixmatch(doc) {
+  let d = null;
+  try { d = JSON.parse(doc.querySelector('#__NEXT_DATA__')?.textContent || ''); } catch { d = null; }
+  const info = d?.props?.pageProps?.data?.trackInfo?.data;
+  const body = info?.lyrics?.body;
+  if (!body || !String(body).trim()) return null;
+  const tr = info.track || {};
+  return { text: cleanText(String(body)), title: cleanText(tr.name || ''), artist: cleanText(tr.artistName || '') };
+}
+async function loadMusixmatch(url) {
+  const { doc } = await getHtml(url);
+  const p = parseMusixmatch(doc);
+  if (!p) throw new Error(t('Stránka nemá text písně.'));
+  return { ...p, url };
+}
+
 export const SOURCES = [lrclib, welshWiki, lyricsTranslate, wikisource, bandcamp, welearnwelsh, genius, azlyrics];
 
 // ---------- obecné čtení stránky (sdílený odkaz, neznámý web) ----------
@@ -372,6 +390,7 @@ const loaders = [
   [/(^|\.)welearnwelsh\.com$/, async u => ({ ...(await loadWelearnwelsh(u)), source: 'welearnwelsh' })],
   [/(^|\.)genius\.com$/, async u => ({ ...(await loadGenius(u)), source: 'genius' })],
   [/(^|\.)azlyrics\.com$/, async u => ({ ...(await loadAz(u)), source: 'azlyrics' })],
+  [/(^|\.)musixmatch\.com$/, async u => ({ ...(await loadMusixmatch(u)), source: 'musixmatch' })],
 ];
 
 // Načte text z libovolného odkazu (sdílení z prohlížeče, vložená adresa).

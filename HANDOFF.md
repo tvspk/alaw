@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 20. 11. 2026 (noc), verze **0.13.0** (APK versionCode 17). Odpovídej zadavateli **česky**.
+> Stav k 21. 11. 2026, verze **0.13.1** (APK versionCode 18). Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -188,13 +188,18 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
    fine-grained token „Only select repositories“ + Contents „Read and write“, Cloudflare Workers & Pages → Create Worker).
    Test: `test_anglictina.py` otevře každou nápovědu v en-GB. **Rozhodnutí zadavatele: u „Načíst odkazy ze souboru“ otazník NE**
    (vzácná funkce; postup Claude vysvětlí, až na ni dojde).
+13. **Musixmatch z odkazu (0.13.1):** zadavatel chtěl. `sources.js` `parseMusixmatch`/`loadMusixmatch` v `loaders` (soubor s odkazy, vložený
+   odkaz, sdílení). Text je jen v datech pro skript `#__NEXT_DATA__` (`props.pageProps.data.trackInfo.data.lyrics.body`, název `track.name`,
+   interpret `track.artistName`); bez textu (`hasLyrics:false`) → „Stránka nemá text písně“. Hledání na Musixmatch chce přihlášení → není
+   mezi zdroji hledání. Na počítači přes prostředníka (neověřeno, zda Musixmatch Cloudflare nepouští; v APK přímo). Ověřeno na skutečné
+   stránce (stažené z prostředí Claude) a testem `test_hledani.py` (napodobená stránka s lidovou písní).
 
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
 Zadavatel po vydání 0.12 napsal „ok všechno v pohodě“ (Bangor na Windows zřejmě v pořádku – při další práci krátce ověřit,
 zda přepis přes Bangor opravdu proběhl). CZ/EN (0.10) a dva překlady + stažení textu (0.11) viděl („perfektní“), zkouší.
 Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna verze/mazání (0.8) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
 
-## Rozpracováno a další kroky (stav 20. 11. 2026 v noci, verze 0.13.0)
+## Rozpracováno a další kroky (stav 21. 11. 2026, verze 0.13.1)
 
 Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „hotovo“.
 
@@ -214,6 +219,11 @@ Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „
   Druhé kolo (Bandcamp/LyricsTranslate jen podle názvu, webové hledání) skoro nic nenašlo (`alaw-odkazy-2.txt`, 1 odkaz).
   Last.fm (má texty části velšských písní) není v povolených doménách prostředí Claude – případně zadavatel povolí v claude.ai
   → Settings → Capabilities. Skripty (hledání odkazů, přejmenování) jsou v předávacím balíku, ne v repozitáři.
+- **21. 11. – další kola hledání odkazů** (soubory dostal zadavatel, nejsou v repozitáři): `alaw-odkazy-3.txt` = 17 písní z Welsh Lyrics
+  wiki (stažen seznam všech ~640 stránek, porovnání názvu, interpreta i kódu videa YouTube; Ciwb = nové aranže starých hitů → text
+  originálu); aplikace spárovala 14 (3 už text měly). `alaw-odkazy-4.txt` = 8 písní z Genius (přes prohlížeč v aplikaci Claude; Genius
+  po ~85 dotazech blokuje 429 – druhou polovinu písní zkusit později). `alaw-odkazy-5.txt` = 5 písní z Musixmatch (stránky interpretů,
+  `hasLyrics`). Musixmatch: většina zbylých písní tam je, ale bez textu. Popisky videí YouTube texty nemají. Zbytek (~160) → Bangor.
 - Synchronizace po přidání 1,1 GB zvuku běží (průběžné zápisy po 200 MB); telefon pak stáhnout **na Wi-Fi**.
 
 **Poznatky z provozu (možná oprava 0.13.1 – zadavateli nabídnuto, zatím nezadáno):**

@@ -29,6 +29,13 @@ LT_SONG = ("<html><head><title>Ar Log - Ar Lan y Môr lyrics</title></head><body
            "<div class='par'>" + ''.join(f'<div class="ll-0-{i}">{l}</div>' for i, l in enumerate(CY[:2])) + "</div><div class='emptyline'>&nbsp;</div>"
            "<div class='par'>" + ''.join(f'<div class="ll-1-{i}">{l.replace(chr(39), chr(8242))}</div>' for i, l in enumerate(CY[2:])) + "</div></div></div>"
            "<lite-youtube videoid='v-MEA7eQkU8'></lite-youtube></body></html>")
+# Musixmatch: text jen v datech pro skript (__NEXT_DATA__), viditelné HTML ho nemá.
+MXM_DATA = {'props': {'pageProps': {'data': {'trackInfo': {'data': {'track': {'name': 'Ar Lan y Môr', 'artistName': 'Rozárka', 'hasLyrics': True},
+            'lyrics': {'body': '\n'.join(CY[:2]) + '\n\n' + '\n'.join(CY[2:]), 'language': 'cy'}}}}}}}
+MXM_SONG = ("<html><head><title>Ar Lan y Môr - Rozárka | Musixmatch</title></head><body><div id='__next'><h1>Ar Lan y Môr</h1>"
+            "<p>Lyrics</p></div><script id='__NEXT_DATA__' type='application/json'>" + json.dumps(MXM_DATA, ensure_ascii=False) + "</script></body></html>")
+MXM_EMPTY = ("<html><body><script id='__NEXT_DATA__' type='application/json'>"
+             + json.dumps({'props': {'pageProps': {'data': {'trackInfo': {'data': {'track': {'name': 'Jana', 'hasLyrics': False}}}}}}}) + "</script></body></html>")
 SHARED_PAGE = ("<html><head><title>Hen ganeuon</title></head><body><nav><a>Hafan</a><a>Amdanom</a><a>Cysylltu</a><a>Siop</a></nav>"
                "<h1>Ar Lan y Môr</h1><p>Un o'r caneuon gwerin mwyaf adnabyddus yng Nghymru, a genir yn aml mewn eisteddfodau a chyngherddau ledled y wlad gan gorau ac unawdwyr o bob oed.</p>"
                "<div class='lyrics'><p>" + '<br>'.join(CY[:2]) + "</p><p>" + '<br>'.join(CY[2:]) + "</p></div><footer>© 2026</footer></body></html>")
@@ -54,6 +61,8 @@ def respond(req):
         return ok([])
     if host == 'genius.com':
         return ok('blocked', 403)
+    if host == 'www.musixmatch.com':
+        return ok(MXM_EMPTY if path.endswith('/Jana') else MXM_SONG)
     if host == 'hen-ganeuon.example':
         return ok(SHARED_PAGE)
     return json.dumps({'error': 'offline'})
@@ -241,6 +250,19 @@ def main():
         page.click('.sheet button[type=submit]')
         page.wait_for_selector('.lyrics-preview')
         check("'nghariad" in page.inner_text('.lyrics-preview') and '′' not in page.inner_text('.lyrics-preview'), 'apostrofy sjednocené')
+
+        print('Text z odkazu (Musixmatch)')
+        page.keyboard.press('Escape')
+        page.goto(url + '#/new')
+        page.click('text=Z odkazu')
+        page.fill('input[type=url]', 'https://www.musixmatch.com/lyrics/Rozarka/Ar-Lan-y-Mor')
+        page.click('.sheet button[type=submit]')
+        page.wait_for_selector('.lyrics-preview')
+        prev = page.inner_text('.lyrics-preview')
+        check(prev.startswith(CY[0]) and CY[3] in prev and 'Lyrics' not in prev, 'Musixmatch: text z dat stránky')
+        empty = page.evaluate("""async () => { const m = await import('./js/sources.js');
+          const doc = new DOMParser().parseFromString(document.title ? %s : '', 'text/html'); return m.parseMusixmatch(doc); }""" % json.dumps(MXM_EMPTY))
+        check(empty is None, 'Musixmatch bez textu → nic (hláška „Stránka nemá text písně“)')
 
         print('Web na počítači bez prostředníka')
         ctx2 = b.new_context(locale='cs-CZ')
