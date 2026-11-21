@@ -224,6 +224,8 @@ Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „
   originálu); aplikace spárovala 14 (3 už text měly). `alaw-odkazy-4.txt` = 8 písní z Genius (přes prohlížeč v aplikaci Claude; Genius
   po ~85 dotazech blokuje 429 – druhou polovinu písní zkusit později). `alaw-odkazy-5.txt` = 5 písní z Musixmatch (stránky interpretů,
   `hasLyrics`). Musixmatch: většina zbylých písní tam je, ale bez textu. Popisky videí YouTube texty nemají. Zbytek (~160) → Bangor.
+- **Na počítači (web) chybí adresa prostředníka** (Najít texty hlásí „na počítači je potřeba prostředník“) → odkazy na Genius/Musixmatch
+  zadavatel načítá na telefonu (APK). Adresu lze opsat z Nastavení → Hledání textů na telefonu (nabídnuto, nezadáno).
 - Synchronizace po přidání 1,1 GB zvuku běží (průběžné zápisy po 200 MB); telefon pak stáhnout **na Wi-Fi**.
 
 **Poznatky z provozu (možná oprava 0.13.1 – zadavateli nabídnuto, zatím nezadáno):**
@@ -234,7 +236,7 @@ Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „
 - Při odesílání velkého zvuku může UI na počítači krátce zadrhávat (`b64()` + šifrování kousků po 8 MiB v hlavním vlákně).
 
 **Další kroky:**
-1. **DALŠÍ ÚKOL: přepis zbývajících ~212 písní bez textu přes Bangor** (zadavatel souhlasí, chce provést krok po kroku).
+1. **DALŠÍ ÚKOL (zadavatel chce začít v novém chatu): přepis zbývajících ~160 písní bez textu přes Bangor** (zadavatel souhlasí, chce provést krok po kroku).
    Nastavení → Přepis z nahrávky → Bangor (nápověda „?“): stáhnout program z vydání, rozbalit, spustit `alaw-bangor.bat`
    (poprvé Python + model ~1,6 GB), v aplikaci „Zapnout a ověřit“ (Chrome se zeptá na přístup k místní síti/aplikacím – povolit),
    vybrat službu Bangor. Nejdřív **zkouška na 1–2 písních** (Najít texty → u písně přepis, nebo v písni), zadavatel posoudí kvalitu.
