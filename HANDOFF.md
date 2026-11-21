@@ -259,8 +259,10 @@ Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „
 - Při odesílání velkého zvuku může UI na počítači krátce zadrhávat (`b64()` + šifrování kousků po 8 MiB v hlavním vlákně).
 
 **Další kroky:**
-0. **Hromadný přepis Bangorem doběhl** (zadavatel 21. 11.). Další: výměna programu za 1.1 a zkouška časů na jedné písni (krok 5–6 níže);
-   zadavatel ještě neodpověděl, jestli přepis hlásil chyby a kolik písní zůstalo s nejistým nálezem v Najít texty.
+0. **21. 11. hotovo u zadavatele:** hromadný přepis písní bez textu Bangorem doběhl; program vyměněn za 1.1 a **časy veršů doplněny
+   hromadně u všech písní** („vypadá to dobře“); oddělení překladu u „(Nid) Hon Yw'r Gân…“ dopadlo dobře.
+   Zbývá: písně s nejistým nálezem v Najít texty (tlačítko „nenalezené“ je nepřepíše) a písně, kde časy hlásily „skoro neshoduje“ –
+   zeptat se zadavatele, kolik jich je. Případné vylepšení: časy slov i u písní přepsaných Bangorem (verše = úseky Whisperu).
 1. **Bangor – rozpracováno 21. 11.:** zadavatel Bangor nainstaloval (Windows, **grafická karta NVIDIA – počítá na GPU**), Alaw spojení ověřila,
    zkušební přepis jedné písně proběhl: „něco dobře, hodně špatně, ale dobrý základ pro ruční přepis“. Dostal postup pro hromadný přepis
    (Najít texty → Hledat texty → „🎧 Přepsat nenalezené z nahrávek“ → Bangor) – **zjistit, jak dopadl** (kolik písní, chyby).
