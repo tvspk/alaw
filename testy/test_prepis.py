@@ -10,7 +10,7 @@ TMP = Path(tempfile.mkdtemp())
 # Vymyšlené verše (ne skutečná píseň).
 LINES = ["Mae'r haul yn codi dros y bryn", "A'r gwynt yn chwythu'n ysgafn", "Dewch i ganu gyda ni", "Yn llon ar fore braf"]
 calls = {'gen': 0, 'upload': 0, 'delete': 0, 'parts': [], 'upload_rate': None, 'groq': [], 'bangor': []}
-bangor_state = {'up': False, 'health': 0, 'polls': 0}
+bangor_state = {'up': False, 'health': 0, 'polls': 0, 'words': True, 'wordsReq': False}
 
 def tone(path, seconds):
     subprocess.run(['ffmpeg', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', f'sine=frequency=330:duration={seconds}', '-ac', '1', '-ar', '22050', str(path)], check=True)
@@ -82,19 +82,35 @@ def bangor(route):
     if path.startswith('/health'):
         bangor_state['health'] += 1
         ready = bangor_state['health'] > 1  # poprvé ještě načítá model
-        return route.fulfill(json={'app': 'alaw-bangor', 'version': '1.0', 'ready': ready, 'stage': 'ready' if ready else 'loading', 'device': 'cpu', 'busy': 0}, headers=h)
+        hj = {'app': 'alaw-bangor', 'version': '1.1' if bangor_state['words'] else '1.0', 'ready': ready, 'stage': 'ready' if ready else 'loading', 'device': 'cpu', 'busy': 0}
+        if bangor_state['words']:
+            hj['words'] = True
+        return route.fulfill(json=hj, headers=h)
     if path.startswith('/transcribe'):
         calls['bangor'].append({'url': req.url, 'size': len(req.post_data_buffer or b'')})
         bangor_state['polls'] = 0
+        bangor_state['wordsReq'] = 'words=1' in req.url
         return route.fulfill(json={'id': 'abc123'}, headers=h)
     if path.startswith('/jobs/abc123'):
         bangor_state['polls'] += 1
         if bangor_state['polls'] < 3:
             return route.fulfill(json={'state': 'running', 'progress': 0.4, 'segments': [], 'error': None}, headers=h)
+        if bangor_state['wordsReq']:
+            return route.fulfill(json={'state': 'done', 'progress': 1, 'segments': word_segs(), 'error': None}, headers=h)
         segs = [{'start': 1.0, 'end': 3.5, 'text': ' ' + LINES[0], 'no_speech_prob': 0.05, 'avg_logprob': -0.3, 'compression_ratio': 1.2},
                 {'start': 3.6, 'end': 5.5, 'text': " A'r gwynt yn chwythu'n gryf", 'no_speech_prob': 0.05, 'avg_logprob': -0.3, 'compression_ratio': 1.2}]
         return route.fulfill(json={'state': 'done', 'progress': 1, 'segments': segs, 'error': None}, headers=h)
     return route.fulfill(status=404, json={'error': '?'}, headers=h)
+
+def word_segs():
+    # přepis se slovy: verš i začíná ve 2 + 3i s, slova po 0,4 s, třetí verš úplně špatně (dopočítá se)
+    segs = []
+    for i, line in enumerate(LINES):
+        ws = ['xq', 'zzv', 'pomm', 'kret', 'vu'] if i == 2 else line.split(' ')
+        st = 2 + 3 * i
+        segs.append({'start': st, 'end': st + 2.5, 'text': ' ' + ' '.join(ws), 'no_speech_prob': 0.05, 'avg_logprob': -0.3, 'compression_ratio': 1.2,
+                     'words': [{'start': st + 0.4 * k, 'end': st + 0.4 * k + 0.35, 'word': ' ' + w.replace('y', 'i'), 'p': 0.8} for k, w in enumerate(ws)]})
+    return segs
 
 def lrclib(route):
     return route.fulfill(json=[])
@@ -236,6 +252,40 @@ def main():
         check('language=cy' in b['url'] and 'prompt=C%C3%A2n+Tri' in b['url'] and b['size'] > 10000, 'Bangor: původní nahrávka, velština, název jako nápověda')
         v = page.evaluate("async id => (await (await import('./js/store.js')).getSong(id)).versions.map(v => [v.label, v.lines.map(l => l.text)])", tri)
         check(v[1] == ['Přepis (Bangor)', [LINES[0], "A'r gwynt yn chwythu'n gryf"]], 'přepis Bangor přidán jako další verze')
+
+        print('Bangor: doplnění časů k hotovému textu')
+        dau = page.evaluate("""async L => {
+          const st = await import('./js/store.js'), M = await import('./js/model.js');
+          const s = (await st.listSongs()).find(s => s.title === 'Cân Dau');
+          const m = M.primaryVersion(s); m.lines = L.map(t => M.newLine(t, null)); await st.saveSong(s); return s.id;
+        }""", LINES)
+        bangor_state['words'] = False
+        page.goto(url + '#/times')
+        page.wait_for_selector('text=/1 píseň má text i nahrávku/')
+        check(page.locator('.bulk-row').count() == 1, 'jen píseň s textem a nahrávkou bez časů')
+        page.click('text=⏱ Doplnit časy (1)')
+        page.wait_for_selector('text=/starší verze a časy slov neumí/', timeout=20000)
+        check(page.locator('text=⏱ Zkusit znovu zbývající (1)').count() == 1, 'starý program → srozumitelná hláška a zastavení')
+        bangor_state['words'] = True
+        page.click('text=⏱ Zkusit znovu zbývající (1)')
+        page.wait_for_selector('text=✓ Načasováno: 3 z 4 veršů podle nahrávky, ostatní odhadem.', timeout=20000)
+        shot(page, 'p5-casy')
+        check(bangor_state['wordsReq'], 'program požádán o časy slov')
+        times = lambda: page.evaluate("async id => { const M = await import('./js/model.js'); const s = await (await import('./js/store.js')).getSong(id); return [M.primaryVersion(s).lines.map(l => [l.text, l.start]), s.versions.length]; }", dau)
+        r = times()
+        print('   ', r)
+        check([l[1] for l in r[0]] == [2000, 5000, 8000, 11000] and [l[0] for l in r[0]] == LINES, 'časy veršů podle slov, nesedící verš dopočítán; text beze změny')
+        check(r[1] == 1, 'přepis se neuložil jako verze')
+        page.evaluate("async id => { const st = await import('./js/store.js'), M = await import('./js/model.js'); const s = await st.getSong(id); M.primaryVersion(s).lines.forEach(l => { l.start = null; }); await st.saveSong(s); }", dau)
+        page.goto(url + '#/song/' + dau)
+        page.click('button[aria-label="Další možnosti"]')
+        page.click('text=Doplnit časy z nahrávky (Bangor)')
+        page.wait_for_selector('text=/✓ Načasováno: 3 z 4/', timeout=20000)
+        check([l[1] for l in times()[0]] == [2000, 5000, 8000, 11000], 'totéž z nabídky písně')
+        page.click('button[aria-label="Další možnosti"]')
+        check(page.locator('text=Doplnit časy z nahrávky (Bangor)').count() == 0, 'načasovaná píseň už položku nemá')
+        page.keyboard.press('Escape')
+
         bangor_state['up'] = False
         page.goto(url + '#/song/' + tri)
         page.click('button[aria-label="Další možnosti"]')

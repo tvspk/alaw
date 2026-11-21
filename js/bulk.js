@@ -5,8 +5,8 @@
 import { el, fill, iconBtn, toast, fileSize, pickFiles, pickFile, sheet } from './ui.js';
 import { t, pl } from './i18n.js';
 import { listSongs, getSong, saveSong, putAudioBlob, getAudioBlob } from './store.js';
-import { LANGUAGES, newSong, newLine, newVersion, primaryVersion, parseLyrics, parseTags, fold, uid, attachAlt, isSynced, borrowTimes } from './model.js';
-import { ENGINES, availableEngines, defaultEngine, engineName } from './stt.js';
+import { LANGUAGES, newSong, newLine, newVersion, primaryVersion, parseLyrics, parseTags, fold, uid, attachAlt, isSynced, borrowTimes, alignTimes } from './model.js';
+import { ENGINES, availableEngines, defaultEngine, engineName, hasBangor, bangorWords } from './stt.js';
 import { MAX_VERSIONS, prune } from './versions.js';
 import { SOURCES, similarity, loadFromUrl, cleanText } from './sources.js';
 import { openSearch, showPreview } from './search.js';
@@ -625,3 +625,102 @@ export async function runTranscribe(songId, nav, engine) {
 }
 
 export const songsWithoutText = songs => songs.filter(s => !primaryVersion(s).lines.length).length;
+
+// ---------- doplnění časů k hotovému textu (Bangor, časy slov) ----------
+// Rozhodnutí zadavatele: přepis se použije jen na časy (neukládá se), verše bez shody se dopočítají.
+// Jen písně, jejichž hlavní verze má text, vlastní nahrávku a žádné časy.
+export const needsTimes = song => { const m = primaryVersion(song); return !!m.lines.length && !!m.audio && !isSynced(m); };
+
+export async function timesFromRecording(songId, onWait = () => {}) {
+  let song = await getSong(songId);
+  if (!song) throw new Error(t('Píseň nenalezena.'));
+  const m = primaryVersion(song);
+  if (!m.lines.length) throw new Error(t('Píseň nemá text.'));
+  if (isSynced(m)) throw new Error(t('Píseň už časy má.'));
+  if (!m.audio) throw new Error(t('Hlavní verze nemá vlastní nahrávku.'));
+  const blob = await getAudioBlob(m.audio.key);
+  if (!blob) throw new Error(t('Nahrávka v tomto zařízení není (ještě se nestáhla synchronizací?).'));
+  const words = await bangorWords(blob, { title: song.title, language: song.language, name: m.audio.name }, onWait);
+  if (!words.length) throw new Error(t('Bangor v nahrávce žádný zpěv nerozpoznal.'));
+  const r = alignTimes(m.lines, words);
+  if (!r.ok) throw new Error(t('Přepis se s textem skoro neshoduje ({a} z {n} veršů), časy jsem nedoplnil. Načasuj píseň ťukáním.', { a: r.anchored, n: r.total }));
+  song = await getSong(songId); // mezitím se mohla změnit (synchronizace, úprava)
+  const m2 = song && primaryVersion(song);
+  if (!m2 || isSynced(m2) || m2.lines.length !== m.lines.length || m2.lines.some((l, i) => l.id !== m.lines[i].id || l.text !== m.lines[i].text))
+    throw new Error(t('Píseň se mezitím změnila, zkus to znovu.'));
+  m2.lines = m2.lines.map((l, i) => ({ ...l, start: r.lines[i].start }));
+  await saveSong(song);
+  return { anchored: r.anchored, total: r.total };
+}
+
+const timesDone = r => t('✓ Načasováno: {a} z {n} veršů podle nahrávky, ostatní odhadem.', { a: r.anchored, n: r.total });
+
+// Jedna píseň (nabídka písně) s okénkem průběhu.
+export async function runTimes(songId) {
+  const status = el('div', { class: 'sub', text: t('Připravuji nahrávku…') });
+  const close = sheet(() => el('div', {}, el('h3', { text: t('⏱ Časy z nahrávky – Bangor') }), status,
+    el('div', { class: 'hint', text: t('Může to trvat i pár minut, nech aplikaci otevřenou.') })));
+  try { const r = await timesFromRecording(songId, m => { status.textContent = m; }); close(); toast(timesDone(r), 5000); return r; }
+  catch (e) { close(); toast(e.message || String(e), 7000); return null; }
+}
+
+// Hromadně (#/times): všechny písně s textem a nahrávkou bez časů.
+export async function renderTimes(root, nav) {
+  const todo = (await listSongs()).filter(needsTimes);
+  const st = new Map(todo.map(s => [s.id, { state: 'wait' }]));
+  let running = false, stop = false;
+  const list = el('div', { class: 'bulk-list' });
+  const info = el('div', { class: 'hint', role: 'status' });
+  const startBtn = el('button', { type: 'button', class: 'btn primary', onclick: () => running ? (stop = true, startBtn.disabled = true) : run() });
+  const row = s => {
+    const r = st.get(s.id);
+    const msg = r.state === 'busy' ? el('div', { class: 'hint tr-msg', text: r.msg || t('Zpracovávám…') })
+      : r.state === 'done' ? el('div', { class: 'ok', text: timesDone(r) })
+      : r.state === 'error' ? el('div', { class: 'hint', text: t('Chyba: {e}', { e: r.error }) })
+      : el('div', { class: 'hint', text: t('Čeká') });
+    return el('div', { class: 'bulk-row lyr', dataset: { id: s.id } }, el('div', { class: 'bulk-names' },
+      el('div', { class: 'bulk-title' }, el('a', { href: `#/song/${encodeURIComponent(s.id)}` }, el('strong', { text: s.title })), s.artist ? el('span', { text: ` – ${s.artist}` }) : null), msg));
+  };
+  const draw = () => list.replaceChildren(...todo.map(row));
+  const left = () => todo.filter(s => st.get(s.id).state !== 'done');
+  function sumUp() {
+    const v = [...st.values()];
+    const done = v.filter(r => r.state === 'done').length, err = v.filter(r => r.state === 'error').length;
+    if (v.some(r => r.state !== 'wait')) info.textContent = t('Načasováno {d} z {n}, nepovedlo se {e}.', { d: done, n: todo.length, e: err });
+    const n = left().length;
+    startBtn.disabled = false;
+    startBtn.hidden = !running && !n;
+    startBtn.textContent = running ? t('■ Zastavit') : done || err ? t('⏱ Zkusit znovu zbývající ({n})', { n }) : t('⏱ Doplnit časy ({n})', { n });
+  }
+  async function run() {
+    if (!hasBangor()) { toast(t('Nejdřív zapni Bangor v Nastavení → Přepis z nahrávky.'), 5000); return; }
+    const queue = left();
+    if (!queue.length) return;
+    running = true; stop = false; sumUp();
+    for (let i = 0; i < queue.length && !stop; i++) {
+      const s = queue[i], r = st.get(s.id);
+      info.textContent = t('Zpracovávám {i}/{n}: {t}', { i: i + 1, n: queue.length, t: s.title });
+      Object.assign(r, { state: 'busy', msg: '' }); draw();
+      try {
+        Object.assign(r, await timesFromRecording(s.id, m => { r.msg = m; const n = list.querySelector(`[data-id="${CSS.escape(s.id)}"] .tr-msg`); if (n) n.textContent = m; }), { state: 'done' });
+      } catch (e) {
+        Object.assign(r, { state: 'error', error: e.message || String(e) });
+        if (e.stop) { draw(); toast(`${e.message} ` + t('Zastaveno.'), 8000); break; }
+      }
+      draw();
+    }
+    running = false; draw(); sumUp();
+  }
+  root.append(el('div', { class: 'view' },
+    el('header', { class: 'topbar' }, iconBtn('back', t('Zpět'), () => nav.back()), el('h1', { text: t('Doplnit časy z nahrávek') })),
+    el('section', { class: 'section' },
+      todo.length
+        ? el('p', { text: pl(todo.length, '{n} píseň má text i nahrávku, ale ne časy veršů.', '{n} písně mají text i nahrávku, ale ne časy veršů.', '{n} písní má text i nahrávku, ale ne časy veršů.') + ' ' + t('Bangor nahrávku přepíše a podle slov, která se shodují s textem, najde, kdy který verš začíná. Ostatní verše dopočítá odhadem. Text se nemění a přepis se neukládá.') })
+        : el('p', { text: t('Všechny písně s textem a nahrávkou už časy mají.') }),
+      todo.length ? el('div', { class: 'row' }, startBtn) : null,
+      info,
+      todo.length ? el('p', { class: 'hint', style: { marginTop: '8px' }, text: t('Časy jsou přibližné. Nech okno s Alaw viditelné a počítač neuspávej. Verš, který nesedí, opravíš v písni ťukáním (⏱).') }) : null),
+    list));
+  draw(); sumUp();
+  return () => { stop = true; };
+}

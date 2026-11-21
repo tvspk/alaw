@@ -138,7 +138,7 @@ def screens(page, url):
 
     for path, sel, name in [(f'#/edit/{sid}', 'form', 'úprava písně'), ('#/new', 'form', 'nová píseň'),
                             (f'#/version/{sid}/{vid}', 'form', 'úprava verze'), (f'#/compare/{sid}', '.spot, .empty, .spots-h', 'porovnání verzí'),
-                            (f'#/sync/{sid}', '.tap-btn', 'časování'), ('#/bulk', '.view', 'písně z nahrávek'), ('#/lyrics', '.view', 'najít texty'),
+                            (f'#/sync/{sid}', '.tap-btn', 'časování'), ('#/bulk', '.view', 'písně z nahrávek'), ('#/lyrics', '.view', 'najít texty'), ('#/times', '.view', 'doplnit časy'),
                             ('#/settings', '.section', 'nastavení')]:
         page.goto(url + path); page.wait_for_selector(sel); no_czech(page, name)
     # nápověda „?“ u klíčů a přístupů (na počítači všech pět)

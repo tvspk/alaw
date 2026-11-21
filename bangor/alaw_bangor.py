@@ -3,9 +3,10 @@
 # a přijímá požadavky jen ze stránky aplikace Alaw. Nahrávky nikam neodcházejí.
 #
 # Rozhraní (pro aplikaci):
-#   GET  /health            → { app, version, ready, stage, model, device, busy }
-#   POST /transcribe?language=cy&prompt=…   (tělo = zvukový soubor) → { id }
+#   GET  /health            → { app, version, ready, stage, model, device, busy, words }
+#   POST /transcribe?language=cy&prompt=…&words=1   (tělo = zvukový soubor) → { id }
 #   GET  /jobs/<id>         → { state: queued|running|done|error, progress 0–1, segments[], error }
+#   S words=1 má každý úsek i words: [{ start, end, word, p }] (časy slov – aplikace z nich doplní časy veršů textu).
 import glob
 import json
 import logging
@@ -20,7 +21,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-VERSION = '1.0'
+VERSION = '1.1'
 HOST = '127.0.0.1'
 PORT = int(os.environ.get('ALAW_BANGOR_PORT', '8765'))
 MODEL = os.environ.get('ALAW_BANGOR_MODEL', 'techiaith/whisper-large-ft-cy-en-ct2')
@@ -102,6 +103,8 @@ def worker():
                 opts['language'] = job['language']
             if job['prompt']:
                 opts['initial_prompt'] = job['prompt']
+            if job['words']:
+                opts['word_timestamps'] = True
             segs, info = model.transcribe(job['file'], **opts)
             total = info.duration or 0
             for s in segs:
@@ -109,6 +112,8 @@ def worker():
                     'start': round(s.start, 2), 'end': round(s.end, 2), 'text': s.text,
                     'avg_logprob': s.avg_logprob, 'no_speech_prob': s.no_speech_prob,
                     'compression_ratio': s.compression_ratio,
+                    **({'words': [{'start': round(w.start, 2), 'end': round(w.end, 2), 'word': w.word,
+                                   'p': round(w.probability, 3)} for w in (s.words or [])]} if job['words'] else {}),
                 })
                 if total:
                     job['progress'] = min(0.99, s.end / total)
@@ -179,7 +184,7 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path.rstrip('/')
         if path == '/health':
             busy = sum(1 for j in jobs.values() if j['state'] in ('queued', 'running'))
-            return self.reply(200, {'app': 'alaw-bangor', 'version': VERSION, 'model': MODEL, 'busy': busy, **state})
+            return self.reply(200, {'app': 'alaw-bangor', 'version': VERSION, 'model': MODEL, 'busy': busy, 'words': True, **state})
         if path.startswith('/jobs/'):
             job = jobs.get(path[6:])
             if not job:
@@ -215,7 +220,7 @@ class Handler(BaseHTTPRequestHandler):
         jid = uuid.uuid4().hex[:12]
         jobs[jid] = {'state': 'queued', 'progress': 0, 'segments': [], 'error': None, 'file': fname,
                      'language': (q.get('language') or [''])[0], 'prompt': (q.get('prompt') or [''])[0][:200],
-                     'name': (q.get('name') or [''])[0][:120]}
+                     'name': (q.get('name') or [''])[0][:120], 'words': (q.get('words') or [''])[0] == '1'}
         work.put(jobs[jid])
         self.reply(200, {'id': jid})
 

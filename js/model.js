@@ -312,6 +312,127 @@ export function borrowTimes(lines, timedLines) {
   return { lines: out, matched, total: out.length };
 }
 
+// ---------- časy veršů z přepisu se slovy (Bangor) ----------
+// Přepsaná slova s časy se přiřadí ke slovům textu popořadě podle podobnosti (přepis zpěvu má chyby, proto ne doslova).
+// Verš, kde se shoduje aspoň třetina slov, dostane čas podle prvních shodných slov; ostatní verše se dopočítají
+// mezi sousedy podle počtu slov (rozhodnutí zadavatele). words = [{ w, s, e }] (ms).
+// Vrací { lines (kopie s časy), anchored, total, ok } – ok = shoda stačí na použití.
+const wordKeys = text => String(text || '').split(/[\s\-–—/]+/).map(w => fold(w).replace(/[^\p{L}\p{N}]/gu, '')).filter(Boolean);
+
+function lev(a, b) {
+  if (a === b) return 0;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+// Podobnost dvou slov 0–1 (u velštiny i bez první hlásky – mutace: cath/gath/nghath).
+export function wordSim(a, b) {
+  if (a === b) return 1;
+  const m = Math.max(a.length, b.length);
+  if (Math.min(a.length, b.length) <= 2) return 0; // krátká slova jen přesně
+  let s = 1 - lev(a, b) / m;
+  if (a.length >= 4 && b.length >= 4) s = Math.max(s, 0.9 * (1 - lev(a.slice(1), b.slice(1)) / (m - 1)));
+  return s;
+}
+
+const MAX_CELLS = 6e6;
+
+export function alignTimes(lines, words) {
+  const out = lines.map(l => ({ ...l }));
+  const total = out.length;
+  const fail = (anchored = 0) => ({ lines: out, anchored, total, ok: false });
+  const W = (Array.isArray(words) ? words : []).map(w => ({ k: fold(w.w).replace(/[^\p{L}\p{N}]/gu, ''), s: +w.s, e: +(w.e ?? w.s) }))
+    .filter(w => w.k && Number.isFinite(w.s));
+  if (!total || !W.length) return fail();
+  // slova textu s číslem verše
+  const T = [];
+  const lineTok = out.map((l, i) => { const ks = wordKeys(l.text); ks.forEach((k, p) => T.push({ k, line: i, p })); return ks.length; });
+  const n = T.length, m = W.length;
+  if (!n || (n + 1) * (m + 1) > MAX_CELLS) return fail();
+  // nejlepší popořadé párování (vážené LCS): skóre shody = podobnost, krátká slova méně
+  const score = (a, b) => {
+    const s = wordSim(a.k, b.k);
+    if (s < 0.6) return 0;
+    return s * (0.4 + 0.6 * Math.min(1, Math.min(a.k.length, b.k.length) / 4));
+  };
+  const cols = m + 1;
+  const dp = new Float32Array((n + 1) * cols);
+  const sc = new Float32Array((n + 1) * cols);
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      const v = score(T[i - 1], W[j - 1]);
+      sc[i * cols + j] = v;
+      const best = Math.max(dp[(i - 1) * cols + j], dp[i * cols + j - 1]);
+      dp[i * cols + j] = v > 0 ? Math.max(best, dp[(i - 1) * cols + j - 1] + v) : best;
+    }
+  }
+  const match = new Int32Array(n).fill(-1);
+  for (let i = n, j = m; i > 0 && j > 0;) {
+    const v = sc[i * cols + j], here = dp[i * cols + j];
+    if (v > 0 && Math.abs(here - (dp[(i - 1) * cols + j - 1] + v)) < 1e-4) { match[i - 1] = j - 1; i--; j--; }
+    else if (dp[(i - 1) * cols + j] >= dp[i * cols + j - 1]) i--;
+    else j--;
+  }
+  // typická délka slova (medián rozestupů mezi slovy přepisu)
+  const gaps = W.slice(1).map((w, i) => w.s - W[i].s).filter(g => g > 0).sort((a, b) => a - b);
+  const wd = Math.min(700, Math.max(150, gaps.length ? gaps[gaps.length >> 1] : 350));
+  // kotvy: verše s dost shodnými slovy
+  const starts = new Array(total).fill(null);
+  let last = -Infinity, anchored = 0;
+  for (let i = 0, ti = 0; i < total; ti += lineTok[i], i++) {
+    const cnt = lineTok[i];
+    if (!cnt) continue;
+    const hit = [];
+    for (let k = ti; k < ti + cnt; k++) if (match[k] >= 0) hit.push(k);
+    if (!hit.length || hit.length < Math.max(1, Math.ceil(cnt / 3))) continue;
+    // odhad začátku z prvních (nejvýš 3) shodných slov – medián; Whisper krátké slovo po pauze často přilepí dřív
+    const est = hit.slice(0, 3).map(k => W[match[k]].s - T[k].p * wd).sort((a, b) => a - b);
+    const wt = W[match[hit[0]]].s;
+    let st = Math.max(0, est[est.length >> 1]);
+    if (st <= last) st = wt > last ? wt : null; // pořadí veršů musí sedět
+    if (st == null) continue;
+    starts[i] = Math.round(st); last = st; anchored++;
+  }
+  const textLines = lineTok.filter(Boolean).length;
+  if (anchored < 2 || anchored < 0.3 * textLines) return fail(anchored);
+  // dopočet ostatních veršů podle počtu slov
+  const wgt = lineTok.map(c => Math.max(1, c));
+  const idx = starts.map((s, i) => s == null ? -1 : i).filter(i => i >= 0);
+  const a0 = idx[0], aN = idx[idx.length - 1];
+  let rate = 0, tok = 0;
+  for (let i = a0; i < aN; i++) tok += wgt[i];
+  rate = tok ? (starts[aN] - starts[a0]) / tok : wd;
+  rate = Math.min(2000, Math.max(150, rate));
+  for (let q = 0; q + 1 < idx.length; q++) {
+    const a = idx[q], b = idx[q + 1];
+    if (b - a < 2) continue;
+    let sum = 0; for (let i = a; i < b; i++) sum += wgt[i];
+    let acc = 0;
+    for (let i = a + 1; i < b; i++) { acc += wgt[i - 1]; starts[i] = Math.round(starts[a] + (starts[b] - starts[a]) * acc / sum); }
+  }
+  if (a0 > 0) { // před první kotvou
+    let before = 0; for (let i = 0; i < a0; i++) before += wgt[i];
+    const lo = Math.max(0, Math.min(W[0].s, starts[a0]));
+    const span = Math.min(starts[a0] - lo, rate * before);
+    let acc = before;
+    for (let i = 0; i < a0; i++) { starts[i] = Math.round(starts[a0] - span * acc / before); acc -= wgt[i]; }
+  }
+  if (aN < total - 1) { // po poslední kotvě
+    let after = 0; for (let i = aN; i < total - 1; i++) after += wgt[i];
+    const hi = Math.max(starts[aN], W[m - 1].s);
+    const span = Math.min(hi - starts[aN], rate * after);
+    let acc = 0;
+    for (let i = aN + 1; i < total; i++) { acc += wgt[i - 1]; starts[i] = Math.round(starts[aN] + span * acc / after); }
+  }
+  for (let i = 0; i < total; i++) { if (i && starts[i] < starts[i - 1]) starts[i] = starts[i - 1]; out[i].start = starts[i]; }
+  return { lines: out, anchored, total, ok: true };
+}
+
 // Přiřadí řádky překladu ze zdroje k veršům (jen když počet řádků sedí).
 export function attachAlt(lines, altText) {
   const alt = String(altText || '').split('\n').map(s => s.trim()).filter(Boolean);

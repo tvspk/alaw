@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 21. 11. 2026, verze **0.13.1** (APK versionCode 18). Odpovídej zadavateli **česky**.
+> Stav k 21. 11. 2026, verze **0.14.0** (APK versionCode 19). Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -194,12 +194,28 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
    mezi zdroji hledání. Na počítači přes prostředníka (neověřeno, zda Musixmatch Cloudflare nepouští; v APK přímo). Ověřeno na skutečné
    stránce (stažené z prostředí Claude) a testem `test_hledani.py` (napodobená stránka s lidovou písní).
 
+14. **Časy veršů z nahrávky přes Bangor (0.14.0):** zadavatel chtěl časy u všech písní, které je nemají. **Rozhodnutí zadavatele:**
+   **přepis se použije jen na časy a neukládá se** (žádná další verze), **verše bez shody se dopočítají odhadem** mezi sousedy.
+   - Program Bangor 1.1: `POST /transcribe?…&words=1` → úseky mají `words: [{ start, end, word, p }]` (`word_timestamps`), `/health` má `words: true`.
+     Starší program (bez `words`) → hláška „starší verze… stáhni znovu“ a zastavení (`e.stop`). Závislosti beze změny (značka `pripraveno-1.txt` zůstala).
+   - `stt.js`: `bangorJob` (společné), `transcribeBangor` (jako dřív), `bangorWords` → `[{ w, s, e }]` v ms.
+   - `model.js` `alignTimes(lines, words)` (čistá funkce): vážené LCS slov textu × slov přepisu (`wordSim`: Levenshtein, slova ≤ 2 písmena jen
+     přesně, u velšských mutací i bez první hlásky; shoda od 0,6). Kotva = verš se shodou aspoň třetiny slov; začátek = medián odhadů z prvních
+     ≤ 3 shodných slov (čas slova − pořadí × typická délka slova; Whisper krátké slovo po pauze přilepí dřív). Pořadí musí růst. Ostatní verše
+     poměrně podle počtu slov mezi kotvami, před první/po poslední kotvě odhadem. `ok` jen při ≥ 2 kotvách a ≥ 30 % veršů, jinak se nic neuloží.
+   - `bulk.js`: `needsTimes` (hlavní verze s textem, vlastní nahrávkou a bez jediného času), `timesFromRecording` (před uložením kontrola, že se
+     píseň mezitím nezměnila), `runTimes` (nabídka písně „Doplnit časy z nahrávky (Bangor)“), obrazovka `#/times` (`renderTimes`, odkaz
+     v Nastavení → Bangor, když je zapnutý).
+   - Ověřeno v prostředí Claude: **skutečný model `techiaith/whisper-large-ft-cy-en-ct2` (CPU)** na velšské lidové písni čtené espeak-ng
+     (i s přimíchaným šumem a tóny): všech 8 veršů do 0,16 s; verš navíc v textu se dopočítal. Skutečný zpěv s hudbou bude horší – ověří zadavatel.
+   - Test: `test_prepis.py` (napodobený program se slovy, starý program, obrazovka i nabídka písně), `#/times` v `test_anglictina.py`.
+
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
 Zadavatel po vydání 0.12 napsal „ok všechno v pohodě“ (Bangor na Windows zřejmě v pořádku – při další práci krátce ověřit,
 zda přepis přes Bangor opravdu proběhl). CZ/EN (0.10) a dva překlady + stažení textu (0.11) viděl („perfektní“), zkouší.
 Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna verze/mazání (0.8) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
 
-## Rozpracováno a další kroky (stav 21. 11. 2026, verze 0.13.1)
+## Rozpracováno a další kroky (stav 21. 11. 2026, verze 0.14.0)
 
 Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „hotovo“.
 
@@ -236,13 +252,15 @@ Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „
 - Při odesílání velkého zvuku může UI na počítači krátce zadrhávat (`b64()` + šifrování kousků po 8 MiB v hlavním vlákně).
 
 **Další kroky:**
-1. **DALŠÍ ÚKOL (zadavatel chce začít v novém chatu): přepis zbývajících ~160 písní bez textu přes Bangor** (zadavatel souhlasí, chce provést krok po kroku).
-   Nastavení → Přepis z nahrávky → Bangor (nápověda „?“): stáhnout program z vydání, rozbalit, spustit `alaw-bangor.bat`
-   (poprvé Python + model ~1,6 GB), v aplikaci „Zapnout a ověřit“ (Chrome se zeptá na přístup k místní síti/aplikacím – povolit),
-   vybrat službu Bangor. Nejdřív **zkouška na 1–2 písních** (Najít texty → u písně přepis, nebo v písni), zadavatel posoudí kvalitu.
-   Pak „🎧 Přepsat nenalezené z nahrávek“. Bez NVIDIA běží na procesoru – 200 písní spíš přes noc; Alaw i okno programu nechat
-   otevřené, počítač neuspávat. Přepis = text bez časů, může mít chyby u zpěvu. Groq jen jako doplněk (denní limit).
-   Zjistit, jestli zadavatel má grafiku NVIDIA (okno programu ukazuje GPU/CPU).
+1. **Bangor – rozpracováno 21. 11.:** zadavatel Bangor nainstaloval (Windows, **grafická karta NVIDIA – počítá na GPU**), Alaw spojení ověřila,
+   zkušební přepis jedné písně proběhl: „něco dobře, hodně špatně, ale dobrý základ pro ruční přepis“. Dostal postup pro hromadný přepis
+   (Najít texty → Hledat texty → „🎧 Přepsat nenalezené z nahrávek“ → Bangor) – **zjistit, jak dopadl** (kolik písní, chyby).
+   Upozornění pro zadavatele: okno Alaw nechat viditelné (Chrome zpomaluje skryté karty), počítač neuspávat. Písně s nejistým nálezem
+   tlačítko „nenalezené“ nepřepíše → projít ručně.
+   **Pak časy (0.14.0):** zadavatel musí stáhnout nový program (Nastavení → Bangor → Stáhnout program), rozbalit přes starý, zavřít okno
+   starého programu a spustit `alaw-bangor.bat` (okno napíše „Alaw – přepis Bangor 1.1“). Pak Nastavení → Bangor → „⏱ Doplnit časy z nahrávek“
+   – nejdřív zkusit jednu píseň z nabídky písně a nechat zadavatele posoudit přesnost časů. Hromadně pak všechny.
+   Možné vylepšení (nabídnout, až uvidí výsledky): stejné časy slov i u písní přepsaných Bangorem (verše přepisu = úseky Whisperu, ne skutečné verše).
 2. Případně 0.13.1 (výše) – jen když zadavatel chce.
 3. Hodnocení přepisu: Bangor vs. Groq vs. Gemini na téže písni; velká WAV přes Gemini (Files API neověřeno).
 4. Zadavatel vyzkouší CZ/EN a dva překlady; připomínky k angličtině do `js/i18n-en.js`.

@@ -116,8 +116,10 @@ export async function checkBangor() {
 const sleep = ms => new Promise(res => setTimeout(res, ms));
 const POLL = () => window.__alawBangorPoll || 2000;
 
-export async function transcribeBangor(blob, { title = '', language = 'cy', name = '' } = {}, onWait = () => {}) {
+// Úloha v programu Bangor → úseky přepisu (s words = i časy jednotlivých slov).
+async function bangorJob(blob, { title = '', language = 'cy', name = '' } = {}, onWait = () => {}, words = false) {
   let h = await checkBangor();
+  if (words && !h.words) throw Object.assign(new SttError(t('Program Bangor na počítači je starší verze a časy slov neumí. V Nastavení → Bangor stáhni program znovu, rozbal ho přes starý, zavři okno starého programu a spusť alaw-bangor.bat.')), { stop: true });
   while (!h.ready) {
     if (h.stage === 'error') throw new SttError(t('Program Bangor nemohl připravit model: {e}', { e: h.error || '' }));
     onWait(h.stage === 'download' ? t('Program Bangor stahuje model (poprvé asi 1,6 GB)…') : t('Program Bangor načítá model…'));
@@ -127,6 +129,7 @@ export async function transcribeBangor(blob, { title = '', language = 'cy', name
   onWait(t('Posílám nahrávku programu Bangor…'));
   const q = new URLSearchParams({ prompt: title.slice(0, 200), name });
   if (BANGOR_LANGS.has(language)) q.set('language', language);
+  if (words) q.set('words', '1');
   const { id } = await bangorFetch(`/transcribe?${q}`, { method: 'POST', body: blob, headers: { 'Content-Type': 'application/octet-stream' } }, 600000);
   let fails = 0;
   for (;;) {
@@ -134,11 +137,24 @@ export async function transcribeBangor(blob, { title = '', language = 'cy', name
     let j;
     try { j = await bangorFetch(`/jobs/${id}`); fails = 0; }
     catch (e) { if (e.status || ++fails >= 5) throw e; continue; }
-    if (j.state === 'done') return whisperLines(j.segments);
+    if (j.state === 'done') return j.segments || [];
     if (j.state === 'error') throw new SttError(t('Bangor: {e}', { e: j.error || '?' }));
     onWait(j.state === 'queued' ? t('Čekám, až program Bangor dokončí předchozí přepis…')
       : t('Přepisuji přes Bangor ({d})… {p} %', { d: h.device === 'gpu' ? t('grafická karta') : t('procesor'), p: Math.round((j.progress || 0) * 100) }));
   }
+}
+
+export async function transcribeBangor(blob, opts = {}, onWait = () => {}) {
+  return whisperLines(await bangorJob(blob, opts, onWait));
+}
+
+// Časy slov z nahrávky (pro doplnění časů k hotovému textu): [{ w, s, e }] (s, e v ms).
+export async function bangorWords(blob, opts = {}, onWait = () => {}) {
+  const segs = await bangorJob(blob, opts, onWait, true);
+  return segs.filter(g => !(g.no_speech_prob > 0.6 && g.avg_logprob < -0.7) && !(g.compression_ratio > 2.6))
+    .flatMap(g => g.words || [])
+    .filter(w => w && typeof w.word === 'string' && w.word.trim() && Number.isFinite(+w.start))
+    .map(w => ({ w: w.word.trim(), s: Math.round(+w.start * 1000), e: Math.round((Number.isFinite(+w.end) ? +w.end : +w.start) * 1000) }));
 }
 
 // ---------- výběr služby ----------
