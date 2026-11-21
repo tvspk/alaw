@@ -178,6 +178,32 @@ def main():
         page.click('.tr-switch button:has-text("CZ")')
         check(page.locator('.tools .chip:has-text("Ze zdroje")').count() == 1, 'CZ: „Ze zdroje“ zůstává')
 
+        print('Překlad vložený mezi verši (střídavé řádky)')
+        # lidová píseň Ar Lan y Môr (volné dílo), pod každým veršem anglický překlad
+        mix = "Ar lan y môr mae rhosys cochion\nBy the sea there are red roses\nAr lan y môr mae lilis gwynion\nBy the sea there are white lilies\n\nAr lan y môr mae carreg wastad\nOn the seashore there is a flat stone\nLle bûm yn siarad gair â'm cariad\nWhere I spoke a word with my love"
+        mid = page.evaluate("""async mix => {
+          const m = await import('./js/model.js'), st = await import('./js/store.js');
+          const s = m.newSong({ title: 'Smíchaná', lines: m.parseLyrics(mix) });
+          await st.saveSong(s); location.hash = '#/song/' + s.id; return s.id;
+        }""", mix)
+        page.wait_for_selector('.lyric')
+        page.click('button[aria-label="Další možnosti"]')
+        page.click('text=Oddělit překlad vložený mezi verši…')
+        page.wait_for_selector('text=8 řádků → 4 veršů, 4 s překladem.')
+        page.click('.sheet button:has-text("Každý druhý řádek")')
+        page.wait_for_selector('text=8 řádků → 4 veršů, 4 s překladem.')
+        shot(page, 'tr-oddeleni')
+        page.click('.sheet button:has-text("Uložit")')
+        wait(page, "!document.querySelector('.sheet')")
+        r = page.evaluate("async id => (await (await import('./js/store.js')).getSong(id)).versions[0].lines.map(l => [l.text, (l.en || {}).translation || '', l.stanza])", mid)
+        print('   ', r)
+        check([x[0] for x in r] == ['Ar lan y môr mae rhosys cochion', 'Ar lan y môr mae lilis gwynion', 'Ar lan y môr mae carreg wastad', "Lle bûm yn siarad gair â'm cariad"], 'zůstaly jen velšské verše')
+        check(r[0][1] == 'By the sea there are red roses' and r[3][1] == 'Where I spoke a word with my love', 'anglické řádky jsou překladem veršů')
+        check([x[2] for x in r] == [False, False, True, False], 'sloky zachované')
+        page.click('button[aria-label="Další možnosti"]')
+        check(page.locator('text=Oddělit překlad vložený mezi verši…').count() == 0, 'po rozdělení už položka v nabídce není')
+        page.keyboard.press('Escape')
+
         browser.close()
     srv.shutdown()
     real = [e for e in errors if 'favicon' not in e]

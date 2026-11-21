@@ -312,6 +312,56 @@ export function borrowTimes(lines, timedLines) {
   return { lines: out, matched, total: out.length };
 }
 
+// ---------- překlad vložený v textu (střídavé řádky) ----------
+// Některé zdroje dávají pod každý verš rovnou překlad. Rozdělení: verše zůstanou, řádky překladu se uloží jako
+// překlad předchozího verše (setTr). Podle jazyka (angličtina/čeština poznaná podle běžných slov) nebo prostě každý druhý řádek.
+const EN_WORDS = new Set('the and you your my me is are was were be been to of in on it its that this we they them our us he she his her will would for with not but all so what where when who how there their from have has had do does just like love can no never one more than into out now see know want go come day night time heart life world only still song sing'.split(' '));
+const CS_WORDS = new Set('je jsem jsi jsme jste jsou se na že to ten ta tak když jak co kde kdo já ty my vy oni můj tvůj náš jen ale nebo by bych byl byla bude není pro při před pod nad mezi až už ještě všechno vždy nikdy srdce píseň zpívat'.split(' '));
+const CY_WORDS = new Set("y yr mae yn ac a'r ni fy dy ei ein eich eu o ar am wedi sy sydd yw ydy hen gan dros ond fel hon hwn hyn ydw oedd bydd dim mewn efo gyda i'r o'r yng ym fe mi ti chi nhw".split(' '));
+
+export function trLineLang(text) {
+  const raw = String(text || '').toLowerCase();
+  const ws = raw.split(/[^\p{L}']+/u).filter(Boolean);
+  let en = 0, cs = 0, cy = 0;
+  for (const w of ws) { if (EN_WORDS.has(w)) en++; if (CS_WORDS.has(w)) cs++; if (CY_WORDS.has(w)) cy++; }
+  if (/[ěščřžůťďň]/.test(raw)) cs += 2;
+  if (/[ŵŷ]|dd|ll|\bch|wy/.test(raw)) cy += 1;
+  if (cs > cy && cs >= en && cs > 0) return 'cs';
+  if (en > cy && en > 0) return 'en';
+  return null;
+}
+
+// Kolik řádků vypadá jako překlad (pro nabídku písně).
+export function interleavedLang(lines) {
+  const c = { en: 0, cs: 0 };
+  for (const l of lines) { const g = trLineLang(l.text); if (g) c[g]++; }
+  const lang = c.cs > c.en ? 'cs' : 'en';
+  return c[lang] >= 2 && c[lang] >= lines.length / 5 ? lang : null;
+}
+
+// mode 'auto' = podle jazyka řádku, 'alt' = každý druhý řádek (první je verš). Vrací { lines, pairs }.
+export function splitInterleaved(lines, mode = 'auto', lang = 'en') {
+  const out = [];
+  let pairs = 0, prevMain = null;
+  const got = new WeakSet();
+  lines.forEach((l, i) => {
+    const isTr = mode === 'alt' ? i % 2 === 1 : trLineLang(l.text) === lang;
+    if (isTr && prevMain) {
+      const cur = trOf(prevMain, lang), again = got.has(prevMain); // dřívější překlad verše se nahradí, další řádky se připojí
+      if (!again) { pairs++; got.add(prevMain); }
+      setTr(prevMain, lang, { ...cur, translation: again ? `${cur.translation} / ${l.text}` : l.text });
+      if (l.stanza && out.length) prevMain.pendingStanza = true; // prázdný řádek před překladem → sloka u dalšího verše
+      return;
+    }
+    const m = { ...l, en: l.en ? { ...l.en } : undefined, contractions: [...(l.contractions || [])] };
+    if (!m.en) delete m.en;
+    if (prevMain && prevMain.pendingStanza) { m.stanza = true; delete prevMain.pendingStanza; }
+    out.push(m); prevMain = m;
+  });
+  if (prevMain) delete prevMain.pendingStanza;
+  return { lines: out, pairs };
+}
+
 // ---------- časy veršů z přepisu se slovy (Bangor) ----------
 // Přepsaná slova s časy se přiřadí ke slovům textu popořadě podle podobnosti (přepis zpěvu má chyby, proto ne doslova).
 // Verš, kde se shoduje aspoň třetina slov, dostane čas podle prvních shodných slov; ostatní verše se dopočítají

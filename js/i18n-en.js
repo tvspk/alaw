@@ -800,10 +800,17 @@ export const EN = {
   "⏱ Časy z nahrávky – Bangor": "⏱ Timings from the recording – Bangor",
   "■ Zastavit": "■ Stop",
   "✓ Načasováno: {a} z {n} veršů podle nahrávky, ostatní odhadem.": "✓ Timed: {a} of {n} lines from the recording, the rest estimated.",
+  "Každý druhý řádek": "Every other line",
+  "Oddělit překlad vložený mezi verši": "Separate a translation mixed into the lyrics",
+  "Oddělit překlad vložený mezi verši…": "Separate a translation mixed into the lyrics…",
+  "Poznat podle jazyka": "Detect by language",
+  "{n} řádků → {v} veršů, {p} s překladem.": "{n} rows → {v} lines, {p} with a translation.",
+  "Řádky překladu se přesunou pod předchozí verš jako jeho překlad. Zkontroluj náhled.": "Translation rows will be moved under the line above as its translation. Check the preview.",
 };
 
 // Množná čísla: klíč = český tvar pro 1, hodnota = [jedno, víc].
 export const EN_PL = {
+  "Překlad přesunut u {n} verše.": ["Translation moved for {n} line.", "Translation moved for {n} lines."],
   "{n} píseň má text i nahrávku, ale ne časy veršů.": ["{n} song has lyrics and a recording but no line timings.", "{n} songs have lyrics and a recording but no line timings."],
   "(pokrok převeden u {n} verše)": ["(progress carried over for {n} line)", "(progress carried over for {n} lines)"],
   "Na špatném místě: {n} slovo.": ["In the wrong place: {n} word.", "In the wrong place: {n} words."],

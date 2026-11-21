@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 21. 11. 2026, verze **0.14.0** (APK versionCode 19). Odpovídej zadavateli **česky**.
+> Stav k 21. 11. 2026, verze **0.14.1** (APK versionCode 20). Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -210,12 +210,19 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
      (i s přimíchaným šumem a tóny): všech 8 veršů do 0,16 s; verš navíc v textu se dopočítal. Skutečný zpěv s hudbou bude horší – ověří zadavatel.
    - Test: `test_prepis.py` (napodobený program se slovy, starý program, obrazovka i nabídka písně), `#/times` v `test_anglictina.py`.
 
+15. **Oddělit překlad vložený mezi verši (0.14.1):** u písně „(Nid) Hon Yw'r Gân…“ měl zadavatel pod každým velšským veršem anglický
+   překlad jako další verš (střídavě po řádcích). Rozhodnutí: **přesunout jako překlad veršů**, ne mazat. `model.js`: `trLineLang` (en/cs podle
+   běžných slov, velština podle typických slov a písmen), `interleavedLang` (nabídnout, jen když ≥ 2 řádky a ≥ 1/5 vypadá jako překlad),
+   `splitInterleaved(lines, 'auto'|'alt', lang)` → překlad přes `setTr` k předchozímu verši (dřívější překlad verše se nahradí, další řádky
+   připojí „ / “), sloka z prázdného řádku před překladem přejde na další verš, časy řádků překladu zahozeny. UI: nabídka písně
+   „🌐 Oddělit překlad vložený mezi verši…“ s náhledem (jazyk, režim podle jazyka / každý druhý řádek). Test v `test_preklady.py`.
+
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
 Zadavatel po vydání 0.12 napsal „ok všechno v pohodě“ (Bangor na Windows zřejmě v pořádku – při další práci krátce ověřit,
 zda přepis přes Bangor opravdu proběhl). CZ/EN (0.10) a dva překlady + stažení textu (0.11) viděl („perfektní“), zkouší.
 Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna verze/mazání (0.8) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
 
-## Rozpracováno a další kroky (stav 21. 11. 2026, verze 0.14.0)
+## Rozpracováno a další kroky (stav 21. 11. 2026, verze 0.14.1)
 
 Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „hotovo“.
 
@@ -252,6 +259,8 @@ Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „
 - Při odesílání velkého zvuku může UI na počítači krátce zadrhávat (`b64()` + šifrování kousků po 8 MiB v hlavním vlákně).
 
 **Další kroky:**
+0. **Hromadný přepis Bangorem doběhl** (zadavatel 21. 11.). Další: výměna programu za 1.1 a zkouška časů na jedné písni (krok 5–6 níže);
+   zadavatel ještě neodpověděl, jestli přepis hlásil chyby a kolik písní zůstalo s nejistým nálezem v Najít texty.
 1. **Bangor – rozpracováno 21. 11.:** zadavatel Bangor nainstaloval (Windows, **grafická karta NVIDIA – počítá na GPU**), Alaw spojení ověřila,
    zkušební přepis jedné písně proběhl: „něco dobře, hodně špatně, ale dobrý základ pro ruční přepis“. Dostal postup pro hromadný přepis
    (Najít texty → Hledat texty → „🎧 Přepsat nenalezené z nahrávek“ → Bangor) – **zjistit, jak dopadl** (kolik písní, chyby).

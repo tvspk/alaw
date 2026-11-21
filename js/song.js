@@ -4,7 +4,7 @@ import { t, pl, vlabel, num, lang as uiLang } from './i18n.js';
 import { getSong, saveSong, deleteSong, getAudioBlob, getPrefs, setPrefs, getProgress, resetProgress } from './store.js';
 import { songUnits, songSummary, unitState, lineKey, STATE_LABEL, fmtIvl } from './learn.js';
 import { DRILLS } from './drill.js';
-import { primaryVersion, formatMs, toLrc, toTxt, langLabel, isSynced, trOf, setTr, trText, trLangs, otherLang } from './model.js';
+import { primaryVersion, formatMs, toLrc, toTxt, langLabel, isSynced, trOf, setTr, trText, trLangs, otherLang, interleavedLang, splitInterleaved } from './model.js';
 import { Player, RATES } from './player.js';
 import { hasAi, translateVersion, explainLine } from './ai.js';
 import { MAX_VERSIONS, analyze, summary } from './versions.js';
@@ -539,6 +539,37 @@ export async function renderSong(root, id, nav) {
       ], close)));
   }
 
+  // Překlad vložený pod verši (střídavé řádky) → překlad veršů; náhled před uložením.
+  function openSplit() {
+    let lang = interleavedLang(version.lines) || 'en', mode = 'auto';
+    const body = el('div', {});
+    const close = sheet(cl => el('div', {}, el('h3', { text: t('Oddělit překlad vložený mezi verši') }), body));
+    const draw = () => {
+      const r = splitInterleaved(version.lines, mode, lang);
+      const opt = (cur, val, label, set) => el('button', { type: 'button', class: 'btn small' + (cur === val ? ' primary' : ''), text: label, onclick: () => { set(val); draw(); } });
+      body.replaceChildren(
+        el('div', { class: 'sub', text: t('Řádky překladu se přesunou pod předchozí verš jako jeho překlad. Zkontroluj náhled.') }),
+        el('div', { class: 'row', style: { flexWrap: 'wrap', gap: '6px', margin: '8px 0' } },
+          opt(lang, 'en', t('angličtina'), v => { lang = v; }), opt(lang, 'cs', t('čeština'), v => { lang = v; })),
+        el('div', { class: 'row', style: { flexWrap: 'wrap', gap: '6px', marginBottom: '8px' } },
+          opt(mode, 'auto', t('Poznat podle jazyka'), v => { mode = v; }), opt(mode, 'alt', t('Každý druhý řádek'), v => { mode = v; })),
+        el('div', { class: 'hint', text: t('{n} řádků → {v} veršů, {p} s překladem.', { n: version.lines.length, v: r.lines.length, p: r.pairs }) }),
+        el('div', { style: { maxHeight: '45vh', overflow: 'auto', margin: '8px 0', borderTop: '1px solid var(--line, #ccc)' } },
+          ...r.lines.map(l => el('div', { style: { padding: '4px 0', marginTop: l.stanza ? '10px' : '0' } },
+            el('div', { text: l.text }), el('div', { style: { color: 'var(--muted)', fontStyle: 'italic' }, text: trOf(l, lang).translation || '—' })))),
+        el('div', { class: 'row', style: { gap: '8px' } },
+          el('button', { type: 'button', class: 'btn primary', text: t('Uložit'), disabled: !r.pairs, onclick: async () => {
+            const fresh = await getSong(song.id), v = fresh && fresh.versions.find(x => x.id === version.id);
+            if (!v || v.lines.length !== version.lines.length || v.lines.some((l, i) => l.id !== version.lines[i].id)) { close(); toast(t('Píseň se mezitím změnila, zkus to znovu.')); return; }
+            v.lines = splitInterleaved(v.lines, mode, lang).lines;
+            await saveSong(fresh); close(); toast(pl(r.pairs, 'Překlad přesunut u {n} verše.', 'Překlad přesunut u {n} veršů.', 'Překlad přesunut u {n} veršů.'));
+            nav.replace(location.hash);
+          } }),
+          el('button', { type: 'button', class: 'btn', text: t('Zrušit'), onclick: () => close() })));
+    };
+    draw();
+  }
+
   function openSongMenu() {
     sheet(close => el('div', {},
       el('h3', { text: song.title }),
@@ -550,6 +581,7 @@ export async function renderSong(root, id, nav) {
         song.versions.length > 1 && { icon: '⚖', label: t('Porovnat verze textu'), action: () => nav.go(`#/compare/${encodeURIComponent(song.id)}`) },
         song.versions.length < MAX_VERSIONS && { icon: '＋', label: t('Přidat verzi textu z jiného zdroje…'), action: () => nav.go(`#/version/${encodeURIComponent(song.id)}/new`) },
         transcribable(song) && (!version.lines.length || song.versions.length < MAX_VERSIONS) && { icon: '🎧', label: version.lines.length ? t('Přepsat z nahrávky jako další verzi (AI)') : t('Přepsat text z nahrávky (AI)'), action: () => runTranscribe(song.id, nav) },
+        interleavedLang(version.lines) && { icon: '🌐', label: t('Oddělit překlad vložený mezi verši…'), action: openSplit },
         { icon: '🎓', label: t('Učit se'), action: () => nav.go(`#/learn/${encodeURIComponent(song.id)}`) },
         { icon: '🎯', label: t('Procvičit celou píseň…'), action: openDrills },
         [...recs.values()].some(r => r.st !== 'new') && { icon: '↺', label: t('Vynulovat pokrok celé písně'), action: async () => {
