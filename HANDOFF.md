@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 21. 11. 2026, verze **0.14.1** (APK versionCode 20). Odpovídej zadavateli **česky**.
+> Stav k 21. 11. 2026, verze **0.14.2** (APK versionCode 21). Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -217,14 +217,29 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
    připojí „ / “), sloka z prázdného řádku před překladem přejde na další verš, časy řádků překladu zahozeny. UI: nabídka písně
    „🌐 Oddělit překlad vložený mezi verši…“ s náhledem (jazyk, režim podle jazyka / každý druhý řádek). Test v `test_preklady.py`.
 
+16. **Časy jen chybějícím veršům + oprava verše si nechá čas (0.14.2):** `needsTimes` = hlavní verze s textem a nahrávkou, kde **aspoň
+   jeden** verš nemá čas. `alignTimes` bere verše s časem jako pevné body (nemění je; nové kotvy jen mezi nimi, ok = kotvy + pevné ≥ 2),
+   vrací i `fixed`, `filled`; hláška „✓ Doplněno {f} chybějících časů…“. `edit.js` `mergeLines`: úsek nespárovaných nových veršů mezi
+   spárovanými sousedy převezme časy nespárovaných starých veršů ze stejného úseku, když jich je stejně. Pozn.: píseň s časy se v Upravit
+   upravuje jako LRC (`[mm:ss.xx]` na začátku řádku) – při opravě slov se značkou čas zůstával už dřív; nové je to pro řádek přepsaný celý.
+
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
 Zadavatel po vydání 0.12 napsal „ok všechno v pohodě“ (Bangor na Windows zřejmě v pořádku – při další práci krátce ověřit,
 zda přepis přes Bangor opravdu proběhl). CZ/EN (0.10) a dva překlady + stažení textu (0.11) viděl („perfektní“), zkouší.
 Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna verze/mazání (0.8) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
 
-## Rozpracováno a další kroky (stav 21. 11. 2026, verze 0.14.1)
+## Rozpracováno a další kroky (stav 21. 11. 2026 večer, verze 0.14.2)
 
-Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „hotovo“.
+Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „hotovo“. Zadavatel není programátor, odpovídat česky.
+
+**Kde jsme skončili (21. 11.):**
+- Bangor u zadavatele běží (Windows, NVIDIA GPU), program 1.1 (časy slov). **Hromadný přepis písní bez textu doběhl**, kvalita
+  „něco dobře, hodně špatně, ale dobrý základ pro ruční přepis“. **Časy veršů doplněny hromadně** („vypadá to dobře“).
+  Zadavatel program zavřel; příště stačí dvojklik na `alaw-bangor.bat`.
+- U „(Nid) Hon Yw'r Gân…“ byl pod každým velšským veršem anglický překlad → nástroj 0.14.1, zadavatel použil, dopadlo dobře.
+- Teď zadavatel začne **ručně opravovat přepisy**. 0.14.2 (časy chybějícím veršům, čas u přepsaného řádku) **zadavateli ještě
+  nepopsaná v praxi** – stačí říct: v Upravit nechat značku `[mm:ss.xx]` na začátku řádku; když verš čas ztratí, v nabídce písně
+  „⏱ Doplnit časy z nahrávky (Bangor)“ doplní jen chybějící (program musí běžet). Po aktualizaci obnovit stránku 2× F5.
 
 **Hotovo 20. 11. večer (bez změny kódu):**
 - **Přejmenování nahrávek na PC – HOTOVO.** Složka zadavatele `D:\Cerdd alaw` (Windows), 277 souborů (mp3, 1 flac, 3 wav;
@@ -259,28 +274,23 @@ Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „
 - Při odesílání velkého zvuku může UI na počítači krátce zadrhávat (`b64()` + šifrování kousků po 8 MiB v hlavním vlákně).
 
 **Další kroky:**
-0. **21. 11. hotovo u zadavatele:** hromadný přepis písní bez textu Bangorem doběhl; program vyměněn za 1.1 a **časy veršů doplněny
-   hromadně u všech písní** („vypadá to dobře“); oddělení překladu u „(Nid) Hon Yw'r Gân…“ dopadlo dobře.
-   Zbývá: písně s nejistým nálezem v Najít texty (tlačítko „nenalezené“ je nepřepíše) a písně, kde časy hlásily „skoro neshoduje“ –
-   zeptat se zadavatele, kolik jich je. Případné vylepšení: časy slov i u písní přepsaných Bangorem (verše = úseky Whisperu).
-1. **Bangor – rozpracováno 21. 11.:** zadavatel Bangor nainstaloval (Windows, **grafická karta NVIDIA – počítá na GPU**), Alaw spojení ověřila,
-   zkušební přepis jedné písně proběhl: „něco dobře, hodně špatně, ale dobrý základ pro ruční přepis“. Dostal postup pro hromadný přepis
-   (Najít texty → Hledat texty → „🎧 Přepsat nenalezené z nahrávek“ → Bangor) – **zjistit, jak dopadl** (kolik písní, chyby).
-   Upozornění pro zadavatele: okno Alaw nechat viditelné (Chrome zpomaluje skryté karty), počítač neuspávat. Písně s nejistým nálezem
-   tlačítko „nenalezené“ nepřepíše → projít ručně.
-   **Pak časy (0.14.0):** zadavatel musí stáhnout nový program (Nastavení → Bangor → Stáhnout program), rozbalit přes starý, zavřít okno
-   starého programu a spustit `alaw-bangor.bat` (okno napíše „Alaw – přepis Bangor 1.1“). Pak Nastavení → Bangor → „⏱ Doplnit časy z nahrávek“
-   – nejdřív zkusit jednu píseň z nabídky písně a nechat zadavatele posoudit přesnost časů. Hromadně pak všechny.
-   Možné vylepšení (nabídnout, až uvidí výsledky): stejné časy slov i u písní přepsaných Bangorem (verše přepisu = úseky Whisperu, ne skutečné verše).
-2. Případně 0.13.1 (výše) – jen když zadavatel chce.
-3. Hodnocení přepisu: Bangor vs. Groq vs. Gemini na téže písni; velká WAV přes Gemini (Files API neověřeno).
-4. Zadavatel vyzkouší CZ/EN a dva překlady; připomínky k angličtině do `js/i18n-en.js`.
-5. Ověřit na telefonu: učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7), přepis/mazání/výměna verze (0.8, 0.9);
-   že telefon stáhl 1,1 GB zvuku (Wi-Fi, místo v telefonu).
+1. Zeptat se, kolik písní zůstalo: (a) s nejistým nálezem v Najít texty (tlačítko „nenalezené“ je nepřepíše → po jedné převzít text
+   nebo „🎧 Přepsat z nahrávky“), (b) kde časy hlásily „Přepis se s textem skoro neshoduje“ (→ ťukání, nebo vymyslet jiný postup).
+2. Případné vylepšení (nabídnuto dřív, nezadáno): u písní přepsaných Bangorem jsou verše = úseky Whisperu, ne skutečné verše; po ruční
+   úpravě rozdělení veršů lze časy doplnit znovu přes časy slov.
+3. 0.13.1-návrh: reakce na 429 v Najít texty (výše) – jen když zadavatel chce.
+4. Hodnocení přepisu: Bangor vs. Groq vs. Gemini na téže písni.
+5. Zadavatel vyzkouší CZ/EN a dva překlady; připomínky k angličtině do `js/i18n-en.js`.
+6. Ověřit na telefonu: učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7), přepis/mazání/výměna verze (0.8, 0.9);
+   že telefon stáhl zvuk i nové texty a časy (synchronizace, Wi-Fi).
 
-Možná rozšíření (nezadaná): sdílení z Androidu rovnou do nové verze.
+Možná rozšíření (nezadaná): sdílení z Androidu rovnou do nové verze; časy slov i přes Groq (`timestamp_granularities[]=word`).
 - Drobnosti: pruh nové verze se objeví až po 20 h od poslední kontroly (záměr). Genius z prostředí Claude netestovatelný
   (blokuje servery). Na počítači může prostředník narazit na blokaci u Genius a Bandcampu.
+
+**Zkouška Bangoru v prostředí Claude:** `pip install --break-system-packages faster-whisper==1.2.1 av==16.1.0 ctranslate2==4.9.0`,
+`ALAW_BANGOR_PORT=8798 python3 bangor/alaw_bangor.py` stáhne i skutečný model (1,6 GB, HF dostupné, CPU ~ desítky s na krátkou nahrávku).
+Zkušební „zpěv“: `apt-get install espeak-ng`, `espeak-ng -v cy` na lidovou píseň (volné dílo), ffmpeg pro ticho/šum.
 
 ## Známá rizika a doporučení (kontrola před 0.6, nic akutního)
 
@@ -296,9 +306,10 @@ Možná rozšíření (nezadaná): sdílení z Androidu rovnou do nové verze.
 
 - Po každé změně v `index.html`, `css/`, `js/` spusť `python3 scripts/build_sw.py` (workflow jinak selže).
 - Testy (Playwright, Chromium jako Pixel 7, bez sítě):
-  `python3 -u testy/test_zaklad.py`, `python3 -u testy/test_verze.py`, `python3 -u testy/test_hledani.py`, `python3 -u testy/test_hromadne.py`, `python3 -u testy/test_prepis.py`, `python3 -u testy/test_sync.py`,
+  `python3 -u testy/test_zaklad.py`, `python3 -u testy/test_verze.py`, `python3 -u testy/test_hledani.py`, `python3 -u testy/test_hromadne.py`, `python3 -u testy/test_prepis.py`, `python3 -u testy/test_sync.py`, `python3 -u testy/test_preklady.py`, `python3 -u testy/test_anglictina.py`,
   `node testy/test_worker.mjs`. Kontrola zdrojů proti skutečným webům: `python3 testy/zdroje_naostro.py`.
-  Spouštěj s `-u` a výstup do souboru (`> /tmp/x.log`): přes rouru s `grep` se dlouhé testy zasekávaly.
+  Spouštěj s `-u` a výstup do souboru (`> /tmp/x.log`): přes rouru s `grep` se dlouhé testy zasekávaly. `test_zaklad` občas
+  náhodně spadne na „Režimy učení“ (`.w.hide`) – při opakování projde.
 - Playwright Chromium nemusí být nainstalovaný: `python3 -m playwright install chromium`.
 - **Nová verze APK:** zvyš `android/verze.txt` („versionCode versionName“, versionCode vždy +1) a `APP_VERSION`
   v `js/app.js`, push do `main` → Actions postaví, ověří certifikát (SHA-256 `c633f3c8…a46da7`) a vydá `v<verze>`.

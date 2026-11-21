@@ -28,7 +28,22 @@ function mergeLines(oldLines, newLines) {
     nl.note = ol.note;
     if (ol.vars) nl.vars = ol.vars; // rozhodnutí sporných míst (versions.js); nesedí-li už, uklidí se
     if (nl.start == null) nl.start = ol.start;
+    nl._old = idx;
   }
+  // Opravený verš na stejném místě si nechá čas: úsek nespárovaných nových veršů mezi spárovanými sousedy dostane časy
+  // nespárovaných starých veršů z odpovídajícího úseku, když jich je stejně (jinak zůstanou bez času → „Doplnit časy“).
+  let prevNew = -1, prevOld = -1;
+  const fill = (a, b, oa, ob) => {
+    if (b - a !== ob - oa || b <= a) return;
+    for (let k = 0; k < b - a; k++) if (newLines[a + k].start == null) newLines[a + k].start = oldLines[oa + k].start ?? null;
+  };
+  newLines.forEach((nl, i) => {
+    if (nl._old == null) return;
+    fill(prevNew + 1, i, prevOld + 1, nl._old);
+    prevNew = i; prevOld = nl._old;
+  });
+  fill(prevNew + 1, newLines.length, prevOld + 1, oldLines.length);
+  newLines.forEach(nl => { delete nl._old; });
   return newLines;
 }
 

@@ -286,6 +286,26 @@ def main():
         check(page.locator('text=Doplnit časy z nahrávky (Bangor)').count() == 0, 'načasovaná píseň už položku nemá')
         page.keyboard.press('Escape')
 
+        print('Bangor: doplnění jen chybějících časů, oprava verše si nechá čas')
+        page.evaluate("async id => { const st = await import('./js/store.js'), M = await import('./js/model.js'); const s = await st.getSong(id); const L = M.primaryVersion(s).lines; L[0].start = 1900; L[1].start = null; L[2].start = null; await st.saveSong(s); }", dau)
+        page.goto(url + '#/song/' + dau)
+        page.click('button[aria-label="Další možnosti"]')
+        page.click('text=Doplnit časy z nahrávky (Bangor)')
+        page.wait_for_selector('text=/✓ Doplněno 2 chybějících časů/', timeout=20000)
+        check([l[1] for l in times()[0]] == [1900, 5000, 8000, 11000], 'doplněny jen chybějící časy, ostatní beze změny')
+        page.goto(url + '#/edit/' + dau)
+        page.wait_for_selector('textarea')
+        txt = page.input_value('textarea')
+        check('[00:05.00]' + LINES[1] in txt, 'píseň s časy se upravuje i se značkami času')
+        # celý řádek přepsaný i se značkou času
+        page.fill('textarea', txt.replace('[00:05.00]' + LINES[1], LINES[1] + ' ddoe'))
+        page.click('button[type=submit]')
+        for _ in range(50):
+            if not page.evaluate("() => location.hash").startswith('#/edit/'): break
+            page.wait_for_timeout(100)
+        r = times()[0]
+        check(r[1][0] == LINES[1] + ' ddoe' and [l[1] for l in r] == [1900, 5000, 8000, 11000], 'opravený verš si nechal čas')
+
         bangor_state['up'] = False
         page.goto(url + '#/song/' + tri)
         page.click('button[aria-label="Další možnosti"]')

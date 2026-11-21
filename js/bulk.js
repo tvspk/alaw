@@ -628,15 +628,16 @@ export const songsWithoutText = songs => songs.filter(s => !primaryVersion(s).li
 
 // ---------- doplnění časů k hotovému textu (Bangor, časy slov) ----------
 // Rozhodnutí zadavatele: přepis se použije jen na časy (neukládá se), verše bez shody se dopočítají.
-// Jen písně, jejichž hlavní verze má text, vlastní nahrávku a žádné časy.
-export const needsTimes = song => { const m = primaryVersion(song); return !!m.lines.length && !!m.audio && !isSynced(m); };
+// Jen písně, jejichž hlavní verze má text, vlastní nahrávku a aspoň jednomu verši chybí čas (doplní se jen chybějící).
+const missingTimes = v => v.lines.some(l => l.start == null);
+export const needsTimes = song => { const m = primaryVersion(song); return !!m.lines.length && !!m.audio && missingTimes(m); };
 
 export async function timesFromRecording(songId, onWait = () => {}) {
   let song = await getSong(songId);
   if (!song) throw new Error(t('Píseň nenalezena.'));
   const m = primaryVersion(song);
   if (!m.lines.length) throw new Error(t('Píseň nemá text.'));
-  if (isSynced(m)) throw new Error(t('Píseň už časy má.'));
+  if (!missingTimes(m)) throw new Error(t('Píseň už časy má.'));
   if (!m.audio) throw new Error(t('Hlavní verze nemá vlastní nahrávku.'));
   const blob = await getAudioBlob(m.audio.key);
   if (!blob) throw new Error(t('Nahrávka v tomto zařízení není (ještě se nestáhla synchronizací?).'));
@@ -646,14 +647,16 @@ export async function timesFromRecording(songId, onWait = () => {}) {
   if (!r.ok) throw new Error(t('Přepis se s textem skoro neshoduje ({a} z {n} veršů), časy jsem nedoplnil. Načasuj píseň ťukáním.', { a: r.anchored, n: r.total }));
   song = await getSong(songId); // mezitím se mohla změnit (synchronizace, úprava)
   const m2 = song && primaryVersion(song);
-  if (!m2 || isSynced(m2) || m2.lines.length !== m.lines.length || m2.lines.some((l, i) => l.id !== m.lines[i].id || l.text !== m.lines[i].text))
+  if (!m2 || m2.lines.length !== m.lines.length || m2.lines.some((l, i) => l.id !== m.lines[i].id || l.text !== m.lines[i].text || l.start !== m.lines[i].start))
     throw new Error(t('Píseň se mezitím změnila, zkus to znovu.'));
   m2.lines = m2.lines.map((l, i) => ({ ...l, start: r.lines[i].start }));
   await saveSong(song);
-  return { anchored: r.anchored, total: r.total };
+  return { anchored: r.anchored, total: r.total, fixed: r.fixed, filled: r.filled };
 }
 
-const timesDone = r => t('✓ Načasováno: {a} z {n} veršů podle nahrávky, ostatní odhadem.', { a: r.anchored, n: r.total });
+const timesDone = r => r.fixed
+  ? t('✓ Doplněno {f} chybějících časů ({a} podle nahrávky, ostatní odhadem), {k} veršů si čas nechalo.', { f: r.filled, a: r.anchored, k: r.fixed })
+  : t('✓ Načasováno: {a} z {n} veršů podle nahrávky, ostatní odhadem.', { a: r.anchored, n: r.total });
 
 // Jedna píseň (nabídka písně) s okénkem průběhu.
 export async function runTimes(songId) {
@@ -715,8 +718,8 @@ export async function renderTimes(root, nav) {
     el('header', { class: 'topbar' }, iconBtn('back', t('Zpět'), () => nav.back()), el('h1', { text: t('Doplnit časy z nahrávek') })),
     el('section', { class: 'section' },
       todo.length
-        ? el('p', { text: pl(todo.length, '{n} píseň má text i nahrávku, ale ne časy veršů.', '{n} písně mají text i nahrávku, ale ne časy veršů.', '{n} písní má text i nahrávku, ale ne časy veršů.') + ' ' + t('Bangor nahrávku přepíše a podle slov, která se shodují s textem, najde, kdy který verš začíná. Ostatní verše dopočítá odhadem. Text se nemění a přepis se neukládá.') })
-        : el('p', { text: t('Všechny písně s textem a nahrávkou už časy mají.') }),
+        ? el('p', { text: pl(todo.length, '{n} píseň má text i nahrávku, ale chybí jí časy veršů (všem nebo některým).', '{n} písně mají text i nahrávku, ale chybí jim časy veršů (všem nebo některým).', '{n} písní má text i nahrávku, ale chybí jim časy veršů (všem nebo některým).') + ' ' + t('Bangor nahrávku přepíše a podle slov, která se shodují s textem, najde, kdy který verš začíná. Ostatní verše dopočítá odhadem. Verše, které čas už mají, se nemění. Text se nemění a přepis se neukládá.') })
+        : el('p', { text: t('Všechny písně s textem a nahrávkou už mají časy u všech veršů.') }),
       todo.length ? el('div', { class: 'row' }, startBtn) : null,
       info,
       todo.length ? el('p', { class: 'hint', style: { marginTop: '8px' }, text: t('Časy jsou přibližné. Nech okno s Alaw viditelné a počítač neuspávej. Verš, který nesedí, opravíš v písni ťukáním (⏱).') }) : null),

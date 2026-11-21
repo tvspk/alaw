@@ -774,7 +774,7 @@ export const EN = {
   "Otevřít Cloudflare": "Open Cloudflare",
   "Soubor worker.js": "The worker.js file",
   "Zdarma. Potřebuje ho jen prohlížeč na počítači – v telefonu (APK) hledá Alaw ve všech zdrojích přímo.": "Free. Only the browser on a computer needs it – on the phone (APK), Alaw searches all sources directly.",
-  "Bangor nahrávku přepíše a podle slov, která se shodují s textem, najde, kdy který verš začíná. Ostatní verše dopočítá odhadem. Text se nemění a přepis se neukládá.": "Bangor transcribes the recording and uses the words that match the lyrics to work out when each line starts. It estimates the rest. The lyrics aren't changed and the transcription isn't saved.",
+  "Bangor nahrávku přepíše a podle slov, která se shodují s textem, najde, kdy který verš začíná. Ostatní verše dopočítá odhadem. Verše, které čas už mají, se nemění. Text se nemění a přepis se neukládá.": "Bangor transcribes the recording and uses the words that match the lyrics to work out when each line starts. It estimates the rest. Lines that already have a timing are left as they are. The lyrics aren't changed and the transcription isn't saved.",
   "Bangor v nahrávce žádný zpěv nerozpoznal.": "Bangor didn't recognise any singing in the recording.",
   "Doplnit časy z nahrávek": "Add timings from recordings",
   "Doplnit časy z nahrávky (Bangor)": "Add timings from the recording (Bangor)",
@@ -786,9 +786,9 @@ export const EN = {
   "Píseň nemá text.": "The song has no lyrics.",
   "Píseň se mezitím změnila, zkus to znovu.": "The song changed in the meantime – please try again.",
   "Píseň už časy má.": "The song already has timings.",
-  "Písně, které text mají, ale ne časy veršů: ": "Songs with lyrics but no line timings: ",
+  "Písně, které text mají, ale chybí jim časy veršů: ": "Songs with lyrics but missing line timings: ",
   "Přepis se s textem skoro neshoduje ({a} z {n} veršů), časy jsem nedoplnil. Načasuj píseň ťukáním.": "The transcription barely matches the lyrics ({a} of {n} lines), so no timings were added. Time the song by tapping.",
-  "Všechny písně s textem a nahrávkou už časy mají.": "All songs with lyrics and a recording already have timings.",
+  "Všechny písně s textem a nahrávkou už mají časy u všech veršů.": "All songs with lyrics and a recording already have timings for every line.",
   "Zastaveno.": "Stopped.",
   "Zpracovávám {i}/{n}: {t}": "Processing {i}/{n}: {t}",
   "Zpracovávám…": "Processing…",
@@ -806,12 +806,13 @@ export const EN = {
   "Poznat podle jazyka": "Detect by language",
   "{n} řádků → {v} veršů, {p} s překladem.": "{n} rows → {v} lines, {p} with a translation.",
   "Řádky překladu se přesunou pod předchozí verš jako jeho překlad. Zkontroluj náhled.": "Translation rows will be moved under the line above as its translation. Check the preview.",
+  "✓ Doplněno {f} chybějících časů ({a} podle nahrávky, ostatní odhadem), {k} veršů si čas nechalo.": "✓ Filled in {f} missing timings ({a} from the recording, the rest estimated); {k} lines kept their timing.",
 };
 
 // Množná čísla: klíč = český tvar pro 1, hodnota = [jedno, víc].
 export const EN_PL = {
   "Překlad přesunut u {n} verše.": ["Translation moved for {n} line.", "Translation moved for {n} lines."],
-  "{n} píseň má text i nahrávku, ale ne časy veršů.": ["{n} song has lyrics and a recording but no line timings.", "{n} songs have lyrics and a recording but no line timings."],
+  "{n} píseň má text i nahrávku, ale chybí jí časy veršů (všem nebo některým).": ["{n} song has lyrics and a recording but is missing line timings (all or some).", "{n} songs have lyrics and a recording but are missing line timings (all or some)."],
   "(pokrok převeden u {n} verše)": ["(progress carried over for {n} line)", "(progress carried over for {n} lines)"],
   "Na špatném místě: {n} slovo.": ["In the wrong place: {n} word.", "In the wrong place: {n} words."],
   "Odkazy: {n} píseň spárováno": ["Links: {n} song matched", "Links: {n} songs matched"],

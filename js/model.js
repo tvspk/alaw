@@ -365,7 +365,7 @@ export function splitInterleaved(lines, mode = 'auto', lang = 'en') {
 // ---------- časy veršů z přepisu se slovy (Bangor) ----------
 // Přepsaná slova s časy se přiřadí ke slovům textu popořadě podle podobnosti (přepis zpěvu má chyby, proto ne doslova).
 // Verš, kde se shoduje aspoň třetina slov, dostane čas podle prvních shodných slov; ostatní verše se dopočítají
-// mezi sousedy podle počtu slov (rozhodnutí zadavatele). words = [{ w, s, e }] (ms).
+// mezi sousedy podle počtu slov (rozhodnutí zadavatele). Verše, které čas už mají, se nemění. words = [{ w, s, e }] (ms).
 // Vrací { lines (kopie s časy), anchored, total, ok } – ok = shoda stačí na použití.
 const wordKeys = text => String(text || '').split(/[\s\-–—/]+/).map(w => fold(w).replace(/[^\p{L}\p{N}]/gu, '')).filter(Boolean);
 
@@ -395,7 +395,10 @@ const MAX_CELLS = 6e6;
 export function alignTimes(lines, words) {
   const out = lines.map(l => ({ ...l }));
   const total = out.length;
-  const fail = (anchored = 0) => ({ lines: out, anchored, total, ok: false });
+  // verše, které čas už mají (ťukání, LRCLIB, oprava textu), zůstanou beze změny a slouží jako pevné body
+  const fixed = out.map(l => l.start != null && Number.isFinite(+l.start));
+  const nFixed = fixed.filter(Boolean).length;
+  const fail = (anchored = 0) => ({ lines: out, anchored, fixed: nFixed, filled: 0, total, ok: false });
   const W = (Array.isArray(words) ? words : []).map(w => ({ k: fold(w.w).replace(/[^\p{L}\p{N}]/gu, ''), s: +w.s, e: +(w.e ?? w.s) }))
     .filter(w => w.k && Number.isFinite(w.s));
   if (!total || !W.length) return fail();
@@ -432,9 +435,12 @@ export function alignTimes(lines, words) {
   const gaps = W.slice(1).map((w, i) => w.s - W[i].s).filter(g => g > 0).sort((a, b) => a - b);
   const wd = Math.min(700, Math.max(150, gaps.length ? gaps[gaps.length >> 1] : 350));
   // kotvy: verše s dost shodnými slovy
-  const starts = new Array(total).fill(null);
+  const starts = out.map((l, i) => fixed[i] ? +l.start : null);
+  const nextFixed = new Array(total).fill(Infinity);
+  for (let i = total - 2; i >= 0; i--) nextFixed[i] = fixed[i + 1] ? starts[i + 1] : nextFixed[i + 1];
   let last = -Infinity, anchored = 0;
   for (let i = 0, ti = 0; i < total; ti += lineTok[i], i++) {
+    if (fixed[i]) { last = Math.max(last, starts[i]); continue; }
     const cnt = lineTok[i];
     if (!cnt) continue;
     const hit = [];
@@ -444,12 +450,12 @@ export function alignTimes(lines, words) {
     const est = hit.slice(0, 3).map(k => W[match[k]].s - T[k].p * wd).sort((a, b) => a - b);
     const wt = W[match[hit[0]]].s;
     let st = Math.max(0, est[est.length >> 1]);
-    if (st <= last) st = wt > last ? wt : null; // pořadí veršů musí sedět
-    if (st == null) continue;
+    if (st <= last) st = wt > last ? wt : null; // pořadí veršů musí sedět (i vůči pevným časům)
+    if (st == null || st >= nextFixed[i]) continue;
     starts[i] = Math.round(st); last = st; anchored++;
   }
   const textLines = lineTok.filter(Boolean).length;
-  if (anchored < 2 || anchored < 0.3 * textLines) return fail(anchored);
+  if (nFixed ? anchored + nFixed < 2 : anchored < 2 || anchored < 0.3 * textLines) return fail(anchored);
   // dopočet ostatních veršů podle počtu slov
   const wgt = lineTok.map(c => Math.max(1, c));
   const idx = starts.map((s, i) => s == null ? -1 : i).filter(i => i >= 0);
@@ -479,8 +485,12 @@ export function alignTimes(lines, words) {
     let acc = 0;
     for (let i = aN + 1; i < total; i++) { acc += wgt[i - 1]; starts[i] = Math.round(starts[aN] + span * acc / after); }
   }
-  for (let i = 0; i < total; i++) { if (i && starts[i] < starts[i - 1]) starts[i] = starts[i - 1]; out[i].start = starts[i]; }
-  return { lines: out, anchored, total, ok: true };
+  for (let i = 0; i < total; i++) {
+    if (fixed[i]) continue;
+    if (i && starts[i] < starts[i - 1]) starts[i] = starts[i - 1];
+    out[i].start = starts[i];
+  }
+  return { lines: out, anchored, fixed: nFixed, filled: total - nFixed, total, ok: true };
 }
 
 // Přiřadí řádky překladu ze zdroje k veršům (jen když počet řádků sedí).

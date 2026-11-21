@@ -49,7 +49,7 @@ Alaw (velšsky „melodie“): texty písní (hlavně velšských) a jejich uče
   („Přepsat nenalezené z nahrávek“). Verše i s časy začátků; bez textu = hlavní verze, s textem = další verze k porovnání
   (a nenačasovaný text si z přepisu převezme časy u shodných veršů). Velké nahrávky se pro přepis posílají jako zmenšená kopie
   (mono 16 kHz; uložená nahrávka se nemění). Přepis oběma službami = dvě verze, rozdíly ukážou nejistá místa.
-- **Časy veršů z nahrávky (Bangor):** u písní, které mají text a nahrávku, ale ne časy, Bangor nahrávku přepíše se slovy a aplikace podle shodných slov doplní, kdy který verš začíná (ostatní dopočítá). Nabídka písně → „Doplnit časy z nahrávky (Bangor)“, hromadně Nastavení → Bangor → „⏱ Doplnit časy z nahrávek“.
+- **Časy veršů z nahrávky (Bangor):** u písní, které mají text a nahrávku, ale ne časy, Bangor nahrávku přepíše se slovy a aplikace podle shodných slov doplní, kdy který verš začíná (ostatní dopočítá; verše, které čas už mají, se nemění – doplní se jen chybějící). Nabídka písně → „Doplnit časy z nahrávky (Bangor)“, hromadně Nastavení → Bangor → „⏱ Doplnit časy z nahrávek“.
 - **Oddělit překlad vložený mezi verši** (nabídka písně): když zdroj dal pod každý verš překlad jako další řádek, přesune ho jako překlad verše (náhled, angličtina/čeština).
 - **Výměna hlavní verze** (Porovnat verze → nabídka → Udělat hlavní verzí): pokrok veršů se převede na nové znění,
   nahrávka přejde na novou hlavní verzi, když vlastní nemá.

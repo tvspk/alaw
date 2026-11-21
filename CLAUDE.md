@@ -42,7 +42,8 @@
   přístup k místní síti / aplikacím v zařízení (`targetAddressSpace: 'loopback'`). V APK skryté. Zapnutí `prefs.bangor` (zařízení).
   Zip `alaw-bangor.zip` přidává workflow do vydání. Změna závislostí ve spouštěči → zvýšit značku `pripraveno-1.txt` (jinak se nepřeinstaluje).
   **Časy veršů k hotovému textu (0.14.0):** `words=1` → časy slov (`bangorWords`), `model.alignTimes` je přiřadí k veršům (přepis se neukládá,
-  nesedící verše se dopočítají), `bulk.js` `timesFromRecording`/`runTimes`, obrazovka `#/times`. Starší program bez `words` v `/health` → hláška.
+  nesedící verše se dopočítají; verše s časem jsou pevné body – doplní se jen chybějící), `bulk.js` `timesFromRecording`/`runTimes`,
+  obrazovka `#/times`. Starší program bez `words` v `/health` → hláška. Oddělení překladu ze střídavých řádků: `model.splitInterleaved` (0.14.1).
   Test: `test_prepis.py` (napodobený program). Ruční zkouška skutečného programu: `ALAW_BANGOR_MODEL=Systran/faster-whisper-tiny python3 bangor/alaw_bangor.py`.
 - **Nápověda „?“** (0.13, `js/help.js`): nová služba/přístup v Nastavení → téma v `TOPICS` + `helpTitle(...)`; kroky přes `t()`
   + angličtina; postupy cizích webů ověřit webovým hledáním. Test v `test_anglictina.py` (seznam témat na počítači).

@@ -21,7 +21,7 @@ import { importFromUrl, showPreview } from './search.js';
 import { cleanText } from './sources.js';
 import { groqKey, setGroqKey, checkGroq, availableEngines, defaultEngine, ENGINES, bangorPossible, checkBangor, bangorZip } from './stt.js';
 
-export const APP_VERSION = '0.14.1';
+export const APP_VERSION = '0.14.2';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně
@@ -482,7 +482,7 @@ function bangorBlock(drawChoice) {
           : el('button', { type: 'button', class: 'btn small primary', text: t('Zapnout a ověřit'), onclick: () => check(true) }),
         on ? el('button', { type: 'button', class: 'btn small danger', text: t('Vypnout'), onclick: () => { setPrefs({ bangor: false }); draw(t('Bangor vypnutý.')); } }) : null),
       status,
-      on ? el('p', { style: { marginTop: '10px' } }, t('Písně, které text mají, ale ne časy veršů: '),
+      on ? el('p', { style: { marginTop: '10px' } }, t('Písně, které text mají, ale chybí jim časy veršů: '),
         el('a', { href: '#/times', text: t('⏱ Doplnit časy z nahrávek') })) : null);
     drawChoice();
   }
