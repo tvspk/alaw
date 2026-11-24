@@ -8,7 +8,8 @@ set "VENV=%DATA%\venv"
 set "VPY=%VENV%\Scripts\python.exe"
 set "PY312=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
 
-if exist "%DATA%\pripraveno-1.txt" goto run
+if exist "%DATA%\pripraveno-2.txt" goto run
+if exist "%DATA%\pripraveno-1.txt" if exist "%VPY%" goto vocals
 
 echo.
 echo  Alaw - přepis Bangor: první spuštění
@@ -42,6 +43,30 @@ echo  Našel jsem grafickou kartu NVIDIA - instaluji knihovny pro rychlý přepi
 "%VPY%" -m pip install --disable-pip-version-check nvidia-cublas-cu12 "nvidia-cudnn-cu12==9.*"
 :nogpu
 echo hotovo> "%DATA%\pripraveno-1.txt"
+
+:vocals
+rem 1.2: oddělení zpěvu od hudby (Demucs + PyTorch). Když se nepovede, program funguje dál bez něj.
+echo.
+echo  Doinstaluji oddělení zpěvu od hudby (Demucs) - přepis pak neztrácí sloky, kde hraje hudba nahlas.
+echo  Jednou, trvá to pár minut.
+where nvidia-smi >nul 2>&1
+if errorlevel 1 goto torchcpu
+echo  S grafickou kartou NVIDIA se stahuje asi 3 GB.
+for %%c in (cu128 cu126 cu129 cu130) do (
+  "%VPY%" -m pip install --disable-pip-version-check torch --index-url https://download.pytorch.org/whl/%%c && goto demucs
+)
+:torchcpu
+"%VPY%" -m pip install --disable-pip-version-check torch --index-url https://download.pytorch.org/whl/cpu
+if errorlevel 1 "%VPY%" -m pip install --disable-pip-version-check torch
+:demucs
+"%VPY%" -m pip install --disable-pip-version-check "demucs==4.1.0"
+if errorlevel 1 goto novocals
+echo hotovo> "%DATA%\pripraveno-2.txt"
+goto run
+:novocals
+echo.
+echo  Oddělení zpěvu se nepodařilo nainstalovat - přepis funguje i bez něj.
+echo  Zkusím to znovu při příštím spuštění.
 
 :run
 echo.

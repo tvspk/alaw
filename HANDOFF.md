@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 21. 11. 2026, verze **0.14.2** (APK versionCode 21). Odpovídej zadavateli **česky**.
+> Stav k 24. 11. 2026, verze **0.15.0** (APK versionCode 22), program Bangor **1.2**. Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -223,12 +223,32 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
    spárovanými sousedy převezme časy nespárovaných starých veršů ze stejného úseku, když jich je stejně. Pozn.: píseň s časy se v Upravit
    upravuje jako LRC (`[mm:ss.xx]` na začátku řádku) – při opravě slov se značkou čas zůstával už dřív; nové je to pro řádek přepsaný celý.
 
+17. **Bangor 1.2 – oddělení zpěvu + verše podle pauz (0.15.0):** zadavatel hlásil, že Bangor u „Lan y Môr“ (Adwaith, živá session,
+   2:40) vzal „strašně málo textu“. Rozbor v prostředí Claude se skutečným modelem (text písně se nevypisoval, jen čísla): zpívá se
+   jen ~63 s (0:14–0:40, 0:54–1:20, 2:13–2:38, uprostřed hudba); přepis pokryl 65 % zpívaných míst, **chyběla poslední sloka** (hlasitá
+   hudba) a 6 dlouhých úseků = 6 „veršů“ (až 27 slov). Zkoušeno: `no_speech_threshold=None`, `without_timestamps`, VAD (na zpěvu
+   s hudbou nic nenajde), kousky po 15 s (víc slov, ale polovina mimo zpěv = halucinace) → nepomohlo. **Oddělený zpěv (Demucs)
+   = 80 % pokrytí, žádná díra ve zpěvu, 89 slov místo 73.** Zadavatel schválil oba návrhy („proveď co navrhuješ“).
+   - Program 1.2: oddělení zpěvu ve zvláštním procesu (viz CLAUDE.md), spouštěč doinstaluje PyTorch + Demucs (s NVIDIA ~3 GB),
+     značka `pripraveno-2.txt` (při `pripraveno-1` se jen doinstaluje oddělení). Selhání instalace ani oddělení přepis nezastaví.
+     U Whisperu se pauza ve zpěvu „schová“ do délky slova (držený tón 1–3 s, mezery 0) → `splitSegment` počítá mezeru + délku
+     slova nad 0,7 s + interpunkci; na „Lan y Môr“ vyšlo 12 veršů po 5–9 slovech, začátky pravidelně po ~7 s.
+   - Aplikace 0.15.0: přepis přes Bangor žádá `words=1` (program 1.1 i 1.2; 1.0 bez slov funguje dál bez dělení), hláška
+     „Program Bangor odděluje zpěv od hudby…“. Časy veršů (`bangorWords`) z odděleného zpěvu taky přesnější.
+   - **Neověřeno: instalace PyTorch/Demucs na Windows (index download.pytorch.org z prostředí Claude nedostupný) a souběh knihoven
+     CUDA (torch v podprocesu, ctranslate2 v hlavním).** Groq dělení na verše zatím nemá (nezadáno; `timestamp_granularities[]=word`).
+
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
 Zadavatel po vydání 0.12 napsal „ok všechno v pohodě“ (Bangor na Windows zřejmě v pořádku – při další práci krátce ověřit,
 zda přepis přes Bangor opravdu proběhl). CZ/EN (0.10) a dva překlady + stažení textu (0.11) viděl („perfektní“), zkouší.
 Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna verze/mazání (0.8) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
 
-## Rozpracováno a další kroky (stav 21. 11. 2026 večer, verze 0.14.2)
+## Rozpracováno a další kroky (stav 24. 11. 2026, verze 0.15.0)
+
+**24. 11.:** vydáno 0.15.0 + Bangor 1.2 (bod 17). Zadavatel má: stáhnout nový zip (Nastavení → Bangor → Stáhnout program),
+rozbalit přes starý, spustit `alaw-bangor.bat` (doinstaluje oddělení zpěvu), aplikaci obnovit 2× F5 a zkusit znovu „Lan y Môr“.
+Pak ověřit, že okno programu píše „Zpěv oddělen od hudby (… na grafické kartě)“; když píše „Zpěv se nepodařilo oddělit“, poslat text z okna.
+Písně přepsané dřív lze přepsat znovu (přibude další verze „Přepis (Bangor) 2“; max. 3 verze).
 
 Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „hotovo“. Zadavatel není programátor, odpovídat česky.
 

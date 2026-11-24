@@ -18,6 +18,11 @@ nikam neodcházejí, nic se neplatí a nemá limity.
    → Bangor → „Zapnout a ověřit“. Když se Chrome zeptá, jestli smí
    stránka přistupovat k aplikacím v tomto zařízení, povol to.
 
+Od verze 1.2 program před přepisem oddělí zpěv od hudby (Demucs), takže
+neztrácí sloky, kde hraje hudba nahlas. Při prvním spuštění 1.2 se to
+jednou doinstaluje (s kartou NVIDIA asi 3 GB). Když se instalace nepovede,
+program přepisuje jako dřív a zkusí ji znovu při dalším spuštění.
+
 Bez grafické karty NVIDIA počítá procesor – funguje, jen pomaleji.
 Program se ukončí zavřením okna. Data jsou ve složce
 %LOCALAPPDATA%\AlawBangor (program) a %USERPROFILE%\.cache\huggingface (model).
@@ -38,3 +43,8 @@ Runs only on this computer: recordings stay here, free, no limits.
 4. In Alaw (in the browser on this computer): Settings → Transcription
    from a recording → Bangor → "Turn on and check". If Chrome asks
    whether the page may access apps on this device, allow it.
+
+From version 1.2 the program separates the vocals from the music before
+transcribing (Demucs), so verses with loud music are no longer lost. The
+first run of 1.2 installs it once (about 3 GB with an NVIDIA card). If that
+fails, the program transcribes as before and tries again next time.

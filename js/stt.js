@@ -43,11 +43,51 @@ export async function checkGroq(key) {
   return ids;
 }
 
+// Dlouhý úsek Whisperu (u zpěvu klidně dva tři verše naráz) rozdělí na verše podle časů slov.
+// U zpěvu Whisper pauzu „schová“ do délky slova (držený tón 1–3 s, mezery mezi slovy skoro nulové),
+// proto se za hranici verše počítá mezera i dlouho držené slovo (a interpunkce). Verš má aspoň 3 slova, nejvýš ~12.
+const LINE_MIN = 3, LINE_MAX = 12, CUT_SCORE = 0.8;
+export function splitSegment(seg) {
+  const words = (Array.isArray(seg.words) ? seg.words : [])
+    .filter(w => w && typeof w.word === 'string' && w.word.trim() && Number.isFinite(+w.start) && Number.isFinite(+w.end));
+  if (words.length < LINE_MIN * 2) return [{ start: +seg.start, end: +seg.end, text: seg.text }];
+  const n = words.length;
+  const score = words.map((w, i) => i === n - 1 ? -1
+    : Math.max(0, +words[i + 1].start - +w.end) + Math.max(0, +w.end - +w.start - 0.7) + (/[.!?;:,][\s"”’»)]*$/.test(w.word) ? 0.6 : 0));
+  const cuts = [];                                   // hranice = index posledního slova verše
+  const piece = i => {                               // kus, ve kterém slovo i leží: (lo, hi] podle dosavadních hranic
+    let lo = -1, hi = n - 1;
+    for (const c of cuts) { if (c < i && c > lo) lo = c; if (c >= i && c < hi) hi = c; }
+    return [lo, hi];
+  };
+  const fits = i => { const [lo, hi] = piece(i); return !cuts.includes(i) && i - lo >= LINE_MIN && hi - i >= LINE_MIN; };
+  for (const i of [...score.keys()].sort((a, b) => score[b] - score[a])) if (score[i] >= CUT_SCORE && fits(i)) cuts.push(i);
+  for (let again = true; again;) {                   // příliš dlouhé verše dělit na nejsilnější hranici
+    again = false;
+    const bounds = [-1, ...cuts.slice().sort((a, b) => a - b), n - 1];
+    for (let k = 1; k < bounds.length; k++) {
+      if (bounds[k] - bounds[k - 1] <= LINE_MAX) continue;
+      let best = -1;
+      for (let i = bounds[k - 1] + 1; i < bounds[k]; i++) if (fits(i) && (best < 0 || score[i] > score[best])) best = i;
+      if (best >= 0) { cuts.push(best); again = true; break; }
+    }
+  }
+  const bounds = [-1, ...cuts.sort((a, b) => a - b), n - 1];
+  const out = [];
+  for (let k = 1; k < bounds.length; k++) {
+    const ws = words.slice(bounds[k - 1] + 1, bounds[k] + 1);
+    out.push({ start: +ws[0].start, end: +ws[ws.length - 1].end, text: ws.map(w => w.word).join('').replace(/\s+/g, ' ').trim() });
+  }
+  return out;
+}
+
 // Úseky Whisperu → verše. Vynechá hudbu bez zpěvu a „halucinace“ (opakování, nejistý text bez řeči).
+// Úseky s časy slov (Bangor) se rozdělí na verše (splitSegment).
 export function whisperLines(segments) {
   const segs = (Array.isArray(segments) ? segments : []).filter(s => s && typeof s.text === 'string')
     .filter(s => !(s.no_speech_prob > 0.6 && s.avg_logprob < -0.7) && !(s.compression_ratio > 2.6))
-    .filter(s => !/^[\s♪♫♬*().,…\-[\]]*$/.test(s.text) && !/^\s*[([].*[)\]]\s*$/.test(s.text));
+    .filter(s => !/^[\s♪♫♬*().,…\-[\]]*$/.test(s.text) && !/^\s*[([].*[)\]]\s*$/.test(s.text))
+    .flatMap(splitSegment);
   let prevEnd = null;
   return cleanTranscript(segs.map(s => {
     const line = { start: +s.start, text: s.text.replace(/[♪♫♬]/g, ''), new_stanza: prevEnd != null && +s.start - prevEnd > 3.5 };
@@ -117,9 +157,9 @@ const sleep = ms => new Promise(res => setTimeout(res, ms));
 const POLL = () => window.__alawBangorPoll || 2000;
 
 // Úloha v programu Bangor → úseky přepisu (s words = i časy jednotlivých slov).
-async function bangorJob(blob, { title = '', language = 'cy', name = '' } = {}, onWait = () => {}, words = false) {
+async function bangorJob(blob, { title = '', language = 'cy', name = '' } = {}, onWait = () => {}, words = false, need = words) {
   let h = await checkBangor();
-  if (words && !h.words) throw Object.assign(new SttError(t('Program Bangor na počítači je starší verze a časy slov neumí. V Nastavení → Bangor stáhni program znovu, rozbal ho přes starý, zavři okno starého programu a spusť alaw-bangor.bat.')), { stop: true });
+  if (need && !h.words) throw Object.assign(new SttError(t('Program Bangor na počítači je starší verze a časy slov neumí. V Nastavení → Bangor stáhni program znovu, rozbal ho přes starý, zavři okno starého programu a spusť alaw-bangor.bat.')), { stop: true });
   while (!h.ready) {
     if (h.stage === 'error') throw new SttError(t('Program Bangor nemohl připravit model: {e}', { e: h.error || '' }));
     onWait(h.stage === 'download' ? t('Program Bangor stahuje model (poprvé asi 1,6 GB)…') : t('Program Bangor načítá model…'));
@@ -129,7 +169,7 @@ async function bangorJob(blob, { title = '', language = 'cy', name = '' } = {}, 
   onWait(t('Posílám nahrávku programu Bangor…'));
   const q = new URLSearchParams({ prompt: title.slice(0, 200), name });
   if (BANGOR_LANGS.has(language)) q.set('language', language);
-  if (words) q.set('words', '1');
+  if (words && h.words) q.set('words', '1');
   const { id } = await bangorFetch(`/transcribe?${q}`, { method: 'POST', body: blob, headers: { 'Content-Type': 'application/octet-stream' } }, 600000);
   let fails = 0;
   for (;;) {
@@ -140,12 +180,14 @@ async function bangorJob(blob, { title = '', language = 'cy', name = '' } = {}, 
     if (j.state === 'done') return j.segments || [];
     if (j.state === 'error') throw new SttError(t('Bangor: {e}', { e: j.error || '?' }));
     onWait(j.state === 'queued' ? t('Čekám, až program Bangor dokončí předchozí přepis…')
+      : j.phase === 'vocals' ? t('Program Bangor odděluje zpěv od hudby…')
       : t('Přepisuji přes Bangor ({d})… {p} %', { d: h.device === 'gpu' ? t('grafická karta') : t('procesor'), p: Math.round((j.progress || 0) * 100) }));
   }
 }
 
 export async function transcribeBangor(blob, opts = {}, onWait = () => {}) {
-  return whisperLines(await bangorJob(blob, opts, onWait));
+  // časy slov → dělení dlouhých úseků na verše (umí program od 1.1; starší je prostě nepošle)
+  return whisperLines(await bangorJob(blob, opts, onWait, true, false));
 }
 
 // Časy slov z nahrávky (pro doplnění časů k hotovému textu): [{ w, s, e }] (s, e v ms).

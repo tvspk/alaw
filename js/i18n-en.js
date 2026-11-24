@@ -731,6 +731,7 @@ export const EN = {
   "grafická karta": "graphics card",
   "procesor": "processor",
   "Čekám, až program Bangor dokončí předchozí přepis…": "Waiting for the Bangor program to finish the previous transcription…",
+  "Program Bangor odděluje zpěv od hudby…": "The Bangor program is separating the vocals from the music…",
   "✓ Program běží – počítá na grafické kartě.": "✓ The program is running – using the graphics card.",
   "✓ Program běží – počítá na procesoru (pomaleji, ale funguje).": "✓ The program is running – using the processor (slower, but it works).",
   "⬇ Stáhnout program (Windows)": "⬇ Download the program (Windows)",

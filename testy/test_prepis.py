@@ -90,17 +90,29 @@ def bangor(route):
         calls['bangor'].append({'url': req.url, 'size': len(req.post_data_buffer or b'')})
         bangor_state['polls'] = 0
         bangor_state['wordsReq'] = 'words=1' in req.url
+        bangor_state['tri'] = 'prompt=C%C3%A2n+Tri' in req.url
         return route.fulfill(json={'id': 'abc123'}, headers=h)
     if path.startswith('/jobs/abc123'):
         bangor_state['polls'] += 1
-        if bangor_state['polls'] < 3:
-            return route.fulfill(json={'state': 'running', 'progress': 0.4, 'segments': [], 'error': None}, headers=h)
+        if bangor_state['polls'] < 3:  # 1.2: nejdřív oddělení zpěvu, pak přepis
+            return route.fulfill(json={'state': 'running', 'phase': 'vocals' if bangor_state['polls'] == 1 else 'transcribe',
+                                       'progress': 0.4, 'segments': [], 'error': None}, headers=h)
+        if bangor_state['wordsReq'] and bangor_state.get('tri'):
+            return route.fulfill(json={'state': 'done', 'progress': 1, 'segments': tri_segs(), 'vocals': True, 'error': None}, headers=h)
         if bangor_state['wordsReq']:
             return route.fulfill(json={'state': 'done', 'progress': 1, 'segments': word_segs(), 'error': None}, headers=h)
         segs = [{'start': 1.0, 'end': 3.5, 'text': ' ' + LINES[0], 'no_speech_prob': 0.05, 'avg_logprob': -0.3, 'compression_ratio': 1.2},
                 {'start': 3.6, 'end': 5.5, 'text': " A'r gwynt yn chwythu'n gryf", 'no_speech_prob': 0.05, 'avg_logprob': -0.3, 'compression_ratio': 1.2}]
         return route.fulfill(json={'state': 'done', 'progress': 1, 'segments': segs, 'error': None}, headers=h)
     return route.fulfill(status=404, json={'error': '?'}, headers=h)
+
+def tri_segs():
+    # 1.2: jeden dlouhý úsek se dvěma verši; poslední slovo prvního verše držené 1,6 s (pauzu Whisper schová do slova)
+    a, b = LINES[0].split(' '), "A'r gwynt yn chwythu'n gryf".split(' ')
+    words = [{'start': 1 + 0.4 * k, 'end': 1 + 0.4 * k + (1.6 if k == len(a) - 1 else 0.35), 'word': ' ' + w, 'p': 0.9} for k, w in enumerate(a)]
+    words += [{'start': 5.05 + 0.4 * k, 'end': 5.05 + 0.4 * k + 0.35, 'word': ' ' + w, 'p': 0.9} for k, w in enumerate(b)]
+    return [{'start': 1.0, 'end': 7.0, 'text': ' ' + ' '.join(a + b), 'no_speech_prob': 0.05, 'avg_logprob': -0.3, 'compression_ratio': 1.2, 'words': words},
+            {'start': 7.2, 'end': 7.6, 'text': ' ♪', 'no_speech_prob': 0.1, 'avg_logprob': -0.5, 'compression_ratio': 0.5, 'words': [{'start': 7.2, 'end': 7.6, 'word': ' ♪', 'p': 0.2}]}]
 
 def word_segs():
     # přepis se slovy: verš i začíná ve 2 + 3i s, slova po 0,4 s, třetí verš úplně špatně (dopočítá se)
@@ -250,8 +262,19 @@ def main():
         wait(page, "location.hash.startsWith('#/compare/')", 30000)
         b = calls['bangor'][-1]
         check('language=cy' in b['url'] and 'prompt=C%C3%A2n+Tri' in b['url'] and b['size'] > 10000, 'Bangor: původní nahrávka, velština, název jako nápověda')
-        v = page.evaluate("async id => (await (await import('./js/store.js')).getSong(id)).versions.map(v => [v.label, v.lines.map(l => l.text)])", tri)
-        check(v[1] == ['Přepis (Bangor)', [LINES[0], "A'r gwynt yn chwythu'n gryf"]], 'přepis Bangor přidán jako další verze')
+        check('words=1' in b['url'] and 'vocals=' not in b['url'], 'Bangor: přepis s časy slov (dělení na verše), oddělení zpěvu výchozí')
+        v = page.evaluate("async id => (await (await import('./js/store.js')).getSong(id)).versions.map(v => [v.label, v.lines.map(l => l.text), v.lines.map(l => l.start)])", tri)
+        check(v[1][:2] == ['Přepis (Bangor)', [LINES[0], "A'r gwynt yn chwythu'n gryf"]], 'přepis Bangor přidán jako další verze, dlouhý úsek rozdělen na verše')
+        check(v[1][2] == [1000, 5050], 'verše z časů slov: začátek prvního slova verše')
+        r = page.evaluate("""async () => { const m = await import('./js/stt.js');
+          const w = (s, n, held) => Array.from({ length: n }, (_, k) => ({ start: s + 0.4 * k, end: s + 0.4 * k + (k === n - 1 && held ? 2 : 0.35), word: ' w' + k }));
+          const seg = words => ({ start: words[0].start, end: words.at(-1).end, text: words.map(x => x.word).join(''), words, no_speech_prob: 0, avg_logprob: -0.2, compression_ratio: 1 });
+          const one = m.splitSegment(seg([...w(0, 4, false), ...w(1.6, 2, true)]));          // 6 slov bez výrazné pauzy → celé
+          const long = m.splitSegment(seg(w(0, 20, false)));                                  // 20 slov bez pauzy → rozdělit (max ~12)
+          const short = m.splitSegment(seg([...w(0, 2, true), ...w(3, 5, false)]));            // pauza po 2 slovech → verš by měl < 3 slova → nedělit
+          return [one.length, long.map(l => l.text.split(' ').length), short.length]; }""")
+        print('   ', r)
+        check(r[0] == 1 and all(3 <= n <= 12 for n in r[1]) and sum(r[1]) == 20 and r[2] == 1, 'dělení na verše: krátký úsek celý, dlouhý rozdělen, verš aspoň 3 slova')
 
         print('Bangor: doplnění časů k hotovému textu')
         dau = page.evaluate("""async L => {

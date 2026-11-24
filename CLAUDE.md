@@ -44,7 +44,12 @@
   **Časy veršů k hotovému textu (0.14.0):** `words=1` → časy slov (`bangorWords`), `model.alignTimes` je přiřadí k veršům (přepis se neukládá,
   nesedící verše se dopočítají; verše s časem jsou pevné body – doplní se jen chybějící), `bulk.js` `timesFromRecording`/`runTimes`,
   obrazovka `#/times`. Starší program bez `words` v `/health` → hláška. Oddělení překladu ze střídavých řádků: `model.splitInterleaved` (0.14.1).
-  Test: `test_prepis.py` (napodobený program). Ruční zkouška skutečného programu: `ALAW_BANGOR_MODEL=Systran/faster-whisper-tiny python3 bangor/alaw_bangor.py`.
+  **Oddělení zpěvu (1.2, aplikace 0.15):** před přepisem `separate()` (Demucs `htdemucs`, PyTorch) ve zvláštním procesu
+  (`alaw_bangor.py --vocals vstup výstup` → mono WAV 16 kHz); selhání = přepis původní nahrávky. `/health` `vocals`, úloha `phase` (vocals|transcribe),
+  `vocals=0` vypne. Spouštěč doinstaluje torch (index PyTorch cu128/cu126/cu129/cu130, jinak cpu) + `demucs==4.1.0`, značka `pripraveno-2.txt`.
+  Přepis žádá časy slov a `stt.splitSegment` dělí dlouhé úseky na verše (mezera + držené slovo + interpunkce, verš 3–12 slov).
+  Test: `test_prepis.py` (napodobený program). Ruční zkouška skutečného programu: `ALAW_BANGOR_MODEL=Systran/faster-whisper-tiny python3 bangor/alaw_bangor.py`
+  (oddělení zpěvu: `pip install --break-system-packages demucs==4.1.0`, model z HF `adefossez/HTDemucs`).
 - **Nápověda „?“** (0.13, `js/help.js`): nová služba/přístup v Nastavení → téma v `TOPICS` + `helpTitle(...)`; kroky přes `t()`
   + angličtina; postupy cizích webů ověřit webovým hledáním. Test v `test_anglictina.py` (seznam témat na počítači).
 - Nahrávky ukládat před písní je v pořádku jen přes `putAudioBlob` (chrání `db.freshAudio` před úklidem synchronizace).

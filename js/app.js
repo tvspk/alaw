@@ -21,7 +21,7 @@ import { importFromUrl, showPreview } from './search.js';
 import { cleanText } from './sources.js';
 import { groqKey, setGroqKey, checkGroq, availableEngines, defaultEngine, ENGINES, bangorPossible, checkBangor, bangorZip } from './stt.js';
 
-export const APP_VERSION = '0.14.2';
+export const APP_VERSION = '0.15.0';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně
