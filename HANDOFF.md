@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 24. 11. 2026, verze **0.15.0** (APK versionCode 22), program Bangor **1.2**. Odpovídej zadavateli **česky**.
+> Stav k 24. 11. 2026, verze **0.15.1** (APK versionCode 23), program Bangor **1.2.1**. Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -244,6 +244,12 @@ zda přepis přes Bangor opravdu proběhl). CZ/EN (0.10) a dva překlady + staž
 Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna verze/mazání (0.8) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
 
 ## Rozpracováno a další kroky (stav 24. 11. 2026, verze 0.15.0)
+
+**24. 11. večer – Bangor 1.2 u zadavatele ověřen:** instalace Demucs na Windows prošla („všechno ok“), „Lan y Môr“: „dvě sloky to
+dalo parádně“, ale v 1:49 (jen hudba) vymyšlený text. Pod ním je oddělený zpěv −52 dB pod zpěvem písně (skutečný zpěv 0 až −21 dB)
+→ **1.2.1 / aplikace 0.15.1:** `drop_silent` (úsek o 35 dB tišší než 95. percentil po 0,5 s = pryč). Ověřeno skutečným programem.
+Poslední sloka (hlasitá hudba) se mezi běhy mírně liší (Whisper na hraně), filtr ji nemaže. Zadavatel má stáhnout zip znovu,
+rozbalit přes starý, restartovat program (instalace už proběhla, spustí se hned), F5 2× a přepsat znovu.
 
 **24. 11.:** vydáno 0.15.0 + Bangor 1.2 (bod 17). Zadavatel má: stáhnout nový zip (Nastavení → Bangor → Stáhnout program),
 rozbalit přes starý, spustit `alaw-bangor.bat` (doinstaluje oddělení zpěvu), aplikaci obnovit 2× F5 a zkusit znovu „Lan y Môr“.

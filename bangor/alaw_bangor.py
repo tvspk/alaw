@@ -27,7 +27,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-VERSION = '1.2'
+VERSION = '1.2.1'
 HOST = '127.0.0.1'
 PORT = int(os.environ.get('ALAW_BANGOR_PORT', '8765'))
 MODEL = os.environ.get('ALAW_BANGOR_MODEL', 'techiaith/whisper-large-ft-cy-en-ct2')
@@ -36,6 +36,7 @@ LOCAL_ORIGINS = ('http://localhost:', 'http://127.0.0.1:')
 MAX_BYTES = 1024 * 1024 * 1024  # 1 GB
 LANGS = {'cy', 'en'}            # model umí velštinu a angličtinu
 SEP_MODEL = os.environ.get('ALAW_BANGOR_SEP', 'htdemucs')
+QUIET_DB = 35                   # úsek o tolik dB tišší než zpěv písně = v oddělené stopě nikdo nezpívá → vymyšlený text
 SEP_TIMEOUT = 1800              # s – oddělení zpěvu jedné písně (na procesoru u dlouhé nahrávky i minuty)
 
 state = {'ready': False, 'stage': 'start', 'device': None, 'error': None,
@@ -145,6 +146,28 @@ def separate(src, dst):
     print('DEVICE', 'gpu' if dev == 'cuda' else 'cpu', flush=True)
 
 
+def drop_silent(segments, path):
+    # 1.2.1: Whisper si v tichu (hudba bez zpěvu, po oddělení zpěvu = ticho) občas text vymyslí. Úseky, pod kterými
+    # je oddělená stopa zpěvu skoro tichá (o QUIET_DB pod 95. percentilem hlasitosti po 0,5 s), se zahodí.
+    import numpy as np
+    with wave.open(path, 'rb') as w:
+        sr = w.getframerate()
+        x = np.frombuffer(w.readframes(w.getnframes()), '<i2').astype('float32') / 32768
+    half = sr // 2
+    if len(x) < half:
+        return segments
+    db = lambda a: 20 * np.log10(np.sqrt((a ** 2).mean()) + 1e-9)
+    ref = np.percentile([db(x[i:i + half]) for i in range(0, len(x) - half + 1, half)], 95)
+    keep = []
+    for s in segments:
+        a, b = int(s['start'] * sr), int(s['end'] * sr)
+        if db(x[a:max(b, a + sr // 10)]) >= ref - QUIET_DB:
+            keep.append(s)
+    if len(keep) < len(segments):
+        say(f'Vynecháno úseků bez zpěvu (vymyšlený text v hudbě): {len(segments) - len(keep)}')
+    return keep
+
+
 def vocals_of(job):
     # Oddělí zpěv ve zvláštním procesu; vrátí cestu k WAV se zpěvem, nebo None (pak se přepisuje původní nahrávka).
     dst = job['file'] + '.vocals.wav'
@@ -205,6 +228,8 @@ def worker():
                 })
                 if total:
                     job['progress'] = min(0.99, s.end / total)
+            if audio != job['file']:
+                job['segments'] = drop_silent(job['segments'], audio)
             job['progress'] = 1
             job['state'] = 'done'
             say(f'Hotovo: {len(job["segments"])} úseků.')
