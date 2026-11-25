@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 25. 11. 2026, verze **0.18.1** (APK versionCode 28), program Bangor **1.2.1**. Odpovídej zadavateli **česky**.
+> Stav k 25. 11. 2026, verze **0.18.2** (APK versionCode 29), program Bangor **1.2.2**. Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -287,6 +287,16 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
    nápověda „Ťukáním na písně v seznamu je označ“. Skok **−5 s nahrazen −10 s a +10 s** ve všech přehrávačích (`ui.skipBtns`;
    píseň, celá obrazovka, procvičování, porovnání verzí, časování ťukáním). Lišta písně při náhodném přehrávání skryje na úzkém displeji čas.
    **Čeká na zadavatele:** zkouška zhasnuté obrazovky (bod 21).
+
+23. **0.18.2 + Bangor 1.2.2 – díra ~30 s v přepisu:** zadavatel: přepis Bangor u „Gwahanol“ nadějný, ale mezi 0:49 a 1:22 nic, i když se
+   zpívá. Příčina (zdroj faster-whisper `transcribe.py`): když `no_speech_prob > 0,6` a `avg_logprob < −1`, Whisper **přeskočí celé 30s okno**
+   (`seek += segment_size`). U zpěvu (zvlášť odděleného) je `no_speech_prob` často vysoké i na skutečném zpěvu (espeak-ng ukázka: 0,6–0,76).
+   Aplikace navíc sama vyhazovala úseky `no_speech_prob > 0,6 && avg_logprob < −0,7`. Reprodukce v prostředí Claude (3 sloky + tón, oddělený
+   zpěv, model tiny): staré nastavení = jen poslední sloka, nové = všechny tři. Oprava: u odděleného zpěvu `no_speech_threshold=None`
+   (hudbu bez zpěvu dál chytá `drop_silent`), úseky nad zpěvem `sung: true` a `stt.js` je podle `no_speech_prob` nevyhazuje (i časy veršů).
+   Skutečnou nahrávku „Gwahanol“ Claude neměl (přístup ke složce zamítnut) – **ověří zadavatel**: stáhnout zip znovu, rozbalit přes starý,
+   restartovat program (instalace se neopakuje), 2× F5, přepsat znovu (přibude „Přepis (Bangor) 2“). Písně přepsané dřív mohou mít stejné díry
+   (i doplněné časy veršů – tam se dopočítaly odhadem).
 
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
 Zadavatel po vydání 0.12 napsal „ok všechno v pohodě“ (Bangor na Windows zřejmě v pořádku – při další práci krátce ověřit,

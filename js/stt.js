@@ -82,10 +82,11 @@ export function splitSegment(seg) {
 }
 
 // Úseky Whisperu → verše. Vynechá hudbu bez zpěvu a „halucinace“ (opakování, nejistý text bez řeči).
-// Úseky s časy slov (Bangor) se rozdělí na verše (splitSegment).
+// Úseky s časy slov (Bangor) se rozdělí na verše (splitSegment). Úsek se `sung` (Bangor 1.2.2: pod ním je oddělený zpěv)
+// se jako „bez řeči“ nevyhazuje – Whisper u zpěvu no_speech_prob často přecení.
 export function whisperLines(segments) {
   const segs = (Array.isArray(segments) ? segments : []).filter(s => s && typeof s.text === 'string')
-    .filter(s => !(s.no_speech_prob > 0.6 && s.avg_logprob < -0.7) && !(s.compression_ratio > 2.6))
+    .filter(s => !(!s.sung && s.no_speech_prob > 0.6 && s.avg_logprob < -0.7) && !(s.compression_ratio > 2.6))
     .filter(s => !/^[\s♪♫♬*().,…\-[\]]*$/.test(s.text) && !/^\s*[([].*[)\]]\s*$/.test(s.text))
     .flatMap(splitSegment);
   let prevEnd = null;
@@ -211,7 +212,7 @@ export async function transcribeBangor(blob, opts = {}, onWait = () => {}) {
 // Časy slov z nahrávky (pro doplnění časů k hotovému textu): [{ w, s, e }] (s, e v ms).
 export async function bangorWords(blob, opts = {}, onWait = () => {}) {
   const segs = await bangorJob(blob, opts, onWait, true);
-  return segs.filter(g => !(g.no_speech_prob > 0.6 && g.avg_logprob < -0.7) && !(g.compression_ratio > 2.6))
+  return segs.filter(g => !(!g.sung && g.no_speech_prob > 0.6 && g.avg_logprob < -0.7) && !(g.compression_ratio > 2.6))
     .flatMap(g => g.words || [])
     .filter(w => w && typeof w.word === 'string' && w.word.trim() && Number.isFinite(+w.start))
     .map(w => ({ w: w.word.trim(), s: Math.round(+w.start * 1000), e: Math.round((Number.isFinite(+w.end) ? +w.end : +w.start) * 1000) }));

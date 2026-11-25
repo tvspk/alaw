@@ -48,6 +48,8 @@
   (`alaw_bangor.py --vocals vstup výstup` → mono WAV 16 kHz); selhání = přepis původní nahrávky. `/health` `vocals`, úloha `phase` (vocals|transcribe),
   `vocals=0` vypne. Spouštěč doinstaluje torch (index PyTorch cu128/cu126/cu129/cu130, jinak cpu) + `demucs==4.1.0`, značka `pripraveno-2.txt`.
   1.2.1: `drop_silent` zahodí úseky, pod kterými je oddělený zpěv o 35 dB tišší než 95. percentil (Whisper v tichu vymýšlí text).
+  1.2.2: u odděleného zpěvu `no_speech_threshold=None` (jinak Whisper přeskočí celé 30s okno, když u zpěvu odhadne „bez řeči“
+  → díra ~30 s v přepisu); úseky, které projdou `drop_silent`, mají `sung: true` a aplikace (`whisperLines`, `bangorWords`) je nevyhazuje podle `no_speech_prob`.
   Přepis žádá časy slov a `stt.splitSegment` dělí dlouhé úseky na verše (mezera + držené slovo + interpunkce, verš 3–12 slov).
   Test: `test_prepis.py` (napodobený program). Ruční zkouška skutečného programu: `ALAW_BANGOR_MODEL=Systran/faster-whisper-tiny python3 bangor/alaw_bangor.py`
   (oddělení zpěvu: `pip install --break-system-packages demucs==4.1.0`, model z HF `adefossez/HTDemucs`).

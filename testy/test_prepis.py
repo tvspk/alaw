@@ -275,6 +275,10 @@ def main():
           return [one.length, long.map(l => l.text.split(' ').length), short.length]; }""")
         print('   ', r)
         check(r[0] == 1 and all(3 <= n <= 12 for n in r[1]) and sum(r[1]) == 20 and r[2] == 1, 'dělení na verše: krátký úsek celý, dlouhý rozdělen, verš aspoň 3 slova')
+        r = page.evaluate("""async () => { const m = await import('./js/stt.js');
+          const seg = (s, txt, sung) => ({ start: s, end: s + 2, text: ' ' + txt, no_speech_prob: 0.8, avg_logprob: -1.4, compression_ratio: 1.1, ...(sung ? { sung: true } : {}) });
+          return m.whisperLines([seg(0, 'Mae hi yn bwrw glaw', true), seg(5, 'Diolch am wylio', false)]).map(l => l.text); }""")
+        check(r == ['Mae hi yn bwrw glaw'], 'Bangor 1.2.2: úsek nad odděleným zpěvem (sung) se nezahodí jako „bez řeči“, ostatní ano')
 
         print('Bangor: doplnění časů k hotovému textu')
         dau = page.evaluate("""async L => {

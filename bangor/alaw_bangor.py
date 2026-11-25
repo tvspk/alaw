@@ -27,7 +27,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-VERSION = '1.2.1'
+VERSION = '1.2.2'
 HOST = '127.0.0.1'
 PORT = int(os.environ.get('ALAW_BANGOR_PORT', '8765'))
 MODEL = os.environ.get('ALAW_BANGOR_MODEL', 'techiaith/whisper-large-ft-cy-en-ct2')
@@ -162,7 +162,7 @@ def drop_silent(segments, path):
     for s in segments:
         a, b = int(s['start'] * sr), int(s['end'] * sr)
         if db(x[a:max(b, a + sr // 10)]) >= ref - QUIET_DB:
-            keep.append(s)
+            keep.append({**s, 'sung': True})  # 1.2.2: pod úsekem opravdu někdo zpívá → aplikace ho nevyhodí jako „bez řeči“
     if len(keep) < len(segments):
         say(f'Vynecháno úseků bez zpěvu (vymyšlený text v hudbě): {len(segments) - len(keep)}')
     return keep
@@ -210,6 +210,10 @@ def worker():
                 job['vocals_used'] = audio != job['file']
             job['phase'] = 'transcribe'
             opts = dict(beam_size=5, condition_on_previous_text=False, task='transcribe')
+            if audio != job['file']:
+                # 1.2.2: Whisper u zpěvu často odhadne „tady není řeč“ a pak přeskočí CELÉ 30s okno (u písně „díra“ ~30 s
+                # bez textu, i když se zpívá). U odděleného zpěvu to nepotřebujeme: místa bez zpěvu pozná drop_silent.
+                opts['no_speech_threshold'] = None
             if job['language'] in LANGS:
                 opts['language'] = job['language']
             if job['prompt']:
