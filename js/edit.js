@@ -43,7 +43,8 @@ function mergeLines(oldLines, newLines) {
     prevNew = i; prevOld = nl._old;
   });
   fill(prevNew + 1, newLines.length, prevOld + 1, oldLines.length);
-  newLines.forEach(nl => { delete nl._old; });
+  // ověřování přepisu (0.17): spárovaný verš si nechá „ověřeno“, ručně přepsaný verš se bere jako ověřený
+  newLines.forEach(nl => { if (nl._old == null || oldLines[nl._old].ok) nl.ok = true; delete nl._old; });
   return newLines;
 }
 

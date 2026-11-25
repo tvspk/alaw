@@ -272,7 +272,9 @@ export function normalizeSong(s) {
       stanza: !!l.stanza,
       ...normVars(l.vars),
       ...normEn(l.en, str),
+      ...(l.ok === true ? { ok: true } : {}),
     })),
+    ...(typeof v.review === 'boolean' ? { review: v.review } : {}),
   }));
   if (!versions.length) return null;
   const primary = versions.some(v => v.id === s.primary) ? s.primary : versions[0].id;
@@ -499,4 +501,65 @@ export function attachAlt(lines, altText) {
   if (!alt.length || alt.length !== lines.length) return false;
   lines.forEach((l, i) => { l.alt = alt[i]; });
   return true;
+}
+
+// ---------- vlastní překlad vložený z jiné aplikace (0.17) ----------
+// Text pro AI: očíslované verše (prázdné řádky = jen oddělení slok, nečíslují se).
+export function numberedText(lines) {
+  return lines.map((l, i) => `${i + 1}. ${l.text}`).join('\n');
+}
+
+// Vložený překlad → pole textů po verších (index = verš, '' = nepřiřazeno).
+// Očíslované řádky („3. …“, „3) …“, „[3] …“) se párují podle čísla; jinak po řádcích v pořadí.
+// Časy LRC a odrážky pryč; řádky, které jen opakují původní verš, se vynechají; „původní — překlad“ → překlad.
+export function parsePastedTr(lines, text) {
+  const k = s => fold(s).replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const orig = new Set(lines.map(l => k(l.text)).filter(Boolean));
+  const NUM = /^\s*[[(]?(\d{1,3})\s*[.):\]]\s*/;
+  const rows = String(text || '').replace(/\r\n?/g, '\n').split('\n')
+    .map(s => s.replace(/^\s*(\[\d{1,3}:\d{1,2}(?:[.,]\d{1,3})?\]\s*)+/, '').replace(/^\s*[-•*]\s+/, '').trim())
+    .filter(Boolean);
+  const numbered = rows.length > 0 && rows.filter(r => NUM.test(r)).length >= rows.length * 0.6;
+  const clean = s => {
+    s = s.replace(/^["“„'‘]+|["”“'’]+$/g, '').trim();
+    // „původní verš — překlad“ / „původní verš = překlad“
+    const m = s.match(/^(.+?)\s+(?:—|–|-|=|→|\|)\s+(.+)$/);
+    if (m && orig.has(k(m[1]))) return m[2].trim();
+    return s;
+  };
+  const out = lines.map(() => '');
+  let extra = 0;
+  if (numbered) {
+    let last = -1;
+    for (const r of rows) {
+      const m = r.match(NUM);
+      let i = m ? +m[1] - 1 : last;
+      let v = clean(m ? r.slice(m[0].length) : r);
+      if (!v || orig.has(k(v))) { last = i; continue; }
+      if (i < 0 || i >= lines.length) { extra++; continue; }
+      out[i] = out[i] ? `${out[i]} / ${v}` : v;
+      last = i;
+    }
+  } else {
+    const vals = rows.map(r => clean(r.replace(NUM, ''))).filter(v => v && !orig.has(k(v)));
+    vals.forEach((v, i) => { if (i < lines.length) out[i] = v; else extra++; });
+  }
+  const filled = out.filter(Boolean).length;
+  return { tr: out, filled, missing: lines.filter((l, i) => l.text.trim() && !out[i]).length, extra, numbered };
+}
+
+// ---------- ověřování textu (0.17) ----------
+// Verze se ověřuje verš po verši: přepis z nahrávky automaticky (dokud se ověřování neukončí), jiná verze když se zapne.
+// Verš: ok = true (ověřený). Verze: review = true (ověřovat) / false (ukončeno).
+export const inReview = v => !!v && (v.review === true || (v.source === 'přepis' && v.review !== false));
+export function reviewCount(v) {
+  const lines = v.lines.filter(l => l.text.trim());
+  return { total: lines.length, ok: lines.filter(l => l.ok).length };
+}
+// Píseň s neověřenými verši hlavní verze
+export function needsReview(song) {
+  const v = primaryVersion(song);
+  if (!inReview(v)) return false;
+  const c = reviewCount(v);
+  return c.ok < c.total;
 }

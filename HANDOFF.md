@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 25. 11. 2026, verze **0.16.0** (APK versionCode 24), program Bangor **1.2.1**. Odpovídej zadavateli **česky**.
+> Stav k 25. 11. 2026, verze **0.17.0** (APK versionCode 25), program Bangor **1.2.1**. Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -249,6 +249,24 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
    - Přepnutí jazyka CZ/EN načte stránku znovu → přehrávání skončí (záměr, vzácné).
    - Test `testy/test_prehravac.py`. **Ověřit na telefonu i počítači.**
 
+19. **Novinky z brainstormingu (0.17.0)** – zadavatel vybral 5, 6, 7, 9, 11, 12, 13 + vlastní 15 a 16 (zamítl/odložil: časovač vypnutí,
+   seznamy, vyloučení/oblíbené, přednost učeným písním, vlastní slovníček, statistiky; zhasnutá obrazovka v APK později):
+   - **5 vyrovnání hlasitosti** (náhodné přehrávání): měření při prvním přehrání (a dopředu další píseň), hlasité se ztlumí na −16 dBFS,
+     tiché zůstanou (zesílit by šlo jen přes Web Audio – nechtěl jsem riskovat přehrávání v pozadí). Nastavení → Náhodné přehrávání.
+   - **6 verš + překlad v malém přehrávači** (jen načasované písně; překlad v jazyce `trLang`, jinak druhý). Vypínatelné.
+   - **7 zpívání na celou obrazovku** (⛶ v přehrávači písně): předchozí / aktuální / další verš, překlad, A−/A+, Wake Lock; bez časů celý text.
+     Při náhodném přehrávání přejde s písní dál. Tlačítko Zpět v APK ho zavře.
+   - **9 ověřování přepisu**: verze z přepisu (`source:'přepis'`) se ověřuje automaticky (i dřív přepsané písně), jiná po volbě v nabídce.
+     Proužek „Ověřeno n z m“, režim Ověřovat = ✓ u veršů; úprava verše i Upravit = ověřeno. Knihovna: filtr „🔍 K ověření (n)“.
+   - **11 zpěvník**: ☑ výběr → „📖 Zpěvník“ → `#/book` (název, překlad CZ/EN/bez, doslovný, nová stránka, obsah) → tisk / PDF.
+     APK: nový most `print()` (PrintManager) – **neověřeno na telefonu**.
+   - **12** Najít texty: při 429 čeká 1, 2, 3 min (odpočet, jde zastavit), pauza mezi písněmi 1 s.
+   - **13** Groq: časy slov (`timestamp_granularities[]`) → dělení na verše jako Bangor. Ověřeno dokumentací Groq, ne skutečným voláním.
+   - **15 vlastní překlad**: zadavatel: „překlady tam teď nejdou jednoduše vložit“. Nabídka písně → „📋 Vložit vlastní překlad…“: jazyk,
+     překlad/doslovně, „Zkopírovat text pro AI“ (očíslované verše + pokyn), vložit odpověď → párování podle čísel (jinak po řádcích,
+     opakovaný originál se vynechá), náhled, „Přepsat překlad, který verš už má“. Časy netřeba: překlad patří k verši.
+   - **16 knihovna**: po Zpět na místo otevřené písně (zvýrazní se), šipka ↑ nahoru.
+
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
 Zadavatel po vydání 0.12 napsal „ok všechno v pohodě“ (Bangor na Windows zřejmě v pořádku – při další práci krátce ověřit,
 zda přepis přes Bangor opravdu proběhl). CZ/EN (0.10) a dva překlady + stažení textu (0.11) viděl („perfektní“), zkouší.
@@ -267,8 +285,7 @@ rozbalit přes starý, spustit `alaw-bangor.bat` (doinstaluje oddělení zpěvu)
 Pak ověřit, že okno programu píše „Zpěv oddělen od hudby (… na grafické kartě)“; když píše „Zpěv se nepodařilo oddělit“, poslat text z okna.
 Písně přepsané dřív lze přepsat znovu (přibude další verze „Přepis (Bangor) 2“; max. 3 verze).
 
-**25. 11.:** vydáno 0.16.0 – náhodné přehrávání (bod 18). Zadavatel chtěl i brainstorming dalších nápadů (k přehrávání i obecně) –
-návrhy jsou v odpovědi v chatu; co vybere, doplnit sem.
+**25. 11.:** vydáno 0.16.0 – náhodné přehrávání (bod 18), pak 0.17.0 – novinky z brainstormingu (bod 19). Ověřit u zadavatele.
 
 Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „hotovo“. Zadavatel není programátor, odpovídat česky.
 
@@ -346,7 +363,7 @@ Zkušební „zpěv“: `apt-get install espeak-ng`, `espeak-ng -v cy` na lidovo
 
 - Po každé změně v `index.html`, `css/`, `js/` spusť `python3 scripts/build_sw.py` (workflow jinak selže).
 - Testy (Playwright, Chromium jako Pixel 7, bez sítě):
-  `python3 -u testy/test_zaklad.py`, `python3 -u testy/test_verze.py`, `python3 -u testy/test_hledani.py`, `python3 -u testy/test_hromadne.py`, `python3 -u testy/test_prepis.py`, `python3 -u testy/test_sync.py`, `python3 -u testy/test_preklady.py`, `python3 -u testy/test_anglictina.py`, `python3 -u testy/test_prehravac.py`,
+  `python3 -u testy/test_zaklad.py`, `python3 -u testy/test_verze.py`, `python3 -u testy/test_hledani.py`, `python3 -u testy/test_hromadne.py`, `python3 -u testy/test_prepis.py`, `python3 -u testy/test_sync.py`, `python3 -u testy/test_preklady.py`, `python3 -u testy/test_anglictina.py`, `python3 -u testy/test_prehravac.py`, `python3 -u testy/test_novinky.py`,
   `node testy/test_worker.mjs`. Kontrola zdrojů proti skutečným webům: `python3 testy/zdroje_naostro.py`.
   Spouštěj s `-u` a výstup do souboru (`> /tmp/x.log`): přes rouru s `grep` se dlouhé testy zasekávaly. `test_zaklad` občas
   náhodně spadne na „Režimy učení“ (`.w.hide`) – při opakování projde.

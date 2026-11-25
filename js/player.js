@@ -29,6 +29,7 @@ export class Player {
     this.ready = false;
     this.playing = false;
     this.rate = 1;
+    this.volume = 1; // jen vlastní soubor (vyrovnání hlasitosti v náhodném přehrávání)
     this.loop = null; // { start, end }
     this.duration = null;
     this.onTime = () => {};
@@ -48,6 +49,7 @@ export class Player {
     const a = new Audio();
     a.preload = 'auto';
     a.preservesPitch = true;
+    a.volume = this.volume;
     this._objectUrl = URL.createObjectURL(blob);
     a.src = this._objectUrl;
     a.addEventListener('loadedmetadata', () => {
@@ -147,6 +149,11 @@ export class Player {
     this.rate = r;
     if (this.audio) this.audio.playbackRate = r;
     else if (this.yt && this.ready) this.yt.setPlaybackRate(r);
+  }
+
+  setVolume(v) {
+    this.volume = v;
+    if (this.audio) this.audio.volume = v;
   }
 
   // Smyčka mezi start a end (ms). end = null → do konce nahrávky.

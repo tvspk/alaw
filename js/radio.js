@@ -4,10 +4,11 @@
 // karaoke, skok na verš i smyčka pak běží nad touto nahrávkou. Jiný přehrávač v aplikaci ho pozastaví (Player.playing).
 // Jen písně s vlastní nahrávkou (YouTube potřebuje viditelné video). Pořadí se zamíchá, po poslední písni znovu.
 import { el, iconBtn, ICONS, toast } from './ui.js';
-import { t } from './i18n.js';
-import { getSong, getAudioBlob } from './store.js';
-import { primaryVersion } from './model.js';
+import { t, lang as uiLang } from './i18n.js';
+import { getSong, getAudioBlob, getPrefs } from './store.js';
+import { primaryVersion, trText, otherLang } from './model.js';
 import { Player } from './player.js';
+import { volumeFor, known, measure } from './loudness.js';
 
 export const player = new Player();
 let queue = [], pos = -1;
@@ -56,6 +57,7 @@ export function toggle() { if (cur) player.toggle(); }
 export function stop() {
   seq++;
   player.destroy();
+  player.setVolume(1);
   queue = []; pos = -1; cur = null; hook = null;
   notify(); draw(); session();
 }
@@ -81,13 +83,35 @@ async function step(dir, play) {
     wantPlay = play;
     player.rate = 1;
     player.setLoop(null);
+    applyVolume(v.audio.key, blob);
     player.loadAudio(blob);
     notify(); draw(); session();
+    setTimeout(() => { if (my === seq) premeasure(); }, 5000);
     return;
   }
   if (my !== seq) return;
   toast(t('Nahrávky těchto písní v tomto zařízení nejsou.'), 3500);
   stop();
+}
+
+// ---------- vyrovnání hlasitosti (Nastavení → Náhodné přehrávání) ----------
+const normOn = () => getPrefs().normVol !== false;
+function applyVolume(key, blob) {
+  player.setVolume(normOn() ? volumeFor(key) : 1);
+  if (normOn() && !known(key)) measure(key, blob).then(vol => {
+    if (vol != null && normOn() && cur && cur.version.audio.key === key) player.setVolume(vol);
+  });
+}
+// další píseň ve frontě změřit dopředu, ať zazní hned se správnou hlasitostí
+async function premeasure() {
+  if (!normOn() || pos + 1 >= queue.length) return;
+  const song = await getSong(queue[pos + 1]);
+  const v = song && audioVersion(song);
+  if (!v || known(v.audio.key)) return;
+  measure(v.audio.key, await getAudioBlob(v.audio.key));
+}
+export function setNormalize(on) {
+  if (cur) player.setVolume(on ? volumeFor(cur.version.audio.key) : 1);
 }
 
 // ---------- obsluha přehrávače ----------
@@ -135,9 +159,11 @@ function build() {
   const title = el('a', { class: 'mini-title', href: '#/' });
   const play = el('button', { type: 'button', class: 'mini-play', 'aria-label': t('Přehrát'), html: ICONS.play, onclick: toggle });
   const fillEl = el('i');
-  ui = { title, play, fillEl };
+  const lineEl = el('div', { class: 'mini-line', hidden: true });
+  ui = { title, play, fillEl, lineEl, li: -2 };
   bar = el('div', { class: 'minibar', hidden: true, role: 'region', 'aria-label': t('Náhodné přehrávání') },
     el('div', { class: 'mini-prog' }, fillEl),
+    lineEl,
     el('div', { class: 'inner' },
       title,
       iconBtn('prev', t('Předchozí píseň'), prev),
@@ -156,10 +182,12 @@ function draw() {
   const s = cur.song;
   ui.title.setAttribute('href', `#/song/${encodeURIComponent(s.id)}`);
   ui.title.title = t('Otevřít text písně');
+  ui.li = -2;
   ui.title.replaceChildren(el('b', { text: s.title }),
     el('small', { text: [s.artist, `🔀 ${pos + 1}/${queue.length}`].filter(Boolean).join(' · ') }));
   drawState();
   drawTime(player.time());
+  height();
 }
 
 function drawState() {
@@ -172,7 +200,27 @@ function drawTime(ms) {
   if (!ui || bar.hidden) return;
   const d = player.duration;
   ui.fillEl.style.width = d ? `${Math.min(100, (100 * ms) / d).toFixed(2)}%` : '0';
+  drawLine(ms);
 }
+
+// Aktuální verš a jeho překlad nad ovládáním (Nastavení → „V malém přehrávači ukazovat…“), jen u načasovaných písní.
+function drawLine(ms) {
+  const lines = cur ? cur.version.lines : [];
+  let i = -1;
+  if (getPrefs().miniLine !== false) lines.forEach((l, j) => { if (l.start != null && l.start <= ms + 80) i = j; });
+  if (i === ui.li) return;
+  ui.li = i;
+  const l = lines[i];
+  ui.lineEl.hidden = !l;
+  if (!l) { height(); return; }
+  const lg = getPrefs().trLang || uiLang;
+  const tr = trText(l, lg) || trText(l, otherLang(lg)); // překlad v jazyce, který píseň má
+  ui.lineEl.replaceChildren(el('div', { class: 'ml-text', text: l.text }), tr ? el('div', { class: 'ml-tr', text: tr.text }) : null);
+  height();
+}
+// výška malého přehrávače pro posun ostatních prvků (CSS --mini-h)
+function height() { if (bar && !bar.hidden) document.body.style.setProperty('--mini-h', `${bar.offsetHeight}px`); }
+export function redrawLine() { if (ui) { ui.li = -2; drawLine(player.time()); } }
 
 // Ovládání ze systému (klávesy pro hudbu, panel médií v prohlížeči / na zamčené obrazovce)
 function session() {

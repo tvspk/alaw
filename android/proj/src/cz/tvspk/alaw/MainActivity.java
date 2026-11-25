@@ -219,6 +219,18 @@ public class MainActivity extends Activity {
             });
         }
 
+        // Zpěvník (0.17): tisk stránky přes systémový tisk Androidu (volba „Uložit jako PDF“)
+        @JavascriptInterface
+        public void print(final String title) {
+            runOnUiThread(new Runnable() {
+                public void run() {
+                    String name = (title == null || title.isEmpty()) ? "Alaw" : title;
+                    android.print.PrintManager pm = (android.print.PrintManager) getSystemService(PRINT_SERVICE);
+                    if (pm != null) pm.print(name, web.createPrintDocumentAdapter(name), null);
+                }
+            });
+        }
+
         @JavascriptInterface
         public void setBars(final String color, final boolean light) {
             runOnUiThread(new Runnable() {

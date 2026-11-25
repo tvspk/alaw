@@ -107,20 +107,38 @@ export async function transcribeGroq(blob, { title = '', language = 'cy', name =
     if (file.size > GROQ_MAX()) throw new SttError(t('Nahrávka je na přepis přes Groq moc dlouhá (víc než ~12 minut).'));
   }
   onWait(t('Přepisuji přes Groq (Whisper)…'));
-  const send = model => {
+  const send = (model, words = true) => {
     const fd = new FormData();
     fd.append('file', file, fname.replace(/[^\w.-]+/g, '_'));
     fd.append('model', model);
     fd.append('response_format', 'verbose_json');
     fd.append('temperature', '0');
+    if (words) { fd.append('timestamp_granularities[]', 'word'); fd.append('timestamp_granularities[]', 'segment'); } // časy slov → dělení na verše (0.17)
     if (WHISPER_LANGS.has(language)) fd.append('language', language);
     if (title) fd.append('prompt', title.slice(0, 200)); // pravopis názvu a jmen
     return groqFetch('audio/transcriptions', { method: 'POST', body: fd }, key);
   };
   let data;
   try { data = await send('whisper-large-v3'); }
-  catch (e) { if (e.status === 404 || (e.status === 400 && /model/i.test(e.msg || ''))) data = await send('whisper-large-v3-turbo'); else throw e; }
-  return whisperLines(data.segments);
+  catch (e) {
+    if (e.status === 400 && /timestamp|granularit/i.test(e.msg || '')) data = await send('whisper-large-v3', false);
+    else if (e.status === 404 || (e.status === 400 && /model/i.test(e.msg || ''))) data = await send('whisper-large-v3-turbo');
+    else throw e;
+  }
+  return whisperLines(withWords(data.segments, data.words));
+}
+
+// Groq vrací časy slov zvlášť (data.words, slova bez mezer) → rozdělit k úsekům podle času, jako je má Bangor (0.17).
+export function withWords(segments, words) {
+  if (!Array.isArray(segments) || !Array.isArray(words) || !words.length) return segments;
+  const ws = words.filter(w => w && typeof w.word === 'string' && Number.isFinite(+w.start))
+    .map(w => ({ word: /^\s/.test(w.word) ? w.word : ' ' + w.word, start: +w.start, end: +w.end }));
+  return segments.map((s, i) => {
+    const next = segments[i + 1];
+    const end = next ? +next.start : Infinity;
+    const mine = ws.filter(w => w.start >= +s.start - 0.05 && w.start < end - 0.05);
+    return mine.length ? { ...s, words: mine } : s;
+  });
 }
 
 // ---------- Bangor: velšský Whisper na tomto počítači (program bangor/alaw_bangor.py) ----------

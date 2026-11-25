@@ -3,7 +3,7 @@ import { el, fill, iconBtn, ICONS, toast, download, pickFile, fileSize, sheet } 
 import { t, pl, lang, setLang, collate } from './i18n.js';
 import { listSongs, getSong, putAudioBlob, getAudioBlob, getPrefs, setPrefs, getProgress, deleteSong } from './store.js';
 import { db, requestPersistence, storageEstimate } from './db.js';
-import { primaryVersion, isSynced, langLabel, fold, songsFromJson, looksLikeLrc } from './model.js';
+import { primaryVersion, isSynced, langLabel, fold, songsFromJson, looksLikeLrc, needsReview } from './model.js';
 import { renderSong } from './song.js';
 import { renderEdit } from './edit.js';
 import { renderTapSync } from './tapsync.js';
@@ -19,10 +19,11 @@ import { helpTitle } from './help.js';
 import { renderBulk, renderFindLyrics, renderTimes, songsWithoutText, applyLyrics } from './bulk.js';
 import { importFromUrl, showPreview } from './search.js';
 import { cleanText } from './sources.js';
-import { playShuffled, hasRecording } from './radio.js';
+import { renderBook, setBookSongs } from './book.js';
+import { playShuffled, hasRecording, setNormalize, redrawLine } from './radio.js';
 import { groqKey, setGroqKey, checkGroq, availableEngines, defaultEngine, ENGINES, bangorPossible, checkBangor, bangorZip } from './stt.js';
 
-export const APP_VERSION = '0.16.0';
+export const APP_VERSION = '0.17.0';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně
@@ -37,7 +38,7 @@ const nav = {
   home() { if (depth() > 0) history.go(-depth()); else nav.replace('#/'); },
 };
 
-async function route() {
+async function route(back = false) {
   if (cleanup) { try { cleanup(); } catch { /* nic */ } cleanup = null; }
   document.querySelectorAll('.sheet-backdrop').forEach(n => n.remove());
   const root = el('div');
@@ -54,6 +55,7 @@ async function route() {
     else if (view === 'bulk') cleanup = await renderBulk(root, nav);
     else if (view === 'lyrics') cleanup = await renderFindLyrics(root, nav);
     else if (view === 'times') cleanup = await renderTimes(root, nav);
+    else if (view === 'book') cleanup = await renderBook(root, nav);
     else if (view === 'settings') cleanup = await renderSettings(root);
     else cleanup = await renderLibrary(root);
   } catch (e) {
@@ -61,10 +63,12 @@ async function route() {
     root.replaceChildren(el('div', { class: 'view' }, el('p', { class: 'empty', text: t('Něco se pokazilo: {e}', { e: e.message || e }) })));
   }
   app.replaceChildren(root);
-  scrollTo(0, 0);
+  // Zpět do knihovny → na místo, kde jsem byl (k písni, kterou jsem otevřel); jinak nahoru
+  if (back && root.querySelector('.song-list')) restoreLibraryScroll(root);
+  else scrollTo(0, 0);
 }
 
-window.addEventListener('popstate', () => { route(); });
+window.addEventListener('popstate', () => { route(true); });
 // odkazy uvnitř aplikace (href="#/…") přes nav, ať se drží hloubka historie
 document.addEventListener('click', e => {
   const a = e.target.closest('a[href^="#/"]');
@@ -75,7 +79,17 @@ document.addEventListener('click', e => {
 
 // ---------- knihovna ----------
 
-let libState = { q: '', tag: null, sel: null }; // sel = Set id písní v režimu výběru (hromadné mazání)
+let libState = { q: '', tag: null, sel: null, y: 0, last: null }; // sel = Set id písní v režimu výběru; y/last = kde jsem v knihovně byl
+
+function restoreLibraryScroll(root) {
+  scrollTo(0, libState.y);
+  const card = libState.last && [...root.querySelectorAll('.song-card')].find(a => a.dataset.id === libState.last);
+  if (!card) return;
+  const r = card.getBoundingClientRect();
+  if (r.top < 70 || r.bottom > innerHeight - 90) card.scrollIntoView({ block: 'center' });
+  card.classList.add('last-open');
+  setTimeout(() => card.classList.remove('last-open'), 1600);
+}
 
 async function renderLibrary(root) {
   const songs = await listSongs();
@@ -84,7 +98,9 @@ async function renderLibrary(root) {
   const sums = new Map(songs.map(s => [s.id, songSummary(songUnits(s), progress.get(s.id) || new Map(), now)]));
   const tags = [...new Set(songs.flatMap(s => s.tags))].sort(collate);
   const langs = [...new Set(songs.map(s => s.language))];
-  const filters = [...(langs.length > 1 ? langs.map(l => ({ key: `lang:${l}`, label: langLabel(l) })) : []), ...tags.map(t => ({ key: `tag:${t}`, label: `#${t}` }))];
+  const nRev = songs.filter(needsReview).length;
+  const filters = [...(nRev ? [{ key: 'rev', label: t('🔍 K ověření ({n})', { n: nRev }) }] : []),
+    ...(langs.length > 1 ? langs.map(l => ({ key: `lang:${l}`, label: langLabel(l) })) : []), ...tags.map(t => ({ key: `tag:${t}`, label: `#${t}` }))];
   if (libState.tag && !filters.some(f => f.key === libState.tag)) libState.tag = null;
 
   const listEl = el('ul', { class: 'song-list' });
@@ -119,6 +135,8 @@ async function renderLibrary(root) {
           libState.sel = null; route();
           await playShuffled(list);
         } }) : null,
+        el('button', { type: 'button', class: 'btn', text: t('📖 Zpěvník ({n})', { n: sel.size }), disabled: !sel.size, title: t('Vybrané písně k tisku nebo do PDF'),
+          onclick: () => { setBookSongs([...sel]); libState.sel = null; nav.go('#/book'); } }),
         el('button', { type: 'button', class: 'btn danger', text: t('🗑 Smazat ({n})', { n: sel.size }), disabled: !sel.size, onclick: removeSelected })));
   }
   async function removeSelected() {
@@ -144,6 +162,7 @@ async function renderLibrary(root) {
     chipsEl.hidden = !filters.length;
     const q = fold(libState.q.trim());
     shown = songs.filter(s => {
+      if (libState.tag === 'rev' && !needsReview(s)) return false;
       if (libState.tag?.startsWith('lang:') && s.language !== libState.tag.slice(5)) return false;
       if (libState.tag?.startsWith('tag:') && !s.tags.includes(libState.tag.slice(4))) return false;
       if (!q) return true;
@@ -152,9 +171,9 @@ async function renderLibrary(root) {
     const sel = libState.sel;
     listEl.replaceChildren(...shown.map(s => {
       const v = primaryVersion(s);
-      return el('li', {}, el('a', { class: 'song-card' + (sel && sel.has(s.id) ? ' selected' : ''), href: `#/song/${encodeURIComponent(s.id)}`, onclick: e => {
+      return el('li', {}, el('a', { class: 'song-card' + (sel && sel.has(s.id) ? ' selected' : ''), href: `#/song/${encodeURIComponent(s.id)}`, dataset: { id: s.id }, onclick: e => {
         e.preventDefault();
-        if (!sel) { nav.go(`#/song/${encodeURIComponent(s.id)}`); return; }
+        if (!sel) { libState.last = s.id; nav.go(`#/song/${encodeURIComponent(s.id)}`); return; }
         sel.has(s.id) ? sel.delete(s.id) : sel.add(s.id);
         draw();
       } },
@@ -179,7 +198,7 @@ async function renderLibrary(root) {
   root.append(el('div', { class: 'view' },
     el('header', { class: 'topbar' }, el('h1', { class: 'brand', text: 'Alaw' }),
       langSwitch(),
-      songs.length ? el('button', { type: 'button', class: 'icon-btn sel-toggle' + (libState.sel ? ' on' : ''), title: t('Vybrat víc písní (přehrát, smazat)'), 'aria-label': t('Vybrat víc písní'), text: '☑', onclick: () => selMode(!libState.sel) }) : null,
+      songs.length ? el('button', { type: 'button', class: 'icon-btn sel-toggle' + (libState.sel ? ' on' : ''), title: t('Vybrat víc písní (přehrát, zpěvník, smazat)'), 'aria-label': t('Vybrat víc písní'), text: '☑', onclick: () => selMode(!libState.sel) }) : null,
       iconBtn('settings', t('Nastavení'), () => nav.go('#/settings'))),
     reminders(songs, progress, sums),
     noTextBar(songs),
@@ -187,7 +206,14 @@ async function renderLibrary(root) {
     chipsEl, shuffleRow, listEl, selBar),
     ...(libState.sel ? [] : [el('button', { type: 'button', class: 'fab', html: `${ICONS.plus}<span>${t('Přidat píseň')}</span>`, onclick: () => nav.go('#/new') })]));
   root.querySelector('.fab svg')?.setAttribute('width', '22');
+  // šipka nahoru, když je seznam odrolovaný
+  const top = el('button', { type: 'button', class: 'to-top', hidden: true, 'aria-label': t('Nahoru'), title: t('Nahoru'), text: '↑',
+    onclick: () => scrollTo({ top: 0, behavior: 'smooth' }) });
+  root.append(top);
+  const onScroll = () => { top.hidden = scrollY < 600 || !!libState.sel; };
+  window.addEventListener('scroll', onScroll, { passive: true });
   draw();
+  return () => { libState.y = scrollY; window.removeEventListener('scroll', onScroll); };
 }
 
 // Přepínač jazyka rozhraní na hlavní stránce (CZ | EN), volba jen pro toto zařízení.
@@ -235,6 +261,17 @@ function reminders(songs, progress, sums) {
       } }));
     return box;
   }));
+}
+
+// Nastavení → Náhodné přehrávání (0.17): vyrovnání hlasitosti a verš s překladem v malém přehrávači (jen zařízení).
+function playSection() {
+  const p = getPrefs();
+  const norm = el('input', { type: 'checkbox', checked: p.normVol !== false, onchange: () => { setPrefs({ normVol: norm.checked }); setNormalize(norm.checked); } });
+  const line = el('input', { type: 'checkbox', checked: p.miniLine !== false, onchange: () => { setPrefs({ miniLine: line.checked }); redrawLine(); } });
+  return el('section', { class: 'section' },
+    el('h2', { text: t('Náhodné přehrávání') }),
+    el('label', { class: 'check' }, norm, el('span', { text: t('Vyrovnat hlasitost (hlasité nahrávky se ztlumí na stejnou úroveň jako ostatní)') })),
+    el('label', { class: 'check', style: { marginTop: '8px' } }, line, el('span', { text: t('V malém přehrávači ukazovat aktuální verš a jeho překlad') })));
 }
 
 // ---------- nastavení a záloha ----------
@@ -333,6 +370,7 @@ async function renderSettings(root) {
       el('label', { class: 'range' }, t('Velikost textu'), sizeIn, sizeOut),
       preview,
       el('label', { class: 'check', style: { marginTop: '10px' } }, autoScroll, el('span', { text: t('Při přehrávání posouvat text na aktuální verš') }))),
+    playSection(),
     learnSection(),
     el('section', { class: 'section' },
       el('h2', { text: t('Záloha a import') }),
@@ -551,6 +589,8 @@ window.alawShare = (url, text) => { // volá APK, když aplikace už běží
 window.alawBack = () => {
   const sheetEl = document.querySelector('.sheet-backdrop');
   if (sheetEl) { sheetEl.remove(); return true; }
+  const stageEl = document.querySelector('.stage');
+  if (stageEl) { stageEl.__close(); return true; }
   const overlay = document.querySelector('.overlay');
   if (overlay) { overlay.remove(); return true; }
   const view = location.hash.replace(/^#\/?/, '').split('/')[0];

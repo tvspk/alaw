@@ -68,4 +68,11 @@
   Obrazovka písně, která hraje, se připojí (`radio.attach/detach`, obsluha `H` v `song.js`) místo vlastního přehrávače; při změně písně
   přejde na text nové (když není otevřená nabídka). Hrát smí jen jeden `Player` (`Player.playing`), ostatní se pozastaví.
   Prvky u spodního okraje posunout pro `body.mini-on`. Test: `python3 -u testy/test_prehravac.py`. Zhasnutá obrazovka v APK zatím ne.
+- **0.17:** `js/stage.js` zpívání na celou obrazovku (Wake Lock, `carryStage` při náhodném přehrávání); `js/loudness.js` vyrovnání
+  hlasitosti jen v náhodném přehrávání (jen ztlumení přes `audio.volume`, cache `localStorage['alaw-loud']`, `prefs.normVol`);
+  `prefs.miniLine` verš+překlad v malém přehrávači (výška `--mini-h`); vlastní překlad `model.numberedText`/`parsePastedTr` + `openPasteTr`
+  v `song.js`; ověřování textu `model.inReview` (verze `source:'přepis'` nebo `review:true`; `review:false` = ukončeno), verš `ok:true`
+  (Upravit a úprava verše = ověřeno); zpěvník `js/book.js` `#/book` (tisk, APK `AlawAndroid.print` → PrintManager); Najít texty 429 →
+  čekat 1/2/3 min; Groq `timestamp_granularities[]` word+segment → `stt.withWords` → `splitSegment`. Knihovna: `libState.y/last`,
+  návrat po Zpět (`route(true)`), `.to-top`. Test: `python3 -u testy/test_novinky.py`.
 - **Stav projektu, rozhodnutí a další kroky: `HANDOFF.md`** (přečti jako první).

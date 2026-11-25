@@ -497,6 +497,18 @@ export async function renderFindLyrics(root, nav) {
     draw();
   }
 
+  const is429 = e => e && (e.status === 429 || /\(429\)/.test(e.message || ''));
+  // odpočet čekání (lze přerušit tlačítkem Zastavit); false = zastaveno
+  async function pause429(ms, i, n) {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      if (stop) return false;
+      info.textContent = t('Web nás brzdí (moc dotazů za sebou). Čekám {s} s a zkusím to znovu… ({i}/{n})', { s: Math.ceil((end - Date.now()) / 1000), i, n });
+      await new Promise(res => setTimeout(res, Math.min(1000, Math.max(10, end - Date.now()))));
+    }
+    return !stop;
+  }
+
   async function run() {
     if (running) { stop = true; return; }
     running = true; stop = false;
@@ -507,22 +519,32 @@ export async function renderFindLyrics(root, nav) {
       const s = queue[i], r = st.get(s.id);
       info.textContent = t('Hledám {i}/{n}: {t}', { i: i + 1, n: queue.length, t: s.title });
       r.state = 'busy'; draw();
-      try {
-        r.cands = r.links ? await fromLinks(r) : [];
-        if (!r.cands.length) { // bez odkazů, nebo z žádného nešel načíst text → LRCLIB
-          const v = primaryVersion(s);
-          if (r.dur === undefined) {
-            const blob = v.audio ? await getAudioBlob(v.audio.key) : null;
-            r.dur = blob ? await audioDuration(blob) : null;
+      for (let attempt = 0; ; attempt++) {
+        try {
+          r.cands = r.links ? await fromLinks(r) : [];
+          if (!r.cands.length) { // bez odkazů, nebo z žádného nešel načíst text → LRCLIB
+            const v = primaryVersion(s);
+            if (r.dur === undefined) {
+              const blob = v.audio ? await getAudioBlob(v.audio.key) : null;
+              r.dur = blob ? await audioDuration(blob) : null;
+            }
+            const res = await lrclib.search({ title: s.title, artist: s.artist });
+            r.cands = rankLyrics(res, s, r.dur).slice(0, 5);
           }
-          const res = await lrclib.search({ title: s.title, artist: s.artist });
-          r.cands = rankLyrics(res, s, r.dur).slice(0, 5);
+          r.i = 0;
+          r.state = 'done';
+        } catch (e) {
+          // 429 = web nás brzdí (moc dotazů za sebou): počkat 1, 2, 3 minuty a zkusit znovu (0.17)
+          if (is429(e) && attempt < 3 && !stop) {
+            const ok = await pause429((attempt + 1) * (window.__alawWait429 ?? 60000), i + 1, queue.length);
+            if (ok) continue;
+          }
+          r.state = 'error'; r.error = e.message || String(e);
         }
-        r.i = 0;
-        r.state = 'done';
-      } catch (e) { r.state = 'error'; r.error = e.message || String(e); }
+        break;
+      }
       draw();
-      await new Promise(res => setTimeout(res, window.__alawBulkDelay ?? 250)); // šetrně k LRCLIB
+      await new Promise(res => setTimeout(res, window.__alawBulkDelay ?? 1000)); // šetrně k LRCLIB
     }
     running = false;
     startBtn.textContent = stop ? t('🔍 Hledat dál') : t('🔍 Hledat znovu nenalezené');

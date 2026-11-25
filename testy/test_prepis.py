@@ -61,7 +61,7 @@ def groq(route):
     body = req.post_data_buffer or b''
     i = body.find(b'RIFF')
     calls['groq'].append({'wav16k': i >= 0 and int.from_bytes(body[i + 24:i + 28], 'little') == 16000,
-                          'model': b'whisper-large-v3' in body, 'lang': b'name="language"\r\n\r\ncy' in body, 'verbose': b'verbose_json' in body})
+                          'model': b'whisper-large-v3' in body, 'lang': b'name="language"\r\n\r\ncy' in body, 'verbose': b'verbose_json' in body, 'words': b'name="timestamp_granularities[]"\r\n\r\nword' in body})
     segs = [{'start': 0.0, 'end': 0.8, 'text': ' ♪ ', 'no_speech_prob': 0.1, 'avg_logprob': -0.2, 'compression_ratio': 1.0},
             {'start': 1.0, 'end': 3.5, 'text': ' ' + LINES[0], 'no_speech_prob': 0.05, 'avg_logprob': -0.3, 'compression_ratio': 1.2},
             {'start': 3.6, 'end': 5.5, 'text': ' ' + LINES[1], 'no_speech_prob': 0.05, 'avg_logprob': -0.3, 'compression_ratio': 1.2},
@@ -232,7 +232,7 @@ def main():
         page.click('.sheet >> text=Whisper (Groq)')
         page.wait_for_selector('.lyric', timeout=30000)
         g = calls['groq'][-1]
-        check(g['wav16k'] and g['model'] and g['lang'] and g['verbose'], 'Groq: zmenšená kopie WAV 16 kHz, whisper-large-v3, velština, časy úseků')
+        check(g['wav16k'] and g['model'] and g['lang'] and g['verbose'] and g['words'], 'Groq: zmenšená kopie WAV 16 kHz, whisper-large-v3, velština, časy úseků i slov')
         r = page.evaluate("async id => { const s = await (await import('./js/store.js')).getSong(id); const v = s.versions[0]; return [v.label, v.lines.map(l => [l.text, l.start, l.stanza])]; }", tri)
         print('   ', r)
         check(r[0] == 'Přepis (Whisper)' and [l[0] for l in r[1]] == LINES[:3], 'Whisper: verše bez hudby (♪), halucinací a opakování')
