@@ -324,16 +324,18 @@ export async function renderSong(root, id, nav) {
   const loopBtn = el('button', { type: 'button', class: 'pill loop', hidden: true, onclick: clearLoop });
   const srcBtn = el('button', { type: 'button', class: 'pill', hidden: true, onclick: () => switchSource(st.source === 'audio' ? 'youtube' : 'audio') });
   const nextBtn = iconBtn('next', t('Další píseň'), () => radio.next());
+  const prevBtn = iconBtn('prev', t('Předchozí píseň'), () => radio.prev());
   const stageBtn = el('button', { type: 'button', class: 'pill', text: '⛶', title: t('Na celou obrazovku (zpívání)'), 'aria-label': t('Na celou obrazovku (zpívání)'), onclick: () => openStageNow() });
   function openStageNow() {
     if (stage) return;
     stage = openStage({ song, version, player: () => player, toggle: () => player.toggle(), back5: () => player.seek(player.time() - 5000),
-      next: shared ? () => radio.next() : null, onClose: () => { stage = null; } });
+      next: shared ? () => radio.next() : null, prev: shared ? () => radio.prev() : null, onClose: () => { stage = null; } });
   }
-  nextBtn.hidden = true;
+  nextBtn.hidden = true; prevBtn.hidden = true;
   const bar = el('div', { class: 'playerbar', hidden: true }, el('div', { class: 'inner' },
     progress,
     el('div', { class: 'controls' },
+      prevBtn,
       iconBtn('rewind', t('O 5 sekund zpět'), () => player.seek(player.time() - 5000)),
       playBtn, nextBtn, timeEl, el('span', { class: 'grow' }), loopBtn, srcBtn, stageBtn, rateBtn)));
 
@@ -359,7 +361,7 @@ export async function renderSong(root, id, nav) {
     radio.attach(song.id, version.id, H);
     st.source = 'audio';
     media.replaceChildren(); mediaError.hidden = true;
-    bar.hidden = false; nextBtn.hidden = false;
+    bar.hidden = false; nextBtn.hidden = false; prevBtn.hidden = false;
     srcBtn.hidden = !version.youtubeId; srcBtn.textContent = '♪ Soubor';
     H.onState(player.playing);
     if (player.ready) H.onReady();
@@ -368,7 +370,7 @@ export async function renderSong(root, id, nav) {
   function leaveShared() {
     if (!shared) return;
     radio.detach(H);
-    shared = false; nextBtn.hidden = true;
+    shared = false; nextBtn.hidden = true; prevBtn.hidden = true;
     player = wire(new Player());
     player.rate = getPrefs().rate;
     H.onState(false); updateRate();

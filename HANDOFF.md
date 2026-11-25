@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 25. 11. 2026, verze **0.17.0** (APK versionCode 25), program Bangor **1.2.1**. Odpovídej zadavateli **česky**.
+> Stav k 25. 11. 2026, verze **0.17.1** (APK versionCode 26), program Bangor **1.2.1**. Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -266,6 +266,11 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
      překlad/doslovně, „Zkopírovat text pro AI“ (očíslované verše + pokyn), vložit odpověď → párování podle čísel (jinak po řádcích,
      opakovaný originál se vynechá), náhled, „Přepsat překlad, který verš už má“. Časy netřeba: překlad patří k verši.
    - **16 knihovna**: po Zpět na místo otevřené písně (zvýrazní se), šipka ↑ nahoru.
+
+20. **0.17.1:** zadavatel vyzkoušel přehrávání („líbí se mi, jak nabízíš zobrazení textu“) a chtěl **⏮ předchozí píseň** i tam, kde byl jen ⏭
+   (přehrávač písně při náhodném přehrávání, celá obrazovka), a **posuvník písně** (celá obrazovka; malý přehrávač má místo proužku posuvník).
+   ⏮ po 3 s přehrávání = od začátku písně, jinak předchozí píseň. Opraveno „null“ v malém přehrávači u verše bez překladu a ve zpěvníku
+   (bez obsahu / bez překladu) – `replaceChildren` s null → `fill`.
 
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
 Zadavatel po vydání 0.12 napsal „ok všechno v pohodě“ (Bangor na Windows zřejmě v pořádku – při další práci krátce ověřit,

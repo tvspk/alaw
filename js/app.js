@@ -23,7 +23,7 @@ import { renderBook, setBookSongs } from './book.js';
 import { playShuffled, hasRecording, setNormalize, redrawLine } from './radio.js';
 import { groqKey, setGroqKey, checkGroq, availableEngines, defaultEngine, ENGINES, bangorPossible, checkBangor, bangorZip } from './stt.js';
 
-export const APP_VERSION = '0.17.0';
+export const APP_VERSION = '0.17.1';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně

@@ -1,6 +1,6 @@
 // Zpěvník (0.17, obrazovka #/book): vybrané písně s textem (a překladem pod verši) k tisku nebo uložení do PDF.
 // Počítač: tisk prohlížeče (Uložit jako PDF). Android: systémový tisk přes most AlawAndroid.print.
-import { el, iconBtn } from './ui.js';
+import { el, fill, iconBtn } from './ui.js';
 import { t, pl, collate } from './i18n.js';
 import { listSongs, getPrefs, setPrefs } from './store.js';
 import { primaryVersion, trOf } from './model.js';
@@ -31,7 +31,7 @@ export async function renderBook(root, nav) {
           return el('div', { class: 'b-line' + (l.stanza ? ' stanza' : '') }, el('div', { class: 'b-text', text: l.text }), tr ? el('div', { class: 'b-tr', text: tr }) : null);
         })));
     });
-    book.replaceChildren(head, toc, ...items);
+    fill(book, head, toc, items);
   }
 
   const opt = (label, cur, val, set) => el('button', { type: 'button', class: 'btn small' + (cur() === val ? ' primary' : ''), text: label, onclick: () => { set(val); save(); drawTools(); draw(); } });
@@ -39,7 +39,7 @@ export async function renderBook(root, nav) {
   const titleIn = el('input', { value: o.title, 'aria-label': t('Název zpěvníku'), oninput: () => { o.title = titleIn.value; draw(); } });
   function drawTools() {
     const ck = (label, key) => el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: o[key], onchange: e => { o[key] = e.target.checked; save(); draw(); } }), el('span', { text: label }));
-    tools.replaceChildren(
+    fill(tools,
       el('p', { class: 'hint', text: pl(songs.length, '{n} píseň', '{n} písně', '{n} písní') + ' · ' + t('řazeno podle názvu') }),
       el('label', { class: 'field' }, el('span', { text: t('Název zpěvníku') }), titleIn),
       el('div', { class: 'row', style: { flexWrap: 'wrap', gap: '6px', margin: '8px 0' } },

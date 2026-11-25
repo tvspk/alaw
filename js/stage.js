@@ -5,7 +5,7 @@
 import { el, iconBtn, ICONS } from './ui.js';
 import { t, lang as uiLang } from './i18n.js';
 import { getPrefs, setPrefs } from './store.js';
-import { trText, otherLang } from './model.js';
+import { trText, otherLang, formatMs } from './model.js';
 
 let carry = false;
 export function carryStage() { carry = true; }
@@ -21,7 +21,7 @@ async function wake(on) {
   } catch { lock = null; }
 }
 
-// opts: { song, version, player: () => Player, toggle(), back5(), next|null, onClose() }
+// opts: { song, version, player: () => Player, toggle(), back5(), next|null, prev|null, onClose() }
 export function openStage(opts) {
   const { song, version } = opts;
   const timed = version.lines.some(l => l.start != null);
@@ -32,14 +32,20 @@ export function openStage(opts) {
   else main.append(el('div', { class: 'st-note', text: t('Píseň nemá časy veršů – text se neposouvá sám.') }),
     ...version.lines.map(l => el('div', { class: 'st-line' + (l.stanza ? ' stanza' : ''), text: l.text })));
   const playBtn = el('button', { type: 'button', class: 'play', 'aria-label': t('Přehrát'), html: ICONS.play, onclick: () => opts.toggle() });
+  // posuvník písně a čas
+  const seek = el('input', { type: 'range', class: 'progress', min: 0, max: 1000, value: 0, step: 100, 'aria-label': t('Pozice'),
+    oninput: () => opts.player().seek(+seek.value) });
+  const timeEl = el('span', { class: 'st-time' });
   const setSize = d => { size = Math.max(0.7, Math.min(1.8, Math.round((size + d) * 10) / 10)); setPrefs({ stageSize: size }); box.style.setProperty('--st-size', size); };
   const box = el('div', { class: 'stage', role: 'dialog', 'aria-label': t('Zpívání na celou obrazovku') },
     el('div', { class: 'st-top' },
       el('div', { class: 'st-title' }, el('b', { text: song.title }), song.artist ? el('small', { text: song.artist }) : null),
       iconBtn('close', t('Zavřít'), () => close())),
     main,
+    el('div', { class: 'st-seek' }, seek, timeEl),
     el('div', { class: 'st-foot' },
       el('button', { type: 'button', class: 'pill', text: 'A−', 'aria-label': t('Menší písmo'), onclick: () => setSize(-0.1) }),
+      opts.prev ? iconBtn('prev', t('Předchozí píseň'), () => opts.prev()) : null,
       iconBtn('rewind', t('O 5 sekund zpět'), () => opts.back5()),
       playBtn,
       opts.next ? iconBtn('next', t('Další píseň'), () => opts.next()) : null,
@@ -55,6 +61,10 @@ export function openStage(opts) {
 
   let shown = -2;
   function update(ms) {
+    const d = opts.player().duration;
+    if (d) seek.max = Math.round(d);
+    if (document.activeElement !== seek) seek.value = Math.round(ms);
+    timeEl.textContent = `${formatMs(ms, false)} / ${formatMs(d, false)}`;
     if (!timed) return;
     let i = -1;
     version.lines.forEach((l, j) => { if (l.start != null && l.start <= ms + 80) i = j; });

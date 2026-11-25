@@ -3,7 +3,7 @@
 // Obrazovka písně, která právě hraje, se k němu připojí (attach) místo vlastního přehrávače:
 // karaoke, skok na verš i smyčka pak běží nad touto nahrávkou. Jiný přehrávač v aplikaci ho pozastaví (Player.playing).
 // Jen písně s vlastní nahrávkou (YouTube potřebuje viditelné video). Pořadí se zamíchá, po poslední písni znovu.
-import { el, iconBtn, ICONS, toast } from './ui.js';
+import { el, fill, iconBtn, ICONS, toast } from './ui.js';
 import { t, lang as uiLang } from './i18n.js';
 import { getSong, getAudioBlob, getPrefs } from './store.js';
 import { primaryVersion, trText, otherLang } from './model.js';
@@ -158,11 +158,13 @@ function notify() { for (const fn of [...subs]) { try { fn(cur); } catch (e) { c
 function build() {
   const title = el('a', { class: 'mini-title', href: '#/' });
   const play = el('button', { type: 'button', class: 'mini-play', 'aria-label': t('Přehrát'), html: ICONS.play, onclick: toggle });
-  const fillEl = el('i');
+  // posuvník: táhnutím přetočit píseň (dřív jen tenký proužek)
+  const seekEl = el('input', { type: 'range', class: 'mini-seek', min: 0, max: 1000, value: 0, step: 100, 'aria-label': t('Pozice'),
+    oninput: () => player.seek(+seekEl.value) });
   const lineEl = el('div', { class: 'mini-line', hidden: true });
-  ui = { title, play, fillEl, lineEl, li: -2 };
+  ui = { title, play, seekEl, lineEl, li: -2 };
   bar = el('div', { class: 'minibar', hidden: true, role: 'region', 'aria-label': t('Náhodné přehrávání') },
-    el('div', { class: 'mini-prog' }, fillEl),
+    seekEl,
     lineEl,
     el('div', { class: 'inner' },
       title,
@@ -199,7 +201,8 @@ function drawState() {
 function drawTime(ms) {
   if (!ui || bar.hidden) return;
   const d = player.duration;
-  ui.fillEl.style.width = d ? `${Math.min(100, (100 * ms) / d).toFixed(2)}%` : '0';
+  if (d) ui.seekEl.max = Math.round(d);
+  if (document.activeElement !== ui.seekEl) ui.seekEl.value = Math.round(ms);
   drawLine(ms);
 }
 
@@ -215,7 +218,7 @@ function drawLine(ms) {
   if (!l) { height(); return; }
   const lg = getPrefs().trLang || uiLang;
   const tr = trText(l, lg) || trText(l, otherLang(lg)); // překlad v jazyce, který píseň má
-  ui.lineEl.replaceChildren(el('div', { class: 'ml-text', text: l.text }), tr ? el('div', { class: 'ml-tr', text: tr.text }) : null);
+  fill(ui.lineEl, el('div', { class: 'ml-text', text: l.text }), tr ? el('div', { class: 'ml-tr', text: tr.text }) : null);
   height();
 }
 // výška malého přehrávače pro posun ostatních prvků (CSS --mini-h)
