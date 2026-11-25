@@ -37,6 +37,9 @@ export const ICONS = {
   pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>',
   rewind: svg('<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><text x="12" y="15.5" font-size="7.5" text-anchor="middle" fill="currentColor" stroke="none" font-family="sans-serif" font-weight="700">5</text>'),
   plus: svg('<path d="M12 5v14M5 12h14"/>'),
+  prev: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="2.4" height="14" rx="1" fill="currentColor"/><path d="M19 6.2v11.6a1 1 0 0 1-1.5.86L9 13.4a1.6 1.6 0 0 1 0-2.8l8.5-5.26A1 1 0 0 1 19 6.2z" fill="currentColor"/></svg>',
+  next: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="16.6" y="5" width="2.4" height="14" rx="1" fill="currentColor"/><path d="M5 6.2v11.6a1 1 0 0 0 1.5.86L15 13.4a1.6 1.6 0 0 0 0-2.8L6.5 5.34A1 1 0 0 0 5 6.2z" fill="currentColor"/></svg>',
+  close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
 };
 
 export function iconBtn(name, label, onClick) {

@@ -11,6 +11,7 @@ import { MAX_VERSIONS, analyze, summary } from './versions.js';
 import { applyLyrics, runTranscribe, transcribable, needsTimes, runTimes } from './bulk.js';
 import { hasBangor } from './stt.js';
 import { openSearch } from './search.js';
+import * as radio from './radio.js';
 
 const WORD_RE = /^([^\p{L}\p{N}]*)(.*?)([^\p{L}\p{N}]*)$/u;
 
@@ -34,8 +35,9 @@ export async function renderSong(root, id, nav) {
   if (!song) { root.append(el('div', { class: 'view' }, el('p', { class: 'empty', text: t('Píseň nenalezena.') }))); return; }
   const prefs = getPrefs();
   let version = primaryVersion(song);
-  const player = new Player();
+  let player = new Player(); // vlastní přehrávač písně, nebo společný (radio.player), když tahle píseň hraje náhodně
   player.rate = prefs.rate;
+  let shared = false;
   const units = songUnits(song);
   let recs = await getProgress(song.id);
 
@@ -284,21 +286,59 @@ export async function renderSong(root, id, nav) {
   } });
   const loopBtn = el('button', { type: 'button', class: 'pill loop', hidden: true, onclick: clearLoop });
   const srcBtn = el('button', { type: 'button', class: 'pill', hidden: true, onclick: () => switchSource(st.source === 'audio' ? 'youtube' : 'audio') });
+  const nextBtn = iconBtn('next', t('Další píseň'), () => radio.next());
+  nextBtn.hidden = true;
   const bar = el('div', { class: 'playerbar', hidden: true }, el('div', { class: 'inner' },
     progress,
     el('div', { class: 'controls' },
       iconBtn('rewind', t('O 5 sekund zpět'), () => player.seek(player.time() - 5000)),
-      playBtn, timeEl, el('span', { class: 'grow' }), loopBtn, srcBtn, rateBtn)));
+      playBtn, nextBtn, timeEl, el('span', { class: 'grow' }), loopBtn, srcBtn, rateBtn)));
 
   function updateRate() { rateBtn.textContent = `${num(player.rate)}×`; rateBtn.classList.toggle('on', player.rate !== 1); }
 
-  player.onState = playing => { playBtn.innerHTML = playing ? ICONS.pause : ICONS.play; playBtn.setAttribute('aria-label', playing ? t('Pozastavit') : t('Přehrát')); };
-  player.onReady = () => { progress.max = Math.round(player.duration || 1000); mediaError.hidden = true; onTime(player.time()); };
-  player.onError = msg => {
-    mediaError.textContent = msg; mediaError.hidden = false;
-    if (player.kind === 'youtube' && !player.ready) media.replaceChildren(); // prázdný černý rámeček nezobrazovat
+  // obsluha událostí přehrávače – stejná pro vlastní i společný přehrávač
+  const H = {
+    onState: playing => { playBtn.innerHTML = playing ? ICONS.pause : ICONS.play; playBtn.setAttribute('aria-label', playing ? t('Pozastavit') : t('Přehrát')); },
+    onReady: () => { progress.max = Math.round(player.duration || 1000); mediaError.hidden = true; onTime(player.time()); },
+    onError: msg => {
+      mediaError.textContent = msg; mediaError.hidden = false;
+      if (player.kind === 'youtube' && !player.ready) media.replaceChildren(); // prázdný černý rámeček nezobrazovat
+    },
+    onTime: ms => onTime(ms),
   };
-  player.onTime = onTime;
+  const wire = p => Object.assign(p, H);
+  wire(player);
+
+  // Píseň právě hraje v náhodném přehrávání → obrazovka převezme společný přehrávač (hraje dál bez přerušení).
+  function enterShared() {
+    if (!shared) player.destroy();
+    player = radio.player; shared = true;
+    radio.attach(song.id, version.id, H);
+    st.source = 'audio';
+    media.replaceChildren(); mediaError.hidden = true;
+    bar.hidden = false; nextBtn.hidden = false;
+    srcBtn.hidden = !version.youtubeId; srcBtn.textContent = '♪ Soubor';
+    H.onState(player.playing);
+    if (player.ready) H.onReady();
+    updateRate(); applyLoop(false);
+  }
+  function leaveShared() {
+    if (!shared) return;
+    radio.detach(H);
+    shared = false; nextBtn.hidden = true;
+    player = wire(new Player());
+    player.rate = getPrefs().rate;
+    H.onState(false); updateRate();
+  }
+  // Náhodné přehrávání přešlo na jinou píseň: když ji tahle obrazovka ukazovala, přejde na text nové písně
+  // (jen když není otevřená nabídka); jinak si obrazovka vezme zpět vlastní přehrávač.
+  const unsubRadio = radio.subscribe(c => {
+    const mine = radio.matches(song.id, version.id);
+    if (shared && !mine) {
+      if (c && !document.querySelector('.sheet')) { nav.replace(`#/song/${encodeURIComponent(c.song.id)}`); return; }
+      leaveShared(); setupMedia();
+    } else if (!shared && mine) setupMedia();
+  });
 
   function onTime(t) {
     if (player.duration) progress.max = Math.round(player.duration);
@@ -322,6 +362,7 @@ export async function renderSong(root, id, nav) {
   window.addEventListener('wheel', markScroll, { passive: true });
 
   async function switchSource(kind) {
+    if (shared) leaveShared();
     st.source = kind;
     setPrefs({ source: { ...getPrefs().source, [song.id]: kind } });
     mediaError.hidden = true;
@@ -348,6 +389,8 @@ export async function renderSong(root, id, nav) {
   }
 
   function setupMedia() {
+    if (radio.matches(song.id, version.id)) { enterShared(); return; }
+    if (shared) leaveShared();
     const hasAudio = !!version.audio, hasYt = !!version.youtubeId;
     if (!hasAudio && !hasYt) {
       player.destroy(); bar.hidden = true;
@@ -614,7 +657,8 @@ export async function renderSong(root, id, nav) {
   document.documentElement.style.setProperty('--lyric-size', `${getPrefs().lyricSize}rem`);
 
   return () => {
-    player.destroy();
+    unsubRadio();
+    if (shared) radio.detach(H); else player.destroy();
     window.removeEventListener('scroll', onScroll);
     window.removeEventListener('touchmove', markScroll);
     window.removeEventListener('wheel', markScroll);

@@ -521,3 +521,31 @@ mark.gap { font-family: var(--sans); font-weight: 700; padding: 0 4px; }
 .sel-toggle { font-size: 1.2rem; margin-left: auto; }
 .sel-toggle.on { color: var(--accent); }
 .sel-bar .btn.danger:disabled { opacity: .5; }
+
+/* ---------- náhodné přehrávání (0.16): malý přehrávač dole ---------- */
+.lib-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 10px; }
+.lib-actions .hint { color: var(--muted); font-size: .85rem; }
+.minibar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 35;
+  background: color-mix(in srgb, var(--surface) 96%, transparent); backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line); padding: 0 8px env(safe-area-inset-bottom);
+}
+.minibar[hidden] { display: none; }
+.minibar .inner { max-width: 760px; height: 58px; margin: 0 auto; display: flex; align-items: center; gap: 2px; }
+.mini-prog { position: absolute; left: 0; right: 0; top: -1px; height: 3px; }
+.mini-prog i { display: block; height: 100%; width: 0; background: var(--accent); }
+.mini-title { flex: 1; min-width: 0; display: grid; text-decoration: none; color: inherit; padding: 4px 6px; border-radius: 10px; }
+.mini-title b, .mini-title small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-title b { font-family: var(--serif); font-size: 1rem; }
+.mini-title small { color: var(--muted); font-size: .8rem; }
+.mini-title:active { background: var(--surface-2); }
+.mini-play {
+  width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-ink);
+  display: grid; place-items: center; flex: none;
+}
+.mini-play svg { width: 22px; height: 22px; }
+/* ostatní prvky u spodního okraje se posunou nad malý přehrávač */
+body.mini-on .view { padding-bottom: calc(180px + env(safe-area-inset-bottom)); }
+body.mini-on .fab { bottom: calc(82px + env(safe-area-inset-bottom)); }
+body.mini-on .playerbar, body.mini-on .tap-zone, body.mini-on .bulk-foot { bottom: calc(58px + env(safe-area-inset-bottom)); }
+body.mini-on #toast { bottom: calc(170px + env(safe-area-inset-bottom)); }

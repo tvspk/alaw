@@ -1,7 +1,8 @@
 import { t } from './i18n.js';
 // Jednotný přehrávač: vlastní zvukový soubor (Blob z IndexedDB) nebo video z YouTube.
 // Ovládání: play, pause, toggle, seek(ms), playFrom(ms), setRate(r), setLoop(a, b)
-// Události: onTime(ms), onState(playing), onReady(), onError(text)
+// Události: onTime(ms), onState(playing), onReady(), onError(text), onEnded()
+// Hrát smí vždy jen jeden přehrávač: když se jeden rozehraje, ostatní se pozastaví (Player.playing).
 
 let ytApiPromise = null;
 function loadYouTubeApi() {
@@ -21,6 +22,8 @@ function loadYouTubeApi() {
 export const RATES = [0.5, 0.75, 1];
 
 export class Player {
+  static playing = new Set();
+
   constructor() {
     this.kind = null;
     this.ready = false;
@@ -32,6 +35,7 @@ export class Player {
     this.onState = () => {};
     this.onReady = () => {};
     this.onError = () => {};
+    this.onEnded = () => {};
     this._timer = null;
     this._objectUrl = null;
   }
@@ -54,7 +58,7 @@ export class Player {
     });
     a.addEventListener('play', () => this._setPlaying(true));
     a.addEventListener('pause', () => this._setPlaying(false));
-    a.addEventListener('ended', () => this._setPlaying(false));
+    a.addEventListener('ended', () => { this._setPlaying(false); this.onEnded(); });
     a.addEventListener('error', () => this.onError(t('Zvukový soubor nejde přehrát. Zkus jiný formát (mp3, m4a, ogg, wav).')));
     this.audio = a;
   }
@@ -84,7 +88,8 @@ export class Player {
           if (e.data === YT.PlayerState.PLAYING) {
             this.duration = (this.yt.getDuration() || 0) * 1000 || this.duration;
             this._setPlaying(true);
-          } else if (e.data === YT.PlayerState.PAUSED || e.data === YT.PlayerState.ENDED) this._setPlaying(false);
+          } else if (e.data === YT.PlayerState.PAUSED) this._setPlaying(false);
+          else if (e.data === YT.PlayerState.ENDED) { this._setPlaying(false); this.onEnded(); }
         },
         onError: e => {
           const msg = { 2: t('Neplatné ID videa.'), 5: t('Video nejde přehrát v tomto prohlížeči.'), 100: t('Video neexistuje nebo je soukromé.'), 101: t('Tohle video nejde přehrát mimo YouTube (autor to nepovolil). Zkus jiné video s toutéž písní.'), 150: t('Tohle video nejde přehrát mimo YouTube (autor to nepovolil). Zkus jiné video s toutéž písní.') }[e.data];
@@ -97,6 +102,7 @@ export class Player {
   destroy() {
     this._token = null;
     this._stopTimer();
+    Player.playing.delete(this);
     if (this.audio) { this.audio.pause(); this.audio.removeAttribute('src'); this.audio.load(); this.audio = null; }
     if (this._objectUrl) { URL.revokeObjectURL(this._objectUrl); this._objectUrl = null; }
     if (this.yt) { try { this.yt.destroy(); } catch { /* nic */ } this.yt = null; }
@@ -153,6 +159,10 @@ export class Player {
   _setPlaying(p) {
     if (this.playing === p) return;
     this.playing = p;
+    if (p) {
+      for (const o of [...Player.playing]) if (o !== this) o.pause();
+      Player.playing.add(this);
+    } else Player.playing.delete(this);
     p ? this._startTimer() : this._stopTimer();
     this.onState(p);
   }

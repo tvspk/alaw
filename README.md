@@ -4,7 +4,7 @@ Alaw (velšsky „melodie“): texty písní (hlavně velšských) a jejich uče
 
 *Alaw (Welsh for ‘melody’): song lyrics, mainly Welsh, and learning them by heart. Available in Czech and British English – switch CZ | EN on the home screen. [English description below.](#in-english)*
 
-## Co umí (verze 0.15)
+## Co umí (verze 0.16)
 
 - **Překlad česky i anglicky** (0.11): u verše může být český i anglický překlad (i doslovný a zkratky); AI překládá do jazyka
   rozhraní, druhý jazyk na vyžádání (Nastavení → Překlady pomocí AI). V písni přepínač CZ / EN u tlačítka Překlad.
@@ -16,6 +16,8 @@ Alaw (velšsky „melodie“): texty písní (hlavně velšských) a jejich uče
 - Přidání písně: prostý text nebo LRC s časy, sloky oddělené prázdným řádkem, načtení ze souboru.
 - Nahrávka: video z YouTube nebo vlastní zvukový soubor (mp3, m4a, ogg, wav, flac…) uložený v zařízení.
 - Přehrávač: zpomalení 0,75× / 0,5×, skok o 5 s zpět, ťuknutí na verš = přehrát od něj, zvýraznění aktuálního verše.
+- **Náhodné přehrávání:** všechny písně s vlastní nahrávkou (nebo jen označené) v náhodném pořadí; malý přehrávač dole
+  hraje dál při procházení aplikace, ťuknutím na název se otevře text hrající písně (karaoke, ⏭ přejde i na text další).
 - Smyčka jednoho verše nebo úseku veršů.
 - Časování veršů ťukáním do rytmu (s krokem zpět a posunem všech časů).
 - Režimy učení: Číst, Mizení (nastavitelné procento skrytých slov), Písmena (jen první písmeno); ťuknutím slovo odkryješ.
@@ -75,13 +77,15 @@ Alaw (Welsh for ‘melody’) is an app for song lyrics, mainly Welsh, and for l
 for Android and computers, works offline, and has an Android app (APK). The interface is in Czech or British English.
 You add the songs yourself – the app has no lyrics library of its own.
 
-**What it does (version 0.15)**
+**What it does (version 0.16)**
 
 - **Library** with search (including within lyrics, ignoring accents), tags and a language filter.
 - **Adding a song:** plain text or LRC with timings, verses separated by a blank line, or from a file.
 - **Recording:** a YouTube video or your own audio file (mp3, m4a, ogg, wav, flac…) stored on the device.
 - **Player:** slow down to 0.75× / 0.5×, jump back 5 s, tap a line to play from it, the current line is highlighted;
   loop one line or a range of lines; time lines by tapping along to the beat.
+- **Shuffle play:** all songs with your own recording (or just the selected ones) in random order; the mini player at the
+  bottom keeps playing while you use the app, and tapping the title opens the lyrics of the song that is playing.
 - **Study modes:** Read, Fade (a chosen share of words hidden) and First letters; tap a word to reveal it.
 - **For every line:** translation, literal translation, colloquial contractions and your own note – in Czech and in English.
 - **Learning properly** (“Learn” in a song): new lines in pairs (read and listen), then first letters, “how does the line go?”

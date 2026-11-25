@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 24. 11. 2026, verze **0.15.1** (APK versionCode 23), program Bangor **1.2.1**. Odpovídej zadavateli **česky**.
+> Stav k 25. 11. 2026, verze **0.16.0** (APK versionCode 24), program Bangor **1.2.1**. Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -238,6 +238,17 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
    - **Neověřeno: instalace PyTorch/Demucs na Windows (index download.pytorch.org z prostředí Claude nedostupný) a souběh knihoven
      CUDA (torch v podprocesu, ctranslate2 v hlavním).** Groq dělení na verše zatím nemá (nezadáno; `timestamp_granularities[]=word`).
 
+18. **Náhodné přehrávání (0.16.0):** zadavatel chtěl aplikaci používat i jako přehrávač. **Rozhodnutí zadavatele:** jen písně
+   **s vlastní nahrávkou** (YouTube ne – potřebuje viditelné video), „Přehrát vše náhodně“ i **jen označené** (☑ výběr v knihovně),
+   **zhasnutá obrazovka / pozadí v APK až později** (vyžaduje službu na popředí s oznámením v `MainActivity`, teď `web.onPause()`).
+   - `js/radio.js`: fronta zamíchaná jednou, po konci znovu (tatáž píseň ne dvakrát po sobě); chybějící nahrávka (nestažená) se přeskočí;
+     ⏮ po 3 s = od začátku; ✕ ukončí. Rychlost se u každé písně vrací na 1×. Media Session (klávesy pro hudbu, panel médií).
+   - Malý přehrávač dole (název + interpret + pořadí, ⏮ ⏯ ⏭ ✕, proužek průběhu); ťuk na název = text písně. U hrající písně se skryje
+     a hraje přehrávač písně (+ ⏭); karaoke, ťuk na verš i smyčka jdou nad společnou nahrávkou. Další píseň → obrazovka přejde na její text.
+   - Přehrání čehokoli jiného (jiná píseň, lekce, procvičování, časování) náhodné přehrávání pozastaví (`Player.playing`), a naopak.
+   - Přepnutí jazyka CZ/EN načte stránku znovu → přehrávání skončí (záměr, vzácné).
+   - Test `testy/test_prehravac.py`. **Ověřit na telefonu i počítači.**
+
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
 Zadavatel po vydání 0.12 napsal „ok všechno v pohodě“ (Bangor na Windows zřejmě v pořádku – při další práci krátce ověřit,
 zda přepis přes Bangor opravdu proběhl). CZ/EN (0.10) a dva překlady + stažení textu (0.11) viděl („perfektní“), zkouší.
@@ -255,6 +266,9 @@ rozbalit přes starý, restartovat program (instalace už proběhla, spustí se 
 rozbalit přes starý, spustit `alaw-bangor.bat` (doinstaluje oddělení zpěvu), aplikaci obnovit 2× F5 a zkusit znovu „Lan y Môr“.
 Pak ověřit, že okno programu píše „Zpěv oddělen od hudby (… na grafické kartě)“; když píše „Zpěv se nepodařilo oddělit“, poslat text z okna.
 Písně přepsané dřív lze přepsat znovu (přibude další verze „Přepis (Bangor) 2“; max. 3 verze).
+
+**25. 11.:** vydáno 0.16.0 – náhodné přehrávání (bod 18). Zadavatel chtěl i brainstorming dalších nápadů (k přehrávání i obecně) –
+návrhy jsou v odpovědi v chatu; co vybere, doplnit sem.
 
 Pořadí podle zadavatele. U kroků mimo kód vždy **po jednom**, čekat na „hotovo“. Zadavatel není programátor, odpovídat česky.
 
@@ -332,7 +346,7 @@ Zkušební „zpěv“: `apt-get install espeak-ng`, `espeak-ng -v cy` na lidovo
 
 - Po každé změně v `index.html`, `css/`, `js/` spusť `python3 scripts/build_sw.py` (workflow jinak selže).
 - Testy (Playwright, Chromium jako Pixel 7, bez sítě):
-  `python3 -u testy/test_zaklad.py`, `python3 -u testy/test_verze.py`, `python3 -u testy/test_hledani.py`, `python3 -u testy/test_hromadne.py`, `python3 -u testy/test_prepis.py`, `python3 -u testy/test_sync.py`, `python3 -u testy/test_preklady.py`, `python3 -u testy/test_anglictina.py`,
+  `python3 -u testy/test_zaklad.py`, `python3 -u testy/test_verze.py`, `python3 -u testy/test_hledani.py`, `python3 -u testy/test_hromadne.py`, `python3 -u testy/test_prepis.py`, `python3 -u testy/test_sync.py`, `python3 -u testy/test_preklady.py`, `python3 -u testy/test_anglictina.py`, `python3 -u testy/test_prehravac.py`,
   `node testy/test_worker.mjs`. Kontrola zdrojů proti skutečným webům: `python3 testy/zdroje_naostro.py`.
   Spouštěj s `-u` a výstup do souboru (`> /tmp/x.log`): přes rouru s `grep` se dlouhé testy zasekávaly. `test_zaklad` občas
   náhodně spadne na „Režimy učení“ (`.w.hide`) – při opakování projde.

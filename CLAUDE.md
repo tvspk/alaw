@@ -63,4 +63,9 @@
 - **Překlad verše ve dvou jazycích** (0.11): český = pole verše `translation`, `literal`, `contractions`; anglický = `line.en`
   `{ translation, literal, contractions }` (prázdný se neukládá). Číst a zapisovat jen přes `model.trOf`/`setTr`, zobrazit přes
   `trText` (anglicky záloha `alt` = překlad ze zdroje, označený), v učení `anyTr`. Export `model.toTxt`. Test: `python3 -u testy/test_preklady.py`.
+- **Náhodné přehrávání** (0.16, `js/radio.js`): jeden společný `Player` pro celou aplikaci, malý přehrávač `.minibar` v `body`
+  (mimo `#app`, přežije přechod mezi obrazovkami). Jen písně s vlastní nahrávkou (`audioVersion`: hlavní verze, jinak první s nahrávkou).
+  Obrazovka písně, která hraje, se připojí (`radio.attach/detach`, obsluha `H` v `song.js`) místo vlastního přehrávače; při změně písně
+  přejde na text nové (když není otevřená nabídka). Hrát smí jen jeden `Player` (`Player.playing`), ostatní se pozastaví.
+  Prvky u spodního okraje posunout pro `body.mini-on`. Test: `python3 -u testy/test_prehravac.py`. Zhasnutá obrazovka v APK zatím ne.
 - **Stav projektu, rozhodnutí a další kroky: `HANDOFF.md`** (přečti jako první).

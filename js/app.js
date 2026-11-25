@@ -19,9 +19,10 @@ import { helpTitle } from './help.js';
 import { renderBulk, renderFindLyrics, renderTimes, songsWithoutText, applyLyrics } from './bulk.js';
 import { importFromUrl, showPreview } from './search.js';
 import { cleanText } from './sources.js';
+import { playShuffled, hasRecording } from './radio.js';
 import { groqKey, setGroqKey, checkGroq, availableEngines, defaultEngine, ENGINES, bangorPossible, checkBangor, bangorZip } from './stt.js';
 
-export const APP_VERSION = '0.15.1';
+export const APP_VERSION = '0.16.0';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně
@@ -92,6 +93,12 @@ async function renderLibrary(root) {
     oninput: () => { libState.q = search.value; draw(); } });
   if (libState.sel) libState.sel = new Set([...libState.sel].filter(id => songs.some(s => s.id === id)));
   let shown = [];
+  const recCount = sel => songs.filter(s => sel.has(s.id) && hasRecording(s)).length;
+  const withRec = songs.filter(hasRecording).length;
+  const shuffleRow = withRec && !libState.sel ? el('div', { class: 'lib-actions' },
+    el('button', { type: 'button', class: 'btn small', text: t('🔀 Přehrát vše náhodně ({n})', { n: withRec }),
+      title: t('Písně s vlastní nahrávkou v náhodném pořadí; aplikaci můžeš mezitím procházet'), onclick: () => playShuffled(songs) }),
+    el('span', { class: 'hint', text: t('nebo označ písně ☑') })) : null;
   const selBar = el('div', { class: 'bulk-foot sel-bar' });
   const selMode = on => { libState.sel = on ? new Set() : null; route(); };
   function drawSel() {
@@ -107,6 +114,11 @@ async function renderLibrary(root) {
           draw();
         } }),
         el('button', { type: 'button', class: 'btn', text: t('Hotovo'), onclick: () => selMode(false) }),
+        recCount(sel) ? el('button', { type: 'button', class: 'btn', text: t('🔀 Přehrát ({n})', { n: recCount(sel) }), title: t('Přehrát označené písně s vlastní nahrávkou v náhodném pořadí'), onclick: async () => {
+          const list = songs.filter(s => sel.has(s.id));
+          libState.sel = null; route();
+          await playShuffled(list);
+        } }) : null,
         el('button', { type: 'button', class: 'btn danger', text: t('🗑 Smazat ({n})', { n: sel.size }), disabled: !sel.size, onclick: removeSelected })));
   }
   async function removeSelected() {
@@ -167,12 +179,12 @@ async function renderLibrary(root) {
   root.append(el('div', { class: 'view' },
     el('header', { class: 'topbar' }, el('h1', { class: 'brand', text: 'Alaw' }),
       langSwitch(),
-      songs.length ? el('button', { type: 'button', class: 'icon-btn sel-toggle' + (libState.sel ? ' on' : ''), title: t('Vybrat víc písní (smazat)'), 'aria-label': t('Vybrat víc písní'), text: '☑', onclick: () => selMode(!libState.sel) }) : null,
+      songs.length ? el('button', { type: 'button', class: 'icon-btn sel-toggle' + (libState.sel ? ' on' : ''), title: t('Vybrat víc písní (přehrát, smazat)'), 'aria-label': t('Vybrat víc písní'), text: '☑', onclick: () => selMode(!libState.sel) }) : null,
       iconBtn('settings', t('Nastavení'), () => nav.go('#/settings'))),
     reminders(songs, progress, sums),
     noTextBar(songs),
     songs.length > 4 || libState.q ? search : null,
-    chipsEl, listEl, selBar),
+    chipsEl, shuffleRow, listEl, selBar),
     ...(libState.sel ? [] : [el('button', { type: 'button', class: 'fab', html: `${ICONS.plus}<span>${t('Přidat píseň')}</span>`, onclick: () => nav.go('#/new') })]));
   root.querySelector('.fab svg')?.setAttribute('width', '22');
   draw();
