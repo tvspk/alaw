@@ -1,4 +1,4 @@
-import { dec } from './i18n.js';
+import { dec, t } from './i18n.js';
 // Drobné pomocníky pro stavbu rozhraní bez knihoven.
 
 export function el(tag, props = {}, ...children) {
@@ -35,7 +35,8 @@ export const ICONS = {
   settings: svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
   play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" fill="currentColor"/></svg>',
   pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>',
-  rewind: svg('<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><text x="12" y="15.5" font-size="7.5" text-anchor="middle" fill="currentColor" stroke="none" font-family="sans-serif" font-weight="700">5</text>'),
+  rewind: svg('<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><text x="12" y="15.5" font-size="7" text-anchor="middle" fill="currentColor" stroke="none" font-family="sans-serif" font-weight="700">10</text>'),
+  forward: svg('<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/><text x="12" y="15.5" font-size="7" text-anchor="middle" fill="currentColor" stroke="none" font-family="sans-serif" font-weight="700">10</text>'),
   plus: svg('<path d="M12 5v14M5 12h14"/>'),
   prev: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="2.4" height="14" rx="1" fill="currentColor"/><path d="M19 6.2v11.6a1 1 0 0 1-1.5.86L9 13.4a1.6 1.6 0 0 1 0-2.8l8.5-5.26A1 1 0 0 1 19 6.2z" fill="currentColor"/></svg>',
   next: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="16.6" y="5" width="2.4" height="14" rx="1" fill="currentColor"/><path d="M5 6.2v11.6a1 1 0 0 0 1.5.86L15 13.4a1.6 1.6 0 0 0 0-2.8L6.5 5.34A1 1 0 0 0 5 6.2z" fill="currentColor"/></svg>',
@@ -116,3 +117,9 @@ export function pickFiles(accept, { folder = false } = {}) {
 export const fileSize = bytes => bytes >= 1048576 ? `${dec(bytes / 1048576)} MB` : `${Math.max(1, Math.round(bytes / 1024))} kB`;
 
 export const safeName = s => String(s || 'pisen').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'pisen';
+
+// Skok o 10 s zpět / vpřed (0.18.1, dřív jen 5 s zpět) – stejné ve všech přehrávačích. p = funkce vracející přehrávač.
+export function skipBtns(p) {
+  return [iconBtn('rewind', t('O 10 sekund zpět'), () => { const x = p(); x.seek(Math.max(0, x.time() - 10000)); }),
+    iconBtn('forward', t('O 10 sekund vpřed'), () => { const x = p(); if (x.duration) x.seek(Math.min(x.duration - 500, x.time() + 10000)); })];
+}

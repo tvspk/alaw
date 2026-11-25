@@ -23,7 +23,7 @@ import { renderBook, setBookSongs } from './book.js';
 import { playShuffled, hasRecording, setNormalize, redrawLine } from './radio.js';
 import { groqKey, setGroqKey, checkGroq, availableEngines, defaultEngine, ENGINES, bangorPossible, checkBangor, bangorZip } from './stt.js';
 
-export const APP_VERSION = '0.18.0';
+export const APP_VERSION = '0.18.1';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně
@@ -114,7 +114,7 @@ async function renderLibrary(root) {
   const shuffleRow = withRec && !libState.sel ? el('div', { class: 'lib-actions' },
     el('button', { type: 'button', class: 'btn small', text: t('🔀 Přehrát vše náhodně ({n})', { n: withRec }),
       title: t('Písně s vlastní nahrávkou v náhodném pořadí; aplikaci můžeš mezitím procházet'), onclick: () => playShuffled(songs) }),
-    el('span', { class: 'hint', text: t('nebo označ písně ☑') })) : null;
+    el('button', { type: 'button', class: 'btn small', text: t('☑ Vybrat písně k přehrání'), onclick: () => selMode(true) })) : null;
   const selBar = el('div', { class: 'bulk-foot sel-bar' });
   const selMode = on => { libState.sel = on ? new Set() : null; route(); };
   function drawSel() {
@@ -123,7 +123,7 @@ async function renderLibrary(root) {
     if (!sel) return;
     const allOn = shown.length && shown.every(s => sel.has(s.id));
     fill(selBar,
-      el('div', { class: 'bulk-sum', text: t('Označeno {n} z {m}', { n: sel.size, m: songs.length }) }),
+      el('div', { class: 'bulk-sum', text: sel.size ? t('Označeno {n} z {m}', { n: sel.size, m: songs.length }) : t('Ťukáním na písně v seznamu je označ (znovu = zrušit).') }),
       el('div', { class: 'row end' },
         el('button', { type: 'button', class: 'btn', text: allOn ? t('Zrušit označení') : t('Označit zobrazené ({n})', { n: shown.length }), onclick: () => {
           for (const s of shown) allOn ? sel.delete(s.id) : sel.add(s.id);

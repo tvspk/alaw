@@ -2,6 +2,10 @@
 // Nový text v kódu → doplnit sem (test hlásí chybějící překlady).
 /* eslint-disable */
 export const EN = {
+  "☑ Vybrat písně k přehrání": "☑ Choose songs to play",
+  "Ťukáním na písně v seznamu je označ (znovu = zrušit).": "Tap songs in the list to select them (tap again to deselect).",
+  "O 10 sekund zpět": "Back 10 seconds",
+  "O 10 sekund vpřed": "Forward 10 seconds",
   "Předchozí": "Previous",
   "Další": "Next",
   "Ukončit": "Stop",
@@ -295,7 +299,6 @@ export const EN = {
   "název z údajů v souboru": "title from the file's tags",
   "Něco se pokazilo: {e}": "Something went wrong: {e}",
   "Některá píseň nemá název.": "One of the songs has no title.",
-  "O 5 sekund zpět": "Back 5 seconds",
   "Odebrat": "Remove",
   "Odejít bez uložení časů?": "Leave without saving the timings?",
   "Odkaz musí začínat http(s)://": "The link must start with http(s)://",
@@ -594,7 +597,6 @@ export const EN = {
   "Vybrat víc písní": "Select several songs",
   "🔀 Přehrát vše náhodně ({n})": "🔀 Shuffle all ({n})",
   "Písně s vlastní nahrávkou v náhodném pořadí; aplikaci můžeš mezitím procházet": "Songs with your own recording in random order; you can keep using the app meanwhile",
-  "nebo označ písně ☑": "or select songs ☑",
   "🔀 Přehrát ({n})": "🔀 Shuffle ({n})",
   "Přehrát označené písně s vlastní nahrávkou v náhodném pořadí": "Play the selected songs that have your own recording, in random order",
   "Žádná z písní nemá vlastní nahrávku.": "None of these songs has its own recording.",

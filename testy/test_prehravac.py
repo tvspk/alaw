@@ -82,9 +82,14 @@ def main():
         }''', [SONGS, b64])
         page.reload()
         page.wait_for_selector('.song-card')
-        btn = page.locator('.lib-actions button')
+        btn = page.locator('.lib-actions button').first
         check(btn.inner_text() == '🔀 Přehrát vše náhodně (3)', 'tlačítko v knihovně počítá jen písně s nahrávkou')
         check(page.locator('.minibar:not([hidden])').count() == 0, 'malý přehrávač zatím není')
+
+        page.click('.lib-actions button:has-text("Vybrat písně k přehrání")')
+        wait(page, "document.querySelector('.sel-bar:not([hidden])')?.textContent.includes('Ťukáním na písně')")
+        check(True, 'tlačítko „Vybrat písně“ zapne výběr s nápovědou')
+        page.click('.sel-bar button:has-text("Hotovo")')
 
         print('Spuštění')
         # napodobený most APK: stav pro službu s oznámením (zhasnutá obrazovka)

@@ -1,7 +1,7 @@
 // Porovnání verzí textu: sporná místa hlavní verze proti jiné verzi, poslech verše ve smyčce (0,75×), rozhodnutí
 // ✓ platí hlavní / ✓ platí druhá (přepíše hlavní verzi, pokrok verše zůstane) / ⚠ nejisté. Logika v versions.js.
 // Adresa #/compare/<id písně>[/<id verze>[/<verš hlavní verze>]].
-import { el, iconBtn, ICONS, sheet, menu, toast } from './ui.js';
+import { el, iconBtn, ICONS, sheet, menu, toast, skipBtns } from './ui.js';
 import { t, pl, vlabel, num } from './i18n.js';
 import { getSong, saveSong, moveProgress, deleteAudioBlob, getPrefs } from './store.js';
 import { primaryVersion, formatMs } from './model.js';
@@ -47,7 +47,7 @@ export async function renderCompare(root, id, versionId, focusLi, nav) {
     player.setRate(st.rate); updateRate();
   } });
   const srcBtn = el('button', { type: 'button', class: 'pill', hidden: true, onclick: () => loadMedia(st.source === 'other' ? 'main' : 'other') });
-  const ctrl = el('div', { class: 'row drill-ctrl', hidden: true }, playBtn, iconBtn('rewind', t('O 5 sekund zpět'), () => player.seek(player.time() - 5000)), timeEl,
+  const ctrl = el('div', { class: 'row drill-ctrl', hidden: true }, playBtn, ...skipBtns(() => player), timeEl,
     el('span', { class: 'grow' }), srcBtn, rateBtn);
   const mediaNote = el('p', { class: 'hint', hidden: true });
   const sum = el('div', { class: 'vsum' });
@@ -258,7 +258,7 @@ export async function renderCompare(root, id, versionId, focusLi, nav) {
         el('p', { class: 'hint', text: t('Ťukni na začátku a na konci verše. Čas se uloží i pro učení a karaoke.') }),
         status,
         pos,
-        el('div', { class: 'row' }, pBtn, iconBtn('rewind', t('O 5 sekund zpět'), () => player.seek(player.time() - 5000)), tTime),
+        el('div', { class: 'row' }, pBtn, ...skipBtns(() => player), tTime),
         el('div', { class: 'row' }, startBtn, endBtn),
         el('div', { class: 'row end' }, el('button', { type: 'button', class: 'btn', text: t('Zrušit'), onclick: () => { closeIt(); cleanup(); } }), saveBtn));
     });

@@ -1,7 +1,7 @@
 // Procvičování celé písně nebo sloky (mimo lekci): skládání sloky, rozmazávání, tahák pro zpěv, zkouška celé písně.
 // Adresa #/drill/<id písně>/<režim>. Funguje bez časů; s časy navíc přehrání a smyčka sloky.
 // Pokrok mění jen zkouška: verše, které nevíš, se vrátí do opakování (rozhodnutí zadavatele: známé se nemění).
-import { el, fill, iconBtn, ICONS, toast } from './ui.js';
+import { el, fill, iconBtn, ICONS, toast, skipBtns } from './ui.js';
 import { t, pl } from './i18n.js';
 import { getSong, getPrefs, getProgress, saveProgress } from './store.js';
 import { primaryVersion } from './model.js';
@@ -39,7 +39,7 @@ export async function renderDrill(root, id, mode, nav) {
   // ---------- přehrávač (i bez časů: celá nahrávka) ----------
   const media = el('div', { class: 'lesson-media' });
   const playBtn = el('button', { type: 'button', class: 'play small', 'aria-label': t('Přehrát'), html: ICONS.play, onclick: () => player.toggle() });
-  const ctrl = el('div', { class: 'row drill-ctrl', hidden: true }, playBtn, iconBtn('rewind', t('O 5 sekund zpět'), () => player.seek(player.time() - 5000)));
+  const ctrl = el('div', { class: 'row drill-ctrl', hidden: true }, playBtn, ...skipBtns(() => player));
   player.onState = p => { playBtn.innerHTML = p ? ICONS.pause : ICONS.play; };
   player.onTime = t => {
     if (stopAt != null && t >= stopAt - 40) { stopAt = null; player.pause(); }

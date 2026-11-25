@@ -1,5 +1,5 @@
 // Obrazovka písně: text, režimy učení, přehrávač, smyčka, úprava veršů.
-import { el, fill, iconBtn, ICONS, sheet, menu, toast, download, safeName } from './ui.js';
+import { el, fill, iconBtn, ICONS, sheet, menu, toast, download, safeName, skipBtns } from './ui.js';
 import { t, pl, vlabel, num, lang as uiLang } from './i18n.js';
 import { getSong, saveSong, deleteSong, getAudioBlob, getPrefs, setPrefs, getProgress, resetProgress } from './store.js';
 import { songUnits, songSummary, unitState, lineKey, STATE_LABEL, fmtIvl } from './learn.js';
@@ -323,21 +323,20 @@ export async function renderSong(root, id, nav) {
   } });
   const loopBtn = el('button', { type: 'button', class: 'pill loop', hidden: true, onclick: clearLoop });
   const srcBtn = el('button', { type: 'button', class: 'pill', hidden: true, onclick: () => switchSource(st.source === 'audio' ? 'youtube' : 'audio') });
+  const skip = skipBtns(() => player); // −10 s / +10 s
   const nextBtn = iconBtn('next', t('Další píseň'), () => radio.next());
   const prevBtn = iconBtn('prev', t('Předchozí píseň'), () => radio.prev());
   const stageBtn = el('button', { type: 'button', class: 'pill', text: '⛶', title: t('Na celou obrazovku (zpívání)'), 'aria-label': t('Na celou obrazovku (zpívání)'), onclick: () => openStageNow() });
   function openStageNow() {
     if (stage) return;
-    stage = openStage({ song, version, player: () => player, toggle: () => player.toggle(), back5: () => player.seek(player.time() - 5000),
+    stage = openStage({ song, version, player: () => player, toggle: () => player.toggle(), 
       next: shared ? () => radio.next() : null, prev: shared ? () => radio.prev() : null, onClose: () => { stage = null; } });
   }
   nextBtn.hidden = true; prevBtn.hidden = true;
   const bar = el('div', { class: 'playerbar', hidden: true }, el('div', { class: 'inner' },
     progress,
     el('div', { class: 'controls' },
-      prevBtn,
-      iconBtn('rewind', t('O 5 sekund zpět'), () => player.seek(player.time() - 5000)),
-      playBtn, nextBtn, timeEl, el('span', { class: 'grow' }), loopBtn, srcBtn, stageBtn, rateBtn)));
+      prevBtn, skip[0], playBtn, skip[1], nextBtn, timeEl, el('span', { class: 'grow' }), loopBtn, srcBtn, stageBtn, rateBtn)));
 
   function updateRate() { rateBtn.textContent = `${num(player.rate)}×`; rateBtn.classList.toggle('on', player.rate !== 1); }
 
@@ -361,7 +360,7 @@ export async function renderSong(root, id, nav) {
     radio.attach(song.id, version.id, H);
     st.source = 'audio';
     media.replaceChildren(); mediaError.hidden = true;
-    bar.hidden = false; nextBtn.hidden = false; prevBtn.hidden = false;
+    bar.hidden = false; nextBtn.hidden = false; prevBtn.hidden = false; bar.classList.add('radio');
     srcBtn.hidden = !version.youtubeId; srcBtn.textContent = '♪ Soubor';
     H.onState(player.playing);
     if (player.ready) H.onReady();
@@ -370,7 +369,7 @@ export async function renderSong(root, id, nav) {
   function leaveShared() {
     if (!shared) return;
     radio.detach(H);
-    shared = false; nextBtn.hidden = true; prevBtn.hidden = true;
+    shared = false; nextBtn.hidden = true; prevBtn.hidden = true; bar.classList.remove('radio');
     player = wire(new Player());
     player.rate = getPrefs().rate;
     H.onState(false); updateRate();

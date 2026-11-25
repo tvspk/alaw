@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 25. 11. 2026, verze **0.18.0** (APK versionCode 27), program Bangor **1.2.1**. Odpovídej zadavateli **česky**.
+> Stav k 25. 11. 2026, verze **0.18.1** (APK versionCode 28), program Bangor **1.2.1**. Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -282,6 +282,11 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
      opravdu hraje dál se skrytou stránkou a zda se po konci písně spustí další (JS v pozadí) – ověří zadavatel. Kdyby ne: nativní
      přehrávač (MediaPlayer) v službě, stránka by mu předávala soubor.
    - Přehrávání jedné písně (ne náhodné) se zhasnutím dál zastaví (nezadáno).
+
+22. **0.18.1:** zadavatel nevěděl, jak označit písně → v knihovně tlačítko „☑ Vybrat písně k přehrání“ (zapne výběr) a v liště výběru
+   nápověda „Ťukáním na písně v seznamu je označ“. Skok **−5 s nahrazen −10 s a +10 s** ve všech přehrávačích (`ui.skipBtns`;
+   píseň, celá obrazovka, procvičování, porovnání verzí, časování ťukáním). Lišta písně při náhodném přehrávání skryje na úzkém displeji čas.
+   **Čeká na zadavatele:** zkouška zhasnuté obrazovky (bod 21).
 
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
 Zadavatel po vydání 0.12 napsal „ok všechno v pohodě“ (Bangor na Windows zřejmě v pořádku – při další práci krátce ověřit,

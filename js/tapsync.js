@@ -1,5 +1,5 @@
 // Časování veršů ťukáním: pustíš nahrávku a na začátku každého verše ťukneš.
-import { el, iconBtn, ICONS, toast } from './ui.js';
+import { el, iconBtn, ICONS, toast, skipBtns } from './ui.js';
 import { t, dec, num } from './i18n.js';
 import { getSong, saveSong, getAudioBlob, getPrefs } from './store.js';
 import { primaryVersion, formatMs } from './model.js';
@@ -105,7 +105,7 @@ export async function renderTapSync(root, id, nav) {
 
   const zone = el('div', { class: 'tap-zone' }, el('div', { class: 'inner' },
     nextEl,
-    el('div', { class: 'controls' }, iconBtn('rewind', t('O 5 sekund zpět'), () => player.seek(player.time() - 5000)), playBtn, timeEl, el('span', { class: 'grow' }), rateBtn),
+    el('div', { class: 'controls' }, ...skipBtns(() => player), playBtn, timeEl, el('span', { class: 'grow' }), rateBtn),
     tapBtn));
 
   root.append(el('div', { class: 'view', style: { paddingBottom: '260px' } }, top, media, err, help, listEl), zone);

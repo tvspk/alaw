@@ -2,7 +2,7 @@
 // obrazovka nezhasne (Wake Lock). Bez časů veršů se ukáže celý text velkým písmem k rolování.
 // Otevírá obrazovka písně (song.js) a posílá sem čas a stav přehrávače; při náhodném přehrávání zůstane otevřený
 // i po přechodu na další píseň (carry → takeCarry).
-import { el, iconBtn, ICONS } from './ui.js';
+import { el, iconBtn, ICONS, skipBtns } from './ui.js';
 import { t, lang as uiLang } from './i18n.js';
 import { getPrefs, setPrefs } from './store.js';
 import { trText, otherLang, formatMs } from './model.js';
@@ -21,7 +21,7 @@ async function wake(on) {
   } catch { lock = null; }
 }
 
-// opts: { song, version, player: () => Player, toggle(), back5(), next|null, prev|null, onClose() }
+// opts: { song, version, player: () => Player, toggle(), next|null, prev|null, onClose() }
 export function openStage(opts) {
   const { song, version } = opts;
   const timed = version.lines.some(l => l.start != null);
@@ -31,6 +31,7 @@ export function openStage(opts) {
   if (timed) main.append(prevEl, curEl, trEl, nextEl);
   else main.append(el('div', { class: 'st-note', text: t('Píseň nemá časy veršů – text se neposouvá sám.') }),
     ...version.lines.map(l => el('div', { class: 'st-line' + (l.stanza ? ' stanza' : ''), text: l.text })));
+  const skip = skipBtns(opts.player);
   const playBtn = el('button', { type: 'button', class: 'play', 'aria-label': t('Přehrát'), html: ICONS.play, onclick: () => opts.toggle() });
   // posuvník písně a čas
   const seek = el('input', { type: 'range', class: 'progress', min: 0, max: 1000, value: 0, step: 100, 'aria-label': t('Pozice'),
@@ -46,8 +47,9 @@ export function openStage(opts) {
     el('div', { class: 'st-foot' },
       el('button', { type: 'button', class: 'pill', text: 'A−', 'aria-label': t('Menší písmo'), onclick: () => setSize(-0.1) }),
       opts.prev ? iconBtn('prev', t('Předchozí píseň'), () => opts.prev()) : null,
-      iconBtn('rewind', t('O 5 sekund zpět'), () => opts.back5()),
+      skip[0],
       playBtn,
+      skip[1],
       opts.next ? iconBtn('next', t('Další píseň'), () => opts.next()) : null,
       el('button', { type: 'button', class: 'pill', text: 'A+', 'aria-label': t('Větší písmo'), onclick: () => setSize(0.1) })));
   box.style.setProperty('--st-size', size);

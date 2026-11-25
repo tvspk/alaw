@@ -632,3 +632,8 @@ body.stage-on { overflow: hidden; }
 .st-seek { display: flex; align-items: center; gap: 10px; max-width: 900px; width: 100%; margin: 0 auto; }
 .st-seek .progress { flex: 1; }
 .st-time { font-size: .82rem; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 92px; text-align: right; }
+/* lišta písně při náhodném přehrávání (⏮ −10 ⏯ +10 ⏭): na úzkém displeji bez času, ať se vejde (posuvník zůstává) */
+@media (max-width: 520px) {
+  .playerbar.radio .controls .time { display: none; }
+  .playerbar.radio .controls { gap: 2px; }
+}
