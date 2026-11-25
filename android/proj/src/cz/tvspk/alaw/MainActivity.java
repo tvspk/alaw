@@ -49,6 +49,9 @@ public class MainActivity extends Activity {
     private static final String UA = "AlawLyrics/0.2 (+https://github.com/tvspk/alaw)";
 
     private WebView web;
+    private static MainActivity current;      // pro ovládání z oznámení přehrávání (PlaybackService)
+    private volatile boolean mediaActive;     // běží náhodné přehrávání → při zhasnutí WebView neuspávat
+    private static final int REQ_NOTIFY = 14;
     private ValueCallback<Uri[]> fileCallback;
     private byte[] pendingSave;
     private PermissionRequest pendingCamera;
@@ -133,6 +136,7 @@ public class MainActivity extends Activity {
             }
         });
 
+        current = this;
         web.addJavascriptInterface(new Bridge(), "AlawAndroid");
         setContentView(web);
         if (state != null) web.restoreState(state);
@@ -215,6 +219,34 @@ public class MainActivity extends Activity {
                     i.setType(mime == null || mime.isEmpty() ? "application/octet-stream" : mime);
                     i.putExtra(Intent.EXTRA_TITLE, name);
                     try { startActivityForResult(i, REQ_SAVE); } catch (Exception e) { pendingSave = null; }
+                }
+            });
+        }
+
+        // Náhodné přehrávání (0.18): stav z radio.js → služba s oznámením; „stopped“ = konec.
+        // JSON { state: playing|paused|stopped, title, artist, labels: [předchozí, přehrát, pozastavit, další, ukončit] }
+        @JavascriptInterface
+        public void media(final String json) {
+            runOnUiThread(new Runnable() {
+                public void run() {
+                    try {
+                        JSONObject o = new JSONObject(json);
+                        String st = o.optString("state");
+                        if ("stopped".equals(st)) { mediaActive = false; PlaybackService.stop(); return; }
+                        mediaActive = true;
+                        boolean playing = "playing".equals(st);
+                        String[] labels = null;
+                        org.json.JSONArray la = o.optJSONArray("labels");
+                        if (la != null && la.length() == 5) { labels = new String[5]; for (int i = 0; i < 5; i++) labels[i] = la.optString(i); }
+                        PlaybackService s = PlaybackService.instance;
+                        if (s != null) { s.update(o.optString("title"), o.optString("artist"), playing, labels); return; }
+                        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED)
+                            requestPermissions(new String[]{ "android.permission.POST_NOTIFICATIONS" }, REQ_NOTIFY);
+                        Intent i = new Intent(MainActivity.this, PlaybackService.class)
+                            .putExtra("title", o.optString("title")).putExtra("artist", o.optString("artist"))
+                            .putExtra("playing", playing).putExtra("labels", labels);
+                        startForegroundService(i);
+                    } catch (Exception e) { /* služba nejde spustit – přehrávání jen s rozsvícenou obrazovkou */ }
                 }
             });
         }
@@ -387,7 +419,19 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    protected void onPause() { super.onPause(); web.onPause(); }
+    protected void onPause() {
+        super.onPause();
+        if (!mediaActive) web.onPause(); // při náhodném přehrávání hraje dál i se zhasnutou obrazovkou
+    }
+
+    /** Tlačítko v oznámení / sluchátkách → stránka (radio.js: window.alawMedia). */
+    static void media(final String cmd) {
+        final MainActivity a = current;
+        if (a == null || a.web == null || !cmd.matches("[a-z]+")) return;
+        a.runOnUiThread(new Runnable() {
+            public void run() { a.web.evaluateJavascript("window.alawMedia&&window.alawMedia('" + cmd + "')", null); }
+        });
+    }
 
     @Override
     protected void onResume() { super.onResume(); web.onResume(); }
@@ -397,6 +441,8 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (current == this) current = null;
+        PlaybackService.stop(); // bez stránky nemá přehrávání kdo hrát
         pool.shutdownNow();
         if (web != null) { web.destroy(); web = null; }
         super.onDestroy();

@@ -225,8 +225,32 @@ function drawLine(ms) {
 function height() { if (bar && !bar.hidden) document.body.style.setProperty('--mini-h', `${bar.offsetHeight}px`); }
 export function redrawLine() { if (ui) { ui.li = -2; drawLine(player.time()); } }
 
+// Android (0.18): stav do služby s oznámením (hraje i se zhasnutou obrazovkou), jen když se změní
+let lastNative = '';
+function native() {
+  const A = window.AlawAndroid;
+  if (!A || typeof A.media !== 'function') return;
+  const msg = JSON.stringify(cur
+    ? { state: player.playing ? 'playing' : 'paused', title: cur.song.title, artist: cur.song.artist || '',
+      labels: [t('Předchozí'), t('Přehrát'), t('Pozastavit'), t('Další'), t('Ukončit')] }
+    : { state: 'stopped' });
+  if (msg === lastNative) return;
+  lastNative = msg;
+  try { A.media(msg); } catch { /* starší APK */ }
+}
+// povely z oznámení, zamčené obrazovky a sluchátek
+window.alawMedia = cmd => {
+  if (cmd === 'play') player.play();
+  else if (cmd === 'pause') player.pause();
+  else if (cmd === 'toggle') toggle();
+  else if (cmd === 'next') next();
+  else if (cmd === 'prev') prev();
+  else if (cmd === 'stop') stop();
+};
+
 // Ovládání ze systému (klávesy pro hudbu, panel médií v prohlížeči / na zamčené obrazovce)
 function session() {
+  native();
   const ms = navigator.mediaSession;
   if (!ms) return;
   try {

@@ -87,6 +87,8 @@ def main():
         check(page.locator('.minibar:not([hidden])').count() == 0, 'malý přehrávač zatím není')
 
         print('Spuštění')
+        # napodobený most APK: stav pro službu s oznámením (zhasnutá obrazovka)
+        page.evaluate("window.AlawAndroid = { media: m => (window.__media = window.__media || []).push(JSON.parse(m)) }")
         btn.click()
         wait(page, f'{R}.player.playing')
         check(page.locator('.minibar:not([hidden])').count() == 1, 'malý přehrávač dole')
@@ -101,6 +103,15 @@ def main():
 
         page.evaluate("(() => { const r = document.querySelector('.mini-seek'); r.value = 2000; r.dispatchEvent(new Event('input')); })()")
         check(page.evaluate(f'{R}.player.time()') >= 1900, 'posuvník v malém přehrávači přetočí píseň')
+
+        media = page.evaluate('window.__media')
+        check(media[-1]['state'] == 'playing' and media[-1]['title'] == first and len(media[-1]['labels']) == 5, 'Android: služba dostala název a stav „hraje“')
+        page.evaluate("window.alawMedia('pause')")
+        wait(page, f'!{R}.player.playing')
+        check(page.evaluate('window.__media')[-1]['state'] == 'paused', 'pauza z oznámení → stav „pauza“')
+        page.evaluate("window.alawMedia('play')")
+        wait(page, f'{R}.player.playing')
+        check(True, 'přehrát z oznámení')
 
         print('Procházení aplikace')
         page.click('.topbar [aria-label="Nastavení"]')
@@ -169,6 +180,7 @@ def main():
         page.click('.minibar [aria-label="Ukončit náhodné přehrávání"]')
         wait(page, f'!{CUR}')
         check(page.locator('.minibar:not([hidden])').count() == 0, 'malý přehrávač zmizel')
+        check(page.evaluate('window.__media')[-1]['state'] == 'stopped', 'Android: služba ukončena')
 
         print('Označené písně')
         page.goto(url + '#/')

@@ -67,7 +67,8 @@
   (mimo `#app`, přežije přechod mezi obrazovkami). Jen písně s vlastní nahrávkou (`audioVersion`: hlavní verze, jinak první s nahrávkou).
   Obrazovka písně, která hraje, se připojí (`radio.attach/detach`, obsluha `H` v `song.js`) místo vlastního přehrávače; při změně písně
   přejde na text nové (když není otevřená nabídka). Hrát smí jen jeden `Player` (`Player.playing`), ostatní se pozastaví.
-  Prvky u spodního okraje posunout pro `body.mini-on`. Test: `python3 -u testy/test_prehravac.py`. Zhasnutá obrazovka v APK zatím ne.
+  Prvky u spodního okraje posunout pro `body.mini-on`. Test: `python3 -u testy/test_prehravac.py`. Zhasnutá obrazovka v APK (0.18):
+  `PlaybackService.java` (služba na popředí + oznámení + MediaSession + wake lock), most `AlawAndroid.media(json)` ← `radio.native()`, povely `window.alawMedia(cmd)`.
 - **0.17:** `js/stage.js` zpívání na celou obrazovku (Wake Lock, `carryStage` při náhodném přehrávání); `js/loudness.js` vyrovnání
   hlasitosti jen v náhodném přehrávání (jen ztlumení přes `audio.volume`, cache `localStorage['alaw-loud']`, `prefs.normVol`);
   `prefs.miniLine` verš+překlad v malém přehrávači (výška `--mini-h`); vlastní překlad `model.numberedText`/`parsePastedTr` + `openPasteTr`

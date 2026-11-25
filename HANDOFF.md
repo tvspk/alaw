@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 25. 11. 2026, verze **0.17.1** (APK versionCode 26), program Bangor **1.2.1**. Odpovídej zadavateli **česky**.
+> Stav k 25. 11. 2026, verze **0.18.0** (APK versionCode 27), program Bangor **1.2.1**. Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -271,6 +271,17 @@ a čekej na „hotovo“. Písně si dodává sám, aplikace nemá vlastní knih
    (přehrávač písně při náhodném přehrávání, celá obrazovka), a **posuvník písně** (celá obrazovka; malý přehrávač má místo proužku posuvník).
    ⏮ po 3 s přehrávání = od začátku písně, jinak předchozí píseň. Opraveno „null“ v malém přehrávači u verše bez překladu a ve zpěvníku
    (bez obsahu / bez překladu) – `replaceChildren` s null → `fill`.
+
+21. **Zhasnutá obrazovka (0.18.0, jen APK):** náhodné přehrávání hraje dál se zhasnutým displejem / v pozadí.
+   - `PlaybackService.java`: služba na popředí typu `mediaPlayback` s oznámením (MediaStyle: ⏮ ⏯ ⏭ ✕, i na zamčené obrazovce),
+     `MediaSession` (sluchátka, hodinky), částečný wake lock při hraní (v pauze se pustí po 15 s – mezi písněmi je chvilka „pauza“).
+     Oprávnění `FOREGROUND_SERVICE(_MEDIA_PLAYBACK)`, `POST_NOTIFICATIONS` (Android 13+ se zeptá při prvním spuštění), `WAKE_LOCK`.
+   - `MainActivity`: most `media(json)` (stav z `radio.js` `native()`), `onPause` neuspí WebView, když běží náhodné přehrávání;
+     povely zpět přes `window.alawMedia(cmd)`. Zvuk dál hraje WebView (žádný nativní přehrávač). Zavření aplikace z posledních = konec.
+   - **Neověřeno na telefonu** (v prostředí Claude jen sestavení APK a napodobený most v `test_prehravac.py`). Riziko: zda WebView
+     opravdu hraje dál se skrytou stránkou a zda se po konci písně spustí další (JS v pozadí) – ověří zadavatel. Kdyby ne: nativní
+     přehrávač (MediaPlayer) v službě, stránka by mu předávala soubor.
+   - Přehrávání jedné písně (ne náhodné) se zhasnutím dál zastaví (nezadáno).
 
 Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, Gemini, prostředník, synchronizace.
 Zadavatel po vydání 0.12 napsal „ok všechno v pohodě“ (Bangor na Windows zřejmě v pořádku – při další práci krátce ověřit,

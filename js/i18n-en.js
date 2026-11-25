@@ -2,6 +2,9 @@
 // Nový text v kódu → doplnit sem (test hlásí chybějící překlady).
 /* eslint-disable */
 export const EN = {
+  "Předchozí": "Previous",
+  "Další": "Next",
+  "Ukončit": "Stop",
   "🔍 K ověření ({n})": "🔍 To check ({n})",
   "📖 Zpěvník ({n})": "📖 Songbook ({n})",
   "Vybrané písně k tisku nebo do PDF": "The selected songs for printing or as a PDF",
