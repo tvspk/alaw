@@ -54,6 +54,10 @@
   `fill_gaps` (místo ≥ 3 s bez přepisu, kde oddělený zpěv zní ≥ 2 s do 25 dB pod zpěvem písně → přepsat zvlášť, 2 kola), `guard_alignment`
   (chyba faster-whisper u časů slov → kousek bez časů místo pádu), okno vypisuje úseky (časy + počet slov, bez textu). Aplikace: `stt.trimLoop`
   zkrátí smyčku (stejný kus 1–4 slov max. 2×) místo zahození úseku (`usableSegments`).
+  **Znovu přepsat staré přepisy (0.19, `#/redo`, `bulk.renderRedo`/`redoBangor`):** verze přepisu nese `engine: 'bangor <verze programu>'`
+  (z `/health`, `stt.lastBangorVersion`; `normalizeSong` ho zachová). Starý = přepis Bangoru (popisek „Přepis (Bangor)…“ nebo engine)
+  bez engine nebo pod `stt.BANGOR_GOOD` (při podstatném zlepšení programu zvýšit). **Rozhodnutí zadavatele: nahradit vždy** (i upravený);
+  zůstane jeden přepis Bangoru (hlavní, jinak nejnovější), ostatní verze beze změny. Program pod `BANGOR_GOOD` → hláška.
   Přepis žádá časy slov a `stt.splitSegment` dělí dlouhé úseky na verše (mezera + držené slovo + interpunkce, verš 3–12 slov).
   Test: `test_prepis.py` (napodobený program). Ruční zkouška skutečného programu: `ALAW_BANGOR_MODEL=Systran/faster-whisper-tiny python3 bangor/alaw_bangor.py`
   (oddělení zpěvu: `pip install --break-system-packages demucs==4.1.0`, model z HF `adefossez/HTDemucs`).

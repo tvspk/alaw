@@ -275,6 +275,7 @@ export function normalizeSong(s) {
       ...(l.ok === true ? { ok: true } : {}),
     })),
     ...(typeof v.review === 'boolean' ? { review: v.review } : {}),
+    ...(typeof v.engine === 'string' && v.engine ? { engine: str(v.engine, 40) } : {}), // čím se přepisovalo, např. 'bangor 1.2.3'
   }));
   if (!versions.length) return null;
   const primary = versions.some(v => v.id === s.primary) ? s.primary : versions[0].id;

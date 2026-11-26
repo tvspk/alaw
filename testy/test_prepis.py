@@ -82,7 +82,7 @@ def bangor(route):
     if path.startswith('/health'):
         bangor_state['health'] += 1
         ready = bangor_state['health'] > 1  # poprvé ještě načítá model
-        hj = {'app': 'alaw-bangor', 'version': '1.1' if bangor_state['words'] else '1.0', 'ready': ready, 'stage': 'ready' if ready else 'loading', 'device': 'cpu', 'busy': 0}
+        hj = {'app': 'alaw-bangor', 'version': bangor_state.get('ver') or ('1.1' if bangor_state['words'] else '1.0'), 'ready': ready, 'stage': 'ready' if ready else 'loading', 'device': 'cpu', 'busy': 0}
         if bangor_state['words']:
             hj['words'] = True
         return route.fulfill(json=hj, headers=h)
@@ -339,6 +339,32 @@ def main():
             page.wait_for_timeout(100)
         r = times()[0]
         check(r[1][0] == LINES[1] + ' ddoe' and [l[1] for l in r] == [1900, 5000, 8000, 11000], 'opravený verš si nechal čas')
+
+        print('Bangor: hromadně znovu přepsat starší přepisy (#/redo)')
+        bangor_state['words'] = True
+        page.evaluate("""async id => { const st = await import('./js/store.js'); const s = await st.getSong(id);
+          const b = s.versions.find(v => v.label === 'Přepis (Bangor)'); b.lines[0].text = 'Upraveno ručně'; b.lines[0].ok = true; await st.saveSong(s); }""", tri)
+        before = page.evaluate("async id => { const s = await (await import('./js/store.js')).getSong(id); return [s.primary, s.versions.map(v => [v.label, v.engine || '', v.lines.map(l => l.text)])]; }", tri)
+        print('   ', before[1])
+        check(before[1][1][1] == 'bangor 1.1', 'přepis z Bangoru si pamatuje verzi programu (engine)')
+        page.goto(url + '#/settings')
+        page.wait_for_selector('#bangor a[href="#/redo"]')
+        page.goto(url + '#/redo')
+        page.wait_for_selector('text=/1 píseň má přepis ze starší verze programu Bangor/')
+        check(page.locator('.bulk-row').count() == 1, 'nabídnuta jen píseň se starým přepisem z Bangoru')
+        page.click('text=🔁 Přepsat znovu (1)')
+        page.wait_for_selector('text=/je verze 1.1, potřeba je aspoň 1.2.3/')
+        check(True, 'starší program → hláška, ať se stáhne nový')
+        bangor_state['ver'] = '1.2.3'
+        page.click('text=🔁 Přepsat znovu (1)')
+        page.wait_for_selector('text=/Přepsáno znovu \\(2 verše/', timeout=30000)
+        after = page.evaluate("async id => { const s = await (await import('./js/store.js')).getSong(id); return [s.primary, s.versions.map(v => [v.label, v.engine || '', v.lines.map(l => l.text), v.lines.some(l => l.ok), v.review ?? null])]; }", tri)
+        print('   ', after[1])
+        check(after[0] == before[0] and len(after[1]) == 2 and after[1][0] == before[1][0] + [False, None], 'hlavní verze beze změny, počet verzí stejný')
+        check(after[1][1][:3] == ['Přepis (Bangor)', 'bangor 1.2.3', [LINES[0], "A'r gwynt yn chwythu'n gryf"]] and not after[1][1][3], 'starý přepis (i ručně upravený) nahrazen novým, znovu k ověření')
+        page.goto(url + '#/redo')
+        page.wait_for_selector('text=Žádná píseň nemá přepis ze starší verze programu Bangor.')
+        check(True, 'po přepisu už nic ke znovupřepsání')
 
         bangor_state['up'] = False
         page.goto(url + '#/song/' + tri)

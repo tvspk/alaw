@@ -6,7 +6,7 @@ import { el, fill, iconBtn, toast, fileSize, pickFiles, pickFile, sheet } from '
 import { t, pl } from './i18n.js';
 import { listSongs, getSong, saveSong, putAudioBlob, getAudioBlob } from './store.js';
 import { LANGUAGES, newSong, newLine, newVersion, primaryVersion, parseLyrics, parseTags, fold, uid, attachAlt, isSynced, borrowTimes, alignTimes } from './model.js';
-import { ENGINES, availableEngines, defaultEngine, engineName, hasBangor, bangorWords } from './stt.js';
+import { ENGINES, availableEngines, defaultEngine, engineName, hasBangor, bangorWords, checkBangor, lastBangorVersion, BANGOR_GOOD, verGte } from './stt.js';
 import { MAX_VERSIONS, prune } from './versions.js';
 import { SOURCES, similarity, loadFromUrl, cleanText } from './sources.js';
 import { openSearch, showPreview } from './search.js';
@@ -586,6 +586,7 @@ export async function transcribeToSong(songId, onWait = () => {}, engine = defau
   const res = await ENGINES[engine].run(blob, { title: song.title, artist: song.artist, language: song.language, name: src.audio.name }, onWait);
   if (!res.length) throw new Error(t('{e} v nahrávce žádný zpěv nerozpoznal.', { e: engineName(engine) }));
   const base = `Přepis (${engineName(engine)})`;
+  const stampEngine = v => { if (engine === 'bangor' && lastBangorVersion()) v.engine = 'bangor ' + lastBangorVersion(); };
   // časy platí pro nahrávku, ze které se přepisovalo: u druhé verze bez vlastní nahrávky jen když je to nahrávka hlavní verze
   const timed = src === main || !main.lines.length;
   const lines = res.map(l => newLine(l.text, timed ? l.start : null, l.stanza));
@@ -596,6 +597,7 @@ export async function transcribeToSong(songId, onWait = () => {}, engine = defau
     m.lines = lines;
     m.source = 'přepis';
     m.label = base;
+    stampEngine(m);
     as = 'main'; version = m;
   } else {
     if (song.versions.length >= MAX_VERSIONS) throw new Error(t('Píseň už má {n} verze textu.', { n: MAX_VERSIONS }));
@@ -603,6 +605,7 @@ export async function transcribeToSong(songId, onWait = () => {}, engine = defau
     let label = base;
     for (let n = 2; labels.has(label); n++) label = `${base} ${n}`;
     version = newVersion(lines, { label, source: 'přepis' });
+    stampEngine(version);
     song.versions.push(version);
     if (!isSynced(m) && timed) { const b = borrowTimes(m.lines, lines); if (b.matched) m.lines = b.lines; }
     prune(song);
@@ -745,6 +748,109 @@ export async function renderTimes(root, nav) {
       todo.length ? el('div', { class: 'row' }, startBtn) : null,
       info,
       todo.length ? el('p', { class: 'hint', style: { marginTop: '8px' }, text: t('Časy jsou přibližné. Nech okno s Alaw viditelné a počítač neuspávej. Verš, který nesedí, opravíš v písni ťukáním (⏱).') }) : null),
+    list));
+  draw(); sumUp();
+  return () => { stop = true; };
+}
+
+// ---------- nový přepis starších přepisů z Bangoru (#/redo) ----------
+// Rozhodnutí zadavatele: starý přepis z Bangoru se NAHRADÍ novým (i upravený; úpravy a pokrok u změněných veršů se ztratí).
+// Přepis Bangoru = verze se source 'přepis' a popiskem „Přepis (Bangor)…“ (nebo s engine 'bangor …'). Starý = bez engine
+// nebo z verze programu starší než BANGOR_GOOD. Má-li píseň víc přepisů z Bangoru, zůstane jeden (hlavní, jinak nejnovější).
+const isBangorTr = v => (v.source === 'přepis' && /^Přepis \(Bangor\)/.test(v.label || '')) || /^bangor /.test(v.engine || '');
+const oldBangor = v => isBangorTr(v) && !verGte((v.engine || '').split(' ')[1] || '0', BANGOR_GOOD);
+export const needsRedo = song => transcribable(song) && song.versions.some(oldBangor);
+
+export async function redoBangor(songId, onWait = () => {}) {
+  let song = await getSong(songId);
+  if (!song) throw new Error(t('Píseň nenalezena.'));
+  if (!song.versions.some(isBangorTr)) throw new Error(t('Píseň nemá přepis z Bangoru.'));
+  const src = [primaryVersion(song), ...song.versions].find(v => v.audio);
+  if (!src) throw new Error(t('Píseň nemá vlastní nahrávku (z YouTube přepsat nejde).'));
+  const blob = await getAudioBlob(src.audio.key);
+  if (!blob) throw new Error(t('Nahrávka v tomto zařízení není (ještě se nestáhla synchronizací?).'));
+  const res = await ENGINES.bangor.run(blob, { title: song.title, artist: song.artist, language: song.language, name: src.audio.name }, onWait);
+  if (!res.length) throw new Error(t('{e} v nahrávce žádný zpěv nerozpoznal.', { e: engineName('bangor') }));
+  song = await getSong(songId); // mezitím se mohla změnit (synchronizace)
+  if (!song) throw new Error(t('Píseň nenalezena.'));
+  const m = primaryVersion(song);
+  const targets = song.versions.filter(isBangorTr);
+  if (!targets.length) throw new Error(t('Píseň nemá přepis z Bangoru.'));
+  const keep = targets.find(v => v === m) || targets[targets.length - 1];
+  const srcId = src.id;
+  const timed = srcId === m.id || keep === m;
+  keep.lines = res.map(l => newLine(l.text, timed ? l.start : null, l.stanza));
+  keep.engine = 'bangor ' + (lastBangorVersion() || BANGOR_GOOD);
+  delete keep.review; // nový přepis → znovu k ověření
+  song.versions = song.versions.filter(v => v === keep || v === m || !targets.includes(v));
+  if (keep !== m && timed && !isSynced(m)) { const b = borrowTimes(m.lines, keep.lines); if (b.matched) m.lines = b.lines; }
+  prune(song);
+  await saveSong(song);
+  return { lines: keep.lines.length, main: keep === m };
+}
+
+export async function renderRedo(root, nav) {
+  const todo = (await listSongs()).filter(needsRedo);
+  const st = new Map(todo.map(s => [s.id, { state: 'wait' }]));
+  let running = false, stop = false;
+  const list = el('div', { class: 'bulk-list' });
+  const info = el('div', { class: 'hint', role: 'status' });
+  const startBtn = el('button', { type: 'button', class: 'btn primary', onclick: () => running ? (stop = true, startBtn.disabled = true) : run() });
+  const row = s => {
+    const r = st.get(s.id);
+    const msg = r.state === 'busy' ? el('div', { class: 'hint tr-msg', text: r.msg || t('Přepisuji z nahrávky…') })
+      : r.state === 'done' ? el('div', { class: 'ok', text: pl(r.lines, '✓ Přepsáno znovu ({n} verš, zkontroluj)', '✓ Přepsáno znovu ({n} verše, zkontroluj)', '✓ Přepsáno znovu ({n} veršů, zkontroluj)') })
+      : r.state === 'error' ? el('div', { class: 'hint', text: t('Chyba: {e}', { e: r.error }) })
+      : el('div', { class: 'hint', text: t('Čeká') });
+    return el('div', { class: 'bulk-row lyr', dataset: { id: s.id } }, el('div', { class: 'bulk-names' },
+      el('div', { class: 'bulk-title' }, el('a', { href: `#/song/${encodeURIComponent(s.id)}` }, el('strong', { text: s.title })), s.artist ? el('span', { text: ` – ${s.artist}` }) : null), msg));
+  };
+  const draw = () => list.replaceChildren(...todo.map(row));
+  const left = () => todo.filter(s => st.get(s.id).state !== 'done');
+  function sumUp() {
+    const v = [...st.values()];
+    const done = v.filter(r => r.state === 'done').length, err = v.filter(r => r.state === 'error').length;
+    if (v.some(r => r.state !== 'wait')) info.textContent = t('Přepsáno {d} z {n}, nepovedlo se {e}.', { d: done, n: todo.length, e: err });
+    const n = left().length;
+    startBtn.disabled = false;
+    startBtn.hidden = !running && !n;
+    startBtn.textContent = running ? t('■ Zastavit') : done || err ? t('🔁 Zkusit znovu zbývající ({n})', { n }) : t('🔁 Přepsat znovu ({n})', { n });
+  }
+  async function run() {
+    if (!hasBangor()) { toast(t('Nejdřív zapni Bangor v Nastavení → Přepis z nahrávky.'), 5000); return; }
+    let h;
+    try { h = await checkBangor(); } catch (e) { toast(e.message || String(e), 7000); return; }
+    if (!verGte(h.version, BANGOR_GOOD)) {
+      toast(t('Program Bangor na počítači je verze {v}, potřeba je aspoň {g}. V Nastavení → Bangor stáhni program znovu, rozbal ho přes starý, zavři okno starého programu a spusť alaw-bangor.bat.', { v: h.version || '?', g: BANGOR_GOOD }), 9000);
+      return;
+    }
+    const queue = left();
+    if (!queue.length) return;
+    if (!confirm(pl(queue.length, 'Přepsat znovu {n} píseň?', 'Přepsat znovu {n} písně?', 'Přepsat znovu {n} písní?') + ' ' + t('Starý přepis z Bangoru se nahradí novým, i když jsi ho upravoval (úpravy a pokrok v učení změněných veršů se ztratí).'))) return;
+    running = true; stop = false; sumUp();
+    for (let i = 0; i < queue.length && !stop; i++) {
+      const s = queue[i], r = st.get(s.id);
+      info.textContent = t('Přepisuji {i}/{n}: {t}', { i: i + 1, n: queue.length, t: s.title });
+      Object.assign(r, { state: 'busy', msg: '' }); draw();
+      try {
+        Object.assign(r, await redoBangor(s.id, m => { r.msg = m; const n = list.querySelector(`[data-id="${CSS.escape(s.id)}"] .tr-msg`); if (n) n.textContent = m; }), { state: 'done' });
+      } catch (e) {
+        Object.assign(r, { state: 'error', error: e.message || String(e) });
+        if (e.stop) { draw(); toast(`${e.message} ` + t('Zastaveno.'), 8000); break; }
+      }
+      draw();
+    }
+    running = false; draw(); sumUp();
+  }
+  root.append(el('div', { class: 'view' },
+    el('header', { class: 'topbar' }, iconBtn('back', t('Zpět'), () => nav.back()), el('h1', { text: t('Přepsat znovu novým Bangorem') })),
+    el('section', { class: 'section' },
+      todo.length
+        ? el('p', { text: pl(todo.length, '{n} píseň má přepis ze starší verze programu Bangor.', '{n} písně mají přepis ze starší verze programu Bangor.', '{n} písní má přepis ze starší verze programu Bangor.') + ' ' + t('Nový program přepíše nahrávku znovu a starý přepis nahradí, i když jsi ho upravoval. Ostatní verze textu se nemění.') })
+        : el('p', { text: t('Žádná píseň nemá přepis ze starší verze programu Bangor.') }),
+      todo.length ? el('div', { class: 'row' }, startBtn) : null,
+      info,
+      todo.length ? el('p', { class: 'hint', style: { marginTop: '8px' }, text: t('Nech okno s Alaw viditelné a počítač neuspávej. Když přepis zastavíš nebo zavřeš aplikaci, příště se pokračuje u písní, které ještě nový přepis nemají.') }) : null),
     list));
   draw(); sumUp();
   return () => { stop = true; };

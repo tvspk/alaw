@@ -16,14 +16,14 @@ import { aiConfig, setAiConfig, pickModel } from './ai.js';
 import { boot as syncBoot, changed as syncChanged } from './sync.js';
 import { syncSection } from './syncui.js';
 import { helpTitle } from './help.js';
-import { renderBulk, renderFindLyrics, renderTimes, songsWithoutText, applyLyrics } from './bulk.js';
+import { renderBulk, renderFindLyrics, renderTimes, renderRedo, songsWithoutText, applyLyrics } from './bulk.js';
 import { importFromUrl, showPreview } from './search.js';
 import { cleanText } from './sources.js';
 import { renderBook, setBookSongs } from './book.js';
 import { playShuffled, hasRecording, setNormalize, redrawLine } from './radio.js';
 import { groqKey, setGroqKey, checkGroq, availableEngines, defaultEngine, ENGINES, bangorPossible, checkBangor, bangorZip } from './stt.js';
 
-export const APP_VERSION = '0.18.3';
+export const APP_VERSION = '0.19.0';
 const app = document.getElementById('app');
 let cleanup = null;
 let pendingDraft = null; // text načtený ze souboru pro formulář nové písně
@@ -55,6 +55,7 @@ async function route(back = false) {
     else if (view === 'bulk') cleanup = await renderBulk(root, nav);
     else if (view === 'lyrics') cleanup = await renderFindLyrics(root, nav);
     else if (view === 'times') cleanup = await renderTimes(root, nav);
+    else if (view === 'redo') cleanup = await renderRedo(root, nav);
     else if (view === 'book') cleanup = await renderBook(root, nav);
     else if (view === 'settings') cleanup = await renderSettings(root);
     else cleanup = await renderLibrary(root);
@@ -533,7 +534,9 @@ function bangorBlock(drawChoice) {
         on ? el('button', { type: 'button', class: 'btn small danger', text: t('Vypnout'), onclick: () => { setPrefs({ bangor: false }); draw(t('Bangor vypnutý.')); } }) : null),
       status,
       on ? el('p', { style: { marginTop: '10px' } }, t('Písně, které text mají, ale chybí jim časy veršů: '),
-        el('a', { href: '#/times', text: t('⏱ Doplnit časy z nahrávek') })) : null);
+        el('a', { href: '#/times', text: t('⏱ Doplnit časy z nahrávek') })) : null,
+      on ? el('p', {}, t('Písně přepsané starší verzí programu: '),
+        el('a', { href: '#/redo', text: t('🔁 Přepsat znovu novým Bangorem') })) : null);
     drawChoice();
   }
   draw('');

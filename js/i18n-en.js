@@ -2,6 +2,18 @@
 // Nový text v kódu → doplnit sem (test hlásí chybějící překlady).
 /* eslint-disable */
 export const EN = {
+  "Píseň nemá přepis z Bangoru.": "The song has no Bangor transcription.",
+  "Přepsáno {d} z {n}, nepovedlo se {e}.": "Transcribed {d} of {n}, {e} failed.",
+  "🔁 Zkusit znovu zbývající ({n})": "🔁 Retry the rest ({n})",
+  "🔁 Přepsat znovu ({n})": "🔁 Transcribe again ({n})",
+  "Program Bangor na počítači je verze {v}, potřeba je aspoň {g}. V Nastavení → Bangor stáhni program znovu, rozbal ho přes starý, zavři okno starého programu a spusť alaw-bangor.bat.": "The Bangor program on this computer is version {v}; at least {g} is needed. In Settings → Bangor download the program again, unzip it over the old one, close the old program's window and run alaw-bangor.bat.",
+  "Starý přepis z Bangoru se nahradí novým, i když jsi ho upravoval (úpravy a pokrok v učení změněných veršů se ztratí).": "The old Bangor transcription will be replaced with the new one, even if you have edited it (edits and learning progress for changed lines will be lost).",
+  "Přepsat znovu novým Bangorem": "Transcribe again with the new Bangor",
+  "Nový program přepíše nahrávku znovu a starý přepis nahradí, i když jsi ho upravoval. Ostatní verze textu se nemění.": "The new program transcribes the recording again and replaces the old transcription, even if you have edited it. Other lyrics versions are not changed.",
+  "Žádná píseň nemá přepis ze starší verze programu Bangor.": "No song has a transcription from an older version of the Bangor program.",
+  "Nech okno s Alaw viditelné a počítač neuspávej. Když přepis zastavíš nebo zavřeš aplikaci, příště se pokračuje u písní, které ještě nový přepis nemají.": "Keep the Alaw window visible and don't let the computer sleep. If you stop or close the app, next time it carries on with the songs that don't have the new transcription yet.",
+  "Písně přepsané starší verzí programu: ": "Songs transcribed by an older version of the program: ",
+  "🔁 Přepsat znovu novým Bangorem": "🔁 Transcribe again with the new Bangor",
   "☑ Vybrat písně k přehrání": "☑ Choose songs to play",
   "Ťukáním na písně v seznamu je označ (znovu = zrušit).": "Tap songs in the list to select them (tap again to deselect).",
   "O 10 sekund zpět": "Back 10 seconds",
@@ -877,6 +889,9 @@ export const EN = {
 
 // Množná čísla: klíč = český tvar pro 1, hodnota = [jedno, víc].
 export const EN_PL = {
+  "{n} píseň má přepis ze starší verze programu Bangor.": ["{n} song has a transcription from an older version of the Bangor program.", "{n} songs have a transcription from an older version of the Bangor program."],
+  "Přepsat znovu {n} píseň?": ["Transcribe {n} song again?", "Transcribe {n} songs again?"],
+  "✓ Přepsáno znovu ({n} verš, zkontroluj)": ["✓ Transcribed again ({n} line, check it)", "✓ Transcribed again ({n} lines, check it)"],
   "{n} verš už překlad má a nepřepíše se.": ["{n} line already has a translation and won't be overwritten.", "{n} lines already have a translation and won't be overwritten."],
   "Překlad uložen u {n} verše": ["Translation saved for {n} line", "Translation saved for {n} lines"],
   "Překlad přesunut u {n} verše.": ["Translation moved for {n} line.", "Translation moved for {n} lines."],

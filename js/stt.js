@@ -197,12 +197,24 @@ export async function checkBangor() {
   return h;
 }
 
+// Verze programu, který dělal poslední přepis (ukládá se k verzi textu jako `engine: 'bangor 1.2.3'`).
+let bangorVer = '';
+export const lastBangorVersion = () => bangorVer;
+// Od této verze programu se přepis nepovažuje za „starý“ (#/redo). Při podstatném zlepšení programu zvýšit.
+export const BANGOR_GOOD = '1.2.3';
+export const verGte = (a, b) => {
+  const x = String(a || '').split('.').map(n => +n || 0), y = String(b || '').split('.').map(n => +n || 0);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+  return true;
+};
+
 const sleep = ms => new Promise(res => setTimeout(res, ms));
 const POLL = () => window.__alawBangorPoll || 2000;
 
 // Úloha v programu Bangor → úseky přepisu (s words = i časy jednotlivých slov).
 async function bangorJob(blob, { title = '', language = 'cy', name = '' } = {}, onWait = () => {}, words = false, need = words) {
   let h = await checkBangor();
+  bangorVer = String(h.version || '');
   if (need && !h.words) throw Object.assign(new SttError(t('Program Bangor na počítači je starší verze a časy slov neumí. V Nastavení → Bangor stáhni program znovu, rozbal ho přes starý, zavři okno starého programu a spusť alaw-bangor.bat.')), { stop: true });
   while (!h.ready) {
     if (h.stage === 'error') throw new SttError(t('Program Bangor nemohl připravit model: {e}', { e: h.error || '' }));

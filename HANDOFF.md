@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 25. 11. 2026, verze **0.18.3** (APK versionCode 30), program Bangor **1.2.3**. Odpovídej zadavateli **česky**.
+> Stav k 25. 11. 2026, verze **0.19.0** (APK versionCode 31), program Bangor **1.2.3**. Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -311,6 +311,12 @@ Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna ve
    výpis úseků do okna. Ověřeno na „Torri Fi“: díry 1:47–2:00, 2:33–3:06 doplněny (26 + 20 + 35 slov), smyčka přepsána znovu (38–40 slov).
    Aplikace: `trimLoop`. Pozor: doplněný úsek 1:47–2:00 může být sbor/vokalýza – zadavatel posoudí při ověřování. Co přesně bylo u zadavatele
    (GPU) po 1:15, nevíme – jeho okno vypsalo 18 úseků, 1 vynechaný; nový výpis úseků příště ukáže víc.
+
+25. **0.19.0 – hromadně znovu přepsat staré přepisy z Bangoru:** zadavatel chtěl pustit nový Bangor na všechny písně přepsané dřívějšími
+   verzemi. Na otázku „co se starými přepisy“ vybral **„Nahradit všechno“** (i ručně upravené; úpravy a pokrok u změněných veršů se ztratí).
+   Nastavení → Bangor → „🔁 Přepsat znovu novým Bangorem“ (`#/redo`): seznam, start/zastavit, potvrzení, průběh; přerušení nevadí (hotové
+   mají `engine` ≥ 1.2.3 a příště se nenabízí). Nové přepisy z Bangoru (`transcribeToSong`) si verzi programu pamatují taky.
+   Test v `test_prepis.py` (napodobený program, verze 1.1 → hláška, 1.2.3 → nahrazení upraveného přepisu).
 
 ## Rozpracováno a další kroky (stav 24. 11. 2026, verze 0.15.0)
 
