@@ -208,7 +208,20 @@ export const verGte = (a, b) => {
   return true;
 };
 
-const sleep = ms => new Promise(res => setTimeout(res, ms));
+// Čekání přes časovač ve workeru (viz js/timer-worker.js); když worker nejde vytvořit, obyčejný setTimeout.
+let timerWorker = null, timerSeq = 0;
+const timerWaits = new Map();
+function sleep(ms) {
+  if (timerWorker === null) {
+    try {
+      timerWorker = new Worker(new URL('./timer-worker.js', import.meta.url));
+      timerWorker.onmessage = e => { const res = timerWaits.get(e.data); timerWaits.delete(e.data); if (res) res(); };
+      timerWorker.onerror = () => { timerWorker = false; for (const res of timerWaits.values()) res(); timerWaits.clear(); };
+    } catch { timerWorker = false; }
+  }
+  if (!timerWorker) return new Promise(res => setTimeout(res, ms));
+  return new Promise(res => { const id = ++timerSeq; timerWaits.set(id, res); timerWorker.postMessage({ id, ms }); });
+}
 const POLL = () => window.__alawBangorPoll || 2000;
 
 // Úloha v programu Bangor → úseky přepisu (s words = i časy jednotlivých slov).

@@ -850,7 +850,7 @@ export async function renderRedo(root, nav) {
         : el('p', { text: t('Žádná píseň nemá přepis ze starší verze programu Bangor.') }),
       todo.length ? el('div', { class: 'row' }, startBtn) : null,
       info,
-      todo.length ? el('p', { class: 'hint', style: { marginTop: '8px' }, text: t('Nech okno s Alaw viditelné a počítač neuspávej. Když přepis zastavíš nebo zavřeš aplikaci, příště se pokračuje u písní, které ještě nový přepis nemají.') }) : null),
+      todo.length ? el('p', { class: 'hint', style: { marginTop: '8px' }, text: t('Mezitím můžeš na počítači dělat něco jiného, jen ho neuspávej a nech Alaw otevřenou. Když přepis zastavíš nebo zavřeš aplikaci, příště se pokračuje u písní, které ještě nový přepis nemají.') }) : null),
     list));
   draw(); sumUp();
   return () => { stop = true; };

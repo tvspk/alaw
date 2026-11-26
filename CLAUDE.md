@@ -58,6 +58,8 @@
   (z `/health`, `stt.lastBangorVersion`; `normalizeSong` ho zachová). Starý = přepis Bangoru (popisek „Přepis (Bangor)…“ nebo engine)
   bez engine nebo pod `stt.BANGOR_GOOD` (při podstatném zlepšení programu zvýšit). **Rozhodnutí zadavatele: nahradit vždy** (i upravený);
   zůstane jeden přepis Bangoru (hlavní, jinak nejnovější), ostatní verze beze změny. Program pod `BANGOR_GOOD` → hláška.
+  **0.19.1:** čekání mezi dotazy na program (`stt.sleep`) běží přes `js/timer-worker.js` – Chrome časovače skryté stránky (záložka,
+  zakryté/minimalizované okno i nainstalovaná aplikace) po 10 s brzdí na 1× za minutu, časovače ve workeru ne. Nepoužívat na to setTimeout.
   Přepis žádá časy slov a `stt.splitSegment` dělí dlouhé úseky na verše (mezera + držené slovo + interpunkce, verš 3–12 slov).
   Test: `test_prepis.py` (napodobený program). Ruční zkouška skutečného programu: `ALAW_BANGOR_MODEL=Systran/faster-whisper-tiny python3 bangor/alaw_bangor.py`
   (oddělení zpěvu: `pip install --break-system-packages demucs==4.1.0`, model z HF `adefossez/HTDemucs`).

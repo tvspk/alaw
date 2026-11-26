@@ -11,7 +11,7 @@ export const EN = {
   "Přepsat znovu novým Bangorem": "Transcribe again with the new Bangor",
   "Nový program přepíše nahrávku znovu a starý přepis nahradí, i když jsi ho upravoval. Ostatní verze textu se nemění.": "The new program transcribes the recording again and replaces the old transcription, even if you have edited it. Other lyrics versions are not changed.",
   "Žádná píseň nemá přepis ze starší verze programu Bangor.": "No song has a transcription from an older version of the Bangor program.",
-  "Nech okno s Alaw viditelné a počítač neuspávej. Když přepis zastavíš nebo zavřeš aplikaci, příště se pokračuje u písní, které ještě nový přepis nemají.": "Keep the Alaw window visible and don't let the computer sleep. If you stop or close the app, next time it carries on with the songs that don't have the new transcription yet.",
+  "Mezitím můžeš na počítači dělat něco jiného, jen ho neuspávej a nech Alaw otevřenou. Když přepis zastavíš nebo zavřeš aplikaci, příště se pokračuje u písní, které ještě nový přepis nemají.": "You can do other things on the computer in the meantime – just don't let it sleep and keep Alaw open. If you stop or close the app, next time it carries on with the songs that don't have the new transcription yet.",
   "Písně přepsané starší verzí programu: ": "Songs transcribed by an older version of the program: ",
   "🔁 Přepsat znovu novým Bangorem": "🔁 Transcribe again with the new Bangor",
   "☑ Vybrat písně k přehrání": "☑ Choose songs to play",

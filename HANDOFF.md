@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 25. 11. 2026, verze **0.19.0** (APK versionCode 31), program Bangor **1.2.3**. Odpovídej zadavateli **česky**.
+> Stav k 25. 11. 2026, verze **0.19.1** (APK versionCode 32), program Bangor **1.2.3**. Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -317,6 +317,11 @@ Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna ve
    Nastavení → Bangor → „🔁 Přepsat znovu novým Bangorem“ (`#/redo`): seznam, start/zastavit, potvrzení, průběh; přerušení nevadí (hotové
    mají `engine` ≥ 1.2.3 a příště se nenabízí). Nové přepisy z Bangoru (`transcribeToSong`) si verzi programu pamatují taky.
    Test v `test_prepis.py` (napodobený program, verze 1.1 → hláška, 1.2.3 → nahrazení upraveného přepisu).
+
+26. **0.19.1 – přepis běží, i když se na PC dělá něco jiného:** zadavatel má Alaw na PC jako nainstalovanou aplikaci a chce u hromadného přepisu
+   pracovat jinde. Chrome (od 109) časovače skryté stránky po 10 s brzdí na 1 probuzení za minutu (intensive wake-up throttling) → každá píseň
+   +~1 min. Čekání v `bangorJob` přesunuto do workeru (`js/timer-worker.js`). Odhad pro zadavatele: Torri Fi (4:15) na jeho GPU ~2 min,
+   180 písní ≈ 6–7,5 h; počítač nesmí usnout (na baterii může Chrome šetřit víc – nechat v zásuvce).
 
 ## Rozpracováno a další kroky (stav 24. 11. 2026, verze 0.15.0)
 
