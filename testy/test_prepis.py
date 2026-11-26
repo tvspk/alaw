@@ -279,6 +279,13 @@ def main():
           const seg = (s, txt, sung) => ({ start: s, end: s + 2, text: ' ' + txt, no_speech_prob: 0.8, avg_logprob: -1.4, compression_ratio: 1.1, ...(sung ? { sung: true } : {}) });
           return m.whisperLines([seg(0, 'Mae hi yn bwrw glaw', true), seg(5, 'Diolch am wylio', false)]).map(l => l.text); }""")
         check(r == ['Mae hi yn bwrw glaw'], 'Bangor 1.2.2: úsek nad odděleným zpěvem (sung) se nezahodí jako „bez řeči“, ostatní ano')
+        r = page.evaluate("""async () => { const m = await import('./js/stt.js');
+          const txt = 'Mae hi yn bwrw glaw ' + 'glaw '.repeat(30) + 'la la la la la mae hi';
+          const words = txt.trim().split(' ').map((x, k) => ({ start: 1 + 0.3 * k, end: 1.25 + 0.3 * k, word: ' ' + x }));
+          const seg = { start: 1, end: 20, text: ' ' + txt, no_speech_prob: 0.01, avg_logprob: -0.1, compression_ratio: 9, sung: true, words };
+          return m.whisperLines([seg]).map(l => l.text).join(' | '); }""")
+        print('   ', r)
+        check(r.replace(' | ', ' ') == 'Mae hi yn bwrw glaw glaw la la mae hi', 'zacyklený úsek se zkrátí (opakování max. 2×), nezahodí se celý')
 
         print('Bangor: doplnění časů k hotovému textu')
         dau = page.evaluate("""async L => {

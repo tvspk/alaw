@@ -81,12 +81,37 @@ export function splitSegment(seg) {
   return out;
 }
 
+// Zacyklený úsek (Whisper opakuje jedno slovo či pár slov pořád dokola): stejný kus 1–4 slov víc než 2× za sebou
+// se zkrátí na 2×. Vrátí úsek jen se zbylými slovy, nebo null (bez časů slov se smyčka zkrátit nedá).
+const wkey = w => String(w.word).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+export function trimLoop(seg) {
+  const ws = Array.isArray(seg.words) ? seg.words.filter(w => w && typeof w.word === 'string' && w.word.trim()) : [];
+  if (!ws.length) return null;
+  const k = ws.map(wkey), out = [];
+  for (let i = 0; i < ws.length;) {
+    let skip = 0;
+    for (let n = 1; n <= 4 && !skip; n++) {
+      let reps = 1;
+      while (i + (reps + 1) * n <= ws.length && k.slice(i + reps * n, i + (reps + 1) * n).join(' ') === k.slice(i, i + n).join(' ')) reps++;
+      if (reps > 2) { out.push(...ws.slice(i, i + 2 * n)); skip = reps * n; }
+    }
+    if (skip) i += skip; else out.push(ws[i++]);
+  }
+  return { ...seg, words: out, text: out.map(w => w.word).join(''), compression_ratio: 1, start: +out[0].start };
+}
+
+// Úseky, které stojí za to: bez „ticha s vymyšleným textem“ (mimo úseky nad odděleným zpěvem), smyčky zkrácené.
+function usableSegments(segments) {
+  return (Array.isArray(segments) ? segments : []).filter(s => s && typeof s.text === 'string')
+    .filter(s => !(!s.sung && s.no_speech_prob > 0.6 && s.avg_logprob < -0.7))
+    .map(s => s.compression_ratio > 2.6 ? trimLoop(s) : s).filter(Boolean);
+}
+
 // Úseky Whisperu → verše. Vynechá hudbu bez zpěvu a „halucinace“ (opakování, nejistý text bez řeči).
 // Úseky s časy slov (Bangor) se rozdělí na verše (splitSegment). Úsek se `sung` (Bangor 1.2.2: pod ním je oddělený zpěv)
 // se jako „bez řeči“ nevyhazuje – Whisper u zpěvu no_speech_prob často přecení.
 export function whisperLines(segments) {
-  const segs = (Array.isArray(segments) ? segments : []).filter(s => s && typeof s.text === 'string')
-    .filter(s => !(!s.sung && s.no_speech_prob > 0.6 && s.avg_logprob < -0.7) && !(s.compression_ratio > 2.6))
+  const segs = usableSegments(segments)
     .filter(s => !/^[\s♪♫♬*().,…\-[\]]*$/.test(s.text) && !/^\s*[([].*[)\]]\s*$/.test(s.text))
     .flatMap(splitSegment);
   let prevEnd = null;
@@ -212,8 +237,7 @@ export async function transcribeBangor(blob, opts = {}, onWait = () => {}) {
 // Časy slov z nahrávky (pro doplnění časů k hotovému textu): [{ w, s, e }] (s, e v ms).
 export async function bangorWords(blob, opts = {}, onWait = () => {}) {
   const segs = await bangorJob(blob, opts, onWait, true);
-  return segs.filter(g => !(!g.sung && g.no_speech_prob > 0.6 && g.avg_logprob < -0.7) && !(g.compression_ratio > 2.6))
-    .flatMap(g => g.words || [])
+  return usableSegments(segs).flatMap(g => g.words || [])
     .filter(w => w && typeof w.word === 'string' && w.word.trim() && Number.isFinite(+w.start))
     .map(w => ({ w: w.word.trim(), s: Math.round(+w.start * 1000), e: Math.round((Number.isFinite(+w.end) ? +w.end : +w.start) * 1000) }));
 }

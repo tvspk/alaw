@@ -27,7 +27,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-VERSION = '1.2.2'
+VERSION = '1.2.3'
 HOST = '127.0.0.1'
 PORT = int(os.environ.get('ALAW_BANGOR_PORT', '8765'))
 MODEL = os.environ.get('ALAW_BANGOR_MODEL', 'techiaith/whisper-large-ft-cy-en-ct2')
@@ -37,6 +37,9 @@ MAX_BYTES = 1024 * 1024 * 1024  # 1 GB
 LANGS = {'cy', 'en'}            # model umí velštinu a angličtinu
 SEP_MODEL = os.environ.get('ALAW_BANGOR_SEP', 'htdemucs')
 QUIET_DB = 35                   # úsek o tolik dB tišší než zpěv písně = v oddělené stopě nikdo nezpívá → vymyšlený text
+GAP_MIN = 3.0                   # s – kratší místo bez přepisu se znovu nepřepisuje
+SUNG_DB = 25                    # zpěv nejvýš o tolik dB tišší než zpěv písně se počítá jako zpěv (pro doplnění děr)
+LOOP_CR = 2.6                   # komprese textu úseku nad tuto mez = Whisper se zacyklil (jedno slovo pořád dokola); stejná mez jako v aplikaci
 SEP_TIMEOUT = 1800              # s – oddělení zpěvu jedné písně (na procesoru u dlouhé nahrávky i minuty)
 
 state = {'ready': False, 'stage': 'start', 'device': None, 'error': None,
@@ -59,6 +62,21 @@ def add_cuda_dlls():
             os.environ['PATH'] = d + os.pathsep + os.environ.get('PATH', '')
         except OSError:
             pass
+
+
+def guard_alignment(model):
+    # 1.2.3: Chyba faster-whisper 1.2.1 – když model u kousku nahrávky vrátí text bez zarovnání na čas, výpočet časů slov
+    # spadne („boolean index did not match…“) a s ním celý přepis. Pak se u toho kousku časy slov jen vynechají.
+    orig = model.find_alignment
+
+    def safe(*a, **k):
+        try:
+            return orig(*a, **k)
+        except (IndexError, ValueError) as e:
+            say('Časy slov u jednoho kousku nahrávky nešly spočítat (' + str(e)[:80] + ') – pokračuji bez nich.')
+            tokens = k.get('text_tokens', a[1] if len(a) > 1 else [])
+            return [[] for _ in tokens]
+    model.find_alignment = safe
 
 
 def load_model():
@@ -87,6 +105,7 @@ def load_model():
     if model is None:
         model = WhisperModel(path, device='cpu', compute_type='int8', cpu_threads=max(1, (os.cpu_count() or 2) - 1))
         state['device'] = 'cpu'
+    guard_alignment(model)
     state['ready'] = True
     state['stage'] = 'ready'
     say('Hotovo. Počítá na ' + ('grafické kartě.' if state['device'] == 'gpu' else 'procesoru (pomalejší, ale funguje).'))
@@ -146,6 +165,121 @@ def separate(src, dst):
     print('DEVICE', 'gpu' if dev == 'cuda' else 'cpu', flush=True)
 
 
+def mmss(sec):
+    sec = int(sec or 0)
+    return f'{sec // 60}:{sec % 60:02d}'
+
+
+def seg_dict(s, words):
+    return {
+        'start': round(s.start, 2), 'end': round(s.end, 2), 'text': s.text,
+        'avg_logprob': s.avg_logprob, 'no_speech_prob': s.no_speech_prob,
+        'compression_ratio': s.compression_ratio,
+        **({'words': [{'start': round(w.start, 2), 'end': round(w.end, 2), 'word': w.word,
+                       'p': round(w.probability, 3)} for w in (s.words or [])]} if words else {}),
+    }
+
+
+def fix_loops(model, audio, segments, opts, words, total):
+    # 1.2.3: U zpěvu se Whisper občas zacyklí (jedno slovo 70× dokola) – aplikace by takový úsek zahodila i s textem,
+    # který v něm opravdu zazněl. Úsek (až po začátek dalšího) se přepíše znovu s penalizací opakování; z pokusů
+    # bez smyčky vyhraje ten, kterým si model byl nejjistější. Když nepomůže nic, zůstane původní (aplikace smyčku zkrátí).
+    out = []
+    for i, s in enumerate(segments):
+        if s['compression_ratio'] <= LOOP_CR:
+            out.append(s)
+            continue
+        a = s['start']
+        b = segments[i + 1]['start'] if i + 1 < len(segments) else max(s['end'], total or 0)
+        best = None
+        if b - a >= 1:
+            for extra in ({'repetition_penalty': 1.3}, {'no_repeat_ngram_size': 4}):
+                try:
+                    new = [seg_dict(x, words) for x in model.transcribe(audio, **opts, clip_timestamps=[a, b], **extra)[0]]
+                except Exception as e:
+                    say('Nový pokus o přepis selhal: ' + str(e)[:200])
+                    continue
+                new = [n for n in new if n['text'].strip() and a - 0.5 <= n['start'] < b]
+                if new and all(n['compression_ratio'] <= LOOP_CR for n in new):
+                    lp = sum(n['avg_logprob'] for n in new) / len(new)
+                    if best is None or lp > best[0]:
+                        best = (lp, new)
+        if best:
+            say(f'Zacyklený přepis {mmss(a)}–{mmss(b)} přepsán znovu.')
+            out.extend(best[1])
+        else:
+            say(f'Zacyklený přepis {mmss(a)}–{mmss(b)} se nepodařilo opravit.')
+            out.append(s)
+    return out
+
+
+def vocal_frames(path):
+    # Hlasitost odděleného zpěvu po 0,5 s (dB) a 95. percentil (= jak nahlas se v písni zpívá).
+    import numpy as np
+    with wave.open(path, 'rb') as w:
+        sr = w.getframerate()
+        x = np.frombuffer(w.readframes(w.getnframes()), '<i2').astype('float32') / 32768
+    half = sr // 2
+    fr = [20 * np.log10(np.sqrt((x[i:i + half] ** 2).mean()) + 1e-9) for i in range(0, len(x) - half + 1, half)]
+    return fr, (float(np.percentile(fr, 95)) if fr else 0.0)
+
+
+def fill_gaps(model, audio, segments, opts, words, total):
+    # Dvě kola: po doplnění díry v ní může zůstat menší díra (Whisper zase skončil dřív).
+    fr, ref = vocal_frames(audio)
+    tried = set()
+    for _ in range(2):
+        before = len(segments)
+        segments = fill_gaps_once(model, audio, segments, opts, words, total, fr, ref, tried)
+        if len(segments) == before:
+            break
+    return segments
+
+
+def fill_gaps_once(model, audio, segments, opts, words, total, fr, ref, tried):
+    # 1.2.3: Whisper občas po pár slovech „ukončí“ 30s okno a zbytek přeskočí (díra ~30 s, i když se zpívá).
+    # Místa, kde přepis nic nemá, ale oddělený zpěv zní (aspoň 2 s do SUNG_DB pod zpěvem písně), se přepíšou znovu zvlášť.
+    if not fr:
+        return segments
+    segs = sorted(segments, key=lambda s: s['start'])
+    edges = [0.0] + [x for s in segs for x in (s['start'], s['end'])] + [max(total or 0, len(fr) / 2)]
+    added, tries = [], 0
+    for a, b in zip(edges[0::2], edges[1::2]):
+        if b - a < GAP_MIN or tries >= 20:
+            continue
+        voiced = [i for i in range(int(a * 2 + 0.999), min(int(b * 2), len(fr))) if fr[i] >= ref - SUNG_DB]
+        if len(voiced) < 4:
+            continue
+        lo, hi = max(a, voiced[0] / 2 - 0.5), min(b, voiced[-1] / 2 + 1.0)
+        if (round(lo, 1), round(hi, 1)) in tried:
+            continue
+        tried.add((round(lo, 1), round(hi, 1)))
+        tries += 1
+        best = None
+        for extra in ({}, {'repetition_penalty': 1.3}):
+            try:
+                new = [seg_dict(x, words) for x in model.transcribe(audio, **opts, clip_timestamps=[lo, hi], **extra)[0]]
+            except Exception as e:
+                say('Nový pokus o přepis selhal: ' + str(e)[:200])
+                continue
+            new = [n for n in new if n['text'].strip() and lo - 0.5 <= n['start'] < hi and n['compression_ratio'] <= LOOP_CR]
+            if new:
+                best = new
+                break
+        n = sum(len(x['words']) if 'words' in x else len(x['text'].split()) for x in best or [])
+        say(f'Místo se zpěvem bez přepisu {mmss(lo)}–{mmss(hi)}: ' + (f'doplněno {n} slov.' if best else 'nic nového.'))
+        added += best or []
+    return sorted(segs + added, key=lambda s: s['start'])
+
+
+def log_segments(segments):
+    # Jen časy a počty slov (bez textu) – aby šlo z okna programu poznat, kde v písni přepis chybí.
+    for s in segments:
+        n = len(s['words']) if 'words' in s else len(s['text'].split())
+        loop = '  (smyčka)' if s['compression_ratio'] > LOOP_CR else ''
+        say(f'  {mmss(s["start"])}–{mmss(s["end"])}  {n} slov{loop}')
+
+
 def drop_silent(segments, path):
     # 1.2.1: Whisper si v tichu (hudba bez zpěvu, po oddělení zpěvu = ticho) občas text vymyslí. Úseky, pod kterými
     # je oddělená stopa zpěvu skoro tichá (o QUIET_DB pod 95. percentilem hlasitosti po 0,5 s), se zahodí.
@@ -164,7 +298,8 @@ def drop_silent(segments, path):
         if db(x[a:max(b, a + sr // 10)]) >= ref - QUIET_DB:
             keep.append({**s, 'sung': True})  # 1.2.2: pod úsekem opravdu někdo zpívá → aplikace ho nevyhodí jako „bez řeči“
     if len(keep) < len(segments):
-        say(f'Vynecháno úseků bez zpěvu (vymyšlený text v hudbě): {len(segments) - len(keep)}')
+        gone = ', '.join(f'{mmss(s["start"])}–{mmss(s["end"])}' for s in segments if not any(k['start'] == s['start'] for k in keep))
+        say(f'Vynecháno úseků bez zpěvu (vymyšlený text v hudbě): {len(segments) - len(keep)} ({gone})')
     return keep
 
 
@@ -222,18 +357,17 @@ def worker():
                 opts['word_timestamps'] = True
             segs, info = model.transcribe(audio, **opts)
             total = info.duration or 0
+            found = []
             for s in segs:
-                job['segments'].append({
-                    'start': round(s.start, 2), 'end': round(s.end, 2), 'text': s.text,
-                    'avg_logprob': s.avg_logprob, 'no_speech_prob': s.no_speech_prob,
-                    'compression_ratio': s.compression_ratio,
-                    **({'words': [{'start': round(w.start, 2), 'end': round(w.end, 2), 'word': w.word,
-                                   'p': round(w.probability, 3)} for w in (s.words or [])]} if job['words'] else {}),
-                })
+                found.append(seg_dict(s, job['words']))
                 if total:
-                    job['progress'] = min(0.99, s.end / total)
+                    job['progress'] = min(0.95, s.end / total)
+            found = fix_loops(model, audio, found, opts, job['words'], total)
             if audio != job['file']:
-                job['segments'] = drop_silent(job['segments'], audio)
+                found = fill_gaps(model, audio, found, opts, job['words'], total)
+                found = drop_silent(found, audio)
+            log_segments(found)
+            job['segments'] = found
             job['progress'] = 1
             job['state'] = 'done'
             say(f'Hotovo: {len(job["segments"])} úseků.')
@@ -241,6 +375,7 @@ def worker():
             job['state'] = 'error'
             job['error'] = str(e)[:300]
             say('Chyba přepisu: ' + str(e))
+            traceback.print_exc()
         finally:
             for f in (job['file'], job['file'] + '.vocals.wav'):
                 try:

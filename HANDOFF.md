@@ -1,7 +1,7 @@
 # Alaw – předávací dokument
 
 > Závazný popis stavu projektu pro další chat. Platí spolu s `CLAUDE.md` (pravidla) a `README.md` (co aplikace umí).
-> Stav k 25. 11. 2026, verze **0.18.2** (APK versionCode 29), program Bangor **1.2.2**. Odpovídej zadavateli **česky**.
+> Stav k 25. 11. 2026, verze **0.18.3** (APK versionCode 30), program Bangor **1.2.3**. Odpovídej zadavateli **česky**.
 
 ## Co to je
 
@@ -302,6 +302,15 @@ Ověřeno zadavatelem na telefonu: hledání, sdílení, YouTube, vlastní mp3, 
 Zadavatel po vydání 0.12 napsal „ok všechno v pohodě“ (Bangor na Windows zřejmě v pořádku – při další práci krátce ověřit,
 zda přepis přes Bangor opravdu proběhl). CZ/EN (0.10) a dva překlady + stažení textu (0.11) viděl („perfektní“), zkouší.
 Učení (0.4, 0.5), verze (0.6), písně z nahrávek (0.7) a přepis/výměna verze/mazání (0.8) zatím jen testy v prostředí Claude – **ověřit na telefonu**.
+
+24. **0.18.3 + Bangor 1.2.3 – další díry v přepisu:** zadavatel: Gwahanol po 1.2.2 „asi nej přepis“, ale „Torri Fi“ (4:15) po verši 1:15
+   „úplně přestalo“. Nahrávku poslal do chatu; rozbor skutečným modelem (CPU, jen čísla): výsledky mezi běhy kolísají, nalezeny tři příčiny:
+   (1) **smyčka** (jedno slovo 70×, komprese 12, časy slov slité na konec) → aplikace zahodila celý úsek (u mě 3:36–3:56);
+   (2) Whisper po pár slovech **ukončí 30s okno** a zbytek přeskočí (2:33–3:06, i s `no_speech_threshold=None`); (3) **pád** celého přepisu
+   ve faster-whisper (`boolean index did not match…` ve `find_alignment`). Oprava v programu: `fix_loops`, `fill_gaps` (2 kola), `guard_alignment`,
+   výpis úseků do okna. Ověřeno na „Torri Fi“: díry 1:47–2:00, 2:33–3:06 doplněny (26 + 20 + 35 slov), smyčka přepsána znovu (38–40 slov).
+   Aplikace: `trimLoop`. Pozor: doplněný úsek 1:47–2:00 může být sbor/vokalýza – zadavatel posoudí při ověřování. Co přesně bylo u zadavatele
+   (GPU) po 1:15, nevíme – jeho okno vypsalo 18 úseků, 1 vynechaný; nový výpis úseků příště ukáže víc.
 
 ## Rozpracováno a další kroky (stav 24. 11. 2026, verze 0.15.0)
 

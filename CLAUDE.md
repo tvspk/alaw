@@ -50,6 +50,10 @@
   1.2.1: `drop_silent` zahodí úseky, pod kterými je oddělený zpěv o 35 dB tišší než 95. percentil (Whisper v tichu vymýšlí text).
   1.2.2: u odděleného zpěvu `no_speech_threshold=None` (jinak Whisper přeskočí celé 30s okno, když u zpěvu odhadne „bez řeči“
   → díra ~30 s v přepisu); úseky, které projdou `drop_silent`, mají `sung: true` a aplikace (`whisperLines`, `bangorWords`) je nevyhazuje podle `no_speech_prob`.
+  1.2.3: po přepisu `fix_loops` (úsek s kompresí > 2,6 = smyčka → znovu přes `clip_timestamps` s `repetition_penalty=1.3` / `no_repeat_ngram_size=4`),
+  `fill_gaps` (místo ≥ 3 s bez přepisu, kde oddělený zpěv zní ≥ 2 s do 25 dB pod zpěvem písně → přepsat zvlášť, 2 kola), `guard_alignment`
+  (chyba faster-whisper u časů slov → kousek bez časů místo pádu), okno vypisuje úseky (časy + počet slov, bez textu). Aplikace: `stt.trimLoop`
+  zkrátí smyčku (stejný kus 1–4 slov max. 2×) místo zahození úseku (`usableSegments`).
   Přepis žádá časy slov a `stt.splitSegment` dělí dlouhé úseky na verše (mezera + držené slovo + interpunkce, verš 3–12 slov).
   Test: `test_prepis.py` (napodobený program). Ruční zkouška skutečného programu: `ALAW_BANGOR_MODEL=Systran/faster-whisper-tiny python3 bangor/alaw_bangor.py`
   (oddělení zpěvu: `pip install --break-system-packages demucs==4.1.0`, model z HF `adefossez/HTDemucs`).
